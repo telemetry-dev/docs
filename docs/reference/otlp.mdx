@@ -1,0 +1,116 @@
+---
+title: OTLP ingest API
+description: Send OTLP/HTTP traces, logs, and metrics to telemetry.dev.
+---
+
+The ingest API accepts OTLP/HTTP protobuf and JSON at `https://ingest.telemetry.dev`.
+
+## Endpoints
+
+| Method | Path | Signal |
+| --- | --- | --- |
+| `POST` | `/v1/traces` | Traces |
+| `POST` | `/v1/logs` | Logs |
+| `POST` | `/v1/metrics` | Metrics |
+| `GET` | `/health` | Service health |
+
+`GET /health` returns `{"ok":true}`. An unregistered route or method returns HTTP `404`, not `405`.
+
+## Authentication
+
+Send the API key in the `Authorization` header:
+
+```http
+Authorization: Bearer td_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+The `Bearer ` prefix is case-sensitive. The ingest API does not accept an `x-api-key` header.
+
+A key can have an environment scope. If it does, each resource block must resolve to that environment. The ingest API resolves the environment from these resource attributes, in order:
+
+1. `deployment.environment.name`
+2. `deployment.environment`
+3. `default`
+
+The comparison removes surrounding whitespace and uses lowercase characters. A mismatch rejects the complete request with HTTP `403`.
+
+## Request encoding
+
+| Header | Accepted value | Behavior |
+| --- | --- | --- |
+| `Content-Type` | `application/x-protobuf` | The response uses protobuf. |
+| `Content-Type` | `application/json` | The response uses OTLP JSON. |
+| `Content-Encoding` | `identity` | The body is not compressed. This is the default. |
+| `Content-Encoding` | `gzip` | The server decompresses the body before decode. |
+
+A media-type parameter is permitted. For example, `application/json; charset=utf-8` is valid. A missing or different `Content-Type` returns HTTP `415`. A different `Content-Encoding` also returns HTTP `415`.
+
+OTLP JSON field names must use `lowerCamelCase`. The server ignores unknown fields. It rejects duplicate object keys and `snake_case` aliases.
+
+## Body limits
+
+| Limit | Maximum |
+| --- | --- |
+| Raw request body | 4 MiB |
+| Body after gzip decompression | 16 MiB |
+
+The server applies the raw limit to declared and streamed body sizes. It counts decompressed bytes to stop gzip expansion beyond 16 MiB.
+
+## Send OTLP JSON with curl
+
+Put a valid OTLP JSON `ExportTraceServiceRequest` in `traces.json`. Use `lowerCamelCase` field names.
+
+```sh
+curl "https://ingest.telemetry.dev/v1/traces" \
+  --request POST \
+  --header "Authorization: Bearer ${TELEMETRY_DEV_API_KEY}" \
+  --header "Content-Type: application/json; charset=utf-8" \
+  --data-binary @traces.json
+```
+
+Use `/v1/logs` for an `ExportLogsServiceRequest`. Use `/v1/metrics` for an `ExportMetricsServiceRequest`.
+
+## Success response
+
+A successful request returns HTTP `200`. The body is the canonical empty OTLP `ExportTraceServiceResponse`, `ExportLogsServiceResponse`, or `ExportMetricsServiceResponse`.
+
+The response encoding matches the request encoding. A protobuf request receives `application/x-protobuf`. A JSON request receives `application/json`.
+
+## Error response
+
+An OTLP error body is a protobuf or ProtoJSON `google.rpc.Status`. The response encoding matches the request when the server can identify it.
+
+The wire `Status` contains the error message. Its `Status.code` remains `0`. The diagnostic codes below do not replace `Status.code` on the wire.
+
+The `details.*` names are internal diagnostics. The `Retry-After` entries are HTTP response headers.
+
+| HTTP | Diagnostic code | Condition | Diagnostic detail or HTTP header |
+| --- | --- | --- | --- |
+| `400` | `invalid_body` | The server cannot read the body stream. | `details.cause` |
+| `400` | `decompression_failed` | The gzip stream is invalid. | `details.cause` |
+| `400` | `invalid_protobuf` | Protobuf decode is not successful. | `details.cause` |
+| `400` | `invalid_json` | JSON parsing or UTF-8 decode is not successful. | `details.cause` |
+| `400` | `invalid_id` | A trace or span ID has the wrong length or is all zero. | `details.length` |
+| `400` | `invalid_payload` | The payload has a bad timestamp, duplicate key, `snake_case` key, or too much nesting. | — |
+| `400` | `empty_payload` | The body is empty or the decoded batch contains no items. | — |
+| `401` | `invalid_api_key` | The key is absent, malformed, unknown, or revoked. | — |
+| `403` | `environment_mismatch` | The payload environment differs from the key or stored trace environment. | `details.expected`, `details.received` |
+| `409` | `trace_conflict` | A different project owns the trace ID. | — |
+| `413` | `body_too_large` | The raw body exceeds 4 MiB or the decompressed body exceeds 16 MiB. | `details.limit_bytes`, `details.received_bytes`, or `details.hint` |
+| `415` | `unsupported_media_type` | `Content-Type` is not protobuf or JSON. | `details.received` |
+| `415` | `unsupported_encoding` | `Content-Encoding` is not `gzip` or `identity`. | `details.received` |
+| `429` | `quota_exceeded` | A free project exceeds its ingestion quota. | `Retry-After` contains seconds to the next UTC month. |
+| `500` | `authentication_failed` | The authentication database request is not successful or times out. | — |
+| `500` | `privacy_configuration_invalid` | The server cannot decode the project privacy settings. | — |
+| `500` | `ingestion_failed` | An unexpected decode error occurs. | — |
+| `503` | `ingestion_failed` | Persistence is not successful. | `Retry-After: 1` |
+
+If the server cannot identify a supported request media type, the HTTP `415` response uses protobuf. An unregistered route returns JSON with diagnostic code `not_found` and message `Route not found`.
+
+## Retries
+
+Retry HTTP `429`, `502`, `503`, and `504` for traces and logs. Use backoff. If the response includes `Retry-After`, obey it.
+
+The telemetry.dev TypeScript transport makes at most three attempts. Its delays are 100 ms and 500 ms. It also retries network errors.
+
+Do not automatically retry DELTA metric batches. The TypeScript metric exporter does not retry them because a duplicate request can double-count metrics.

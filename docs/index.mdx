@@ -1,0 +1,36 @@
+---
+title: Introduction
+description: Record AI application telemetry with OpenTelemetry SDKs and standard OTLP.
+sidebar: { label: "Introduction", order: 0 }
+---
+
+telemetry.dev is an OpenTelemetry-native observability platform for AI and LLM applications. Examine model calls, tool steps, and agent runs in one trace.
+
+## What you get
+
+The platform gives you:
+
+- Token usage, cost, latency, and errors for each trace and span.
+- Standard OTLP/HTTP ingest for the first-party SDKs and your OpenTelemetry stack.
+- Environment-level controls for input and output capture.
+- SDK masking and server-side redaction before storage.
+
+The wire format is OpenTelemetry. You can keep your instrumentation and use standard OTLP instead of a proprietary trace protocol.
+
+## First trace
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" href="/quickstart" icon="rocket">Send a trace in five minutes.</Card>
+  <Card title="TypeScript SDK" href="/sdk/typescript" icon="activity">Record functions, model calls, tools, and agents.</Card>
+  <Card title="Python SDK" href="/sdk/python" icon="activity">Record sync and async Python code.</Card>
+  <Card title="Integrations" href="/integrations" icon="plug">Connect model providers and agent frameworks.</Card>
+</CardGroup>
+
+## Platform
+
+<CardGroup cols={2}>
+  <Card title="Traces" href="/platform/traces" icon="activity">Examine the trace explorer and span waterfall.</Card>
+  <Card title="Analytics" href="/platform/analytics" icon="gauge">Monitor cost, tokens, p95 latency, requests, and errors.</Card>
+  <Card title="Privacy" href="/platform/privacy" icon="shield">Control capture and redact sensitive values.</Card>
+  <Card title="OTLP ingest" href="/reference/otlp" icon="plug">Send traces, logs, and metrics through OTLP/HTTP.</Card>
+</CardGroup>

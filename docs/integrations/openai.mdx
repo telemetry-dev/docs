@@ -1,0 +1,206 @@
+---
+title: OpenAI
+description: Trace OpenAI chat, Responses API, embedding, and stream calls from TypeScript or Python.
+---
+
+The integration records OpenAI calls without changes to the OpenAI calls. Make a project at telemetry.dev. Copy an API key from the project setup page. Keys use the `td_live_...` format.
+
+## What it captures
+
+The integration records:
+
+- Chat messages, Responses API input, system instructions, model parameters, and embedding input
+- Response IDs, response models, finish reasons, output messages, errors, and time to first chunk
+- Input, output, total, cache-read, and reasoning token usage when OpenAI supplies these values
+- Tool-call deltas and arguments from chat streams
+- Azure OpenAI calls with provider `azure.ai.openai`, and other calls with provider `openai`.
+
+Embedding vectors are not part of the span output.
+
+## Install
+
+<CodeGroup>
+
+```sh TypeScript
+npm i @telemetry-dev/sdk @telemetry-dev/openai openai
+```
+
+```sh Python
+pip install telemetry-dev-openai
+```
+
+</CodeGroup>
+
+**TypeScript**
+
+| Requirement | Version |
+| --- | --- |
+| `@telemetry-dev/sdk` peer | `^0.1.0` |
+| `openai` peer | `>=6 <7` |
+| Node.js from `@telemetry-dev/sdk` | `>=20.19.0` |
+
+**Python**
+
+| Requirement | Version |
+| --- | --- |
+| Python | `>=3.10` |
+| `telemetry-dev` | `>=0.2.0` |
+| `openai` | `>=2,<3` |
+
+## Quickstart
+
+<CodeGroup>
+
+```ts TypeScript
+import OpenAI from "openai";
+import { flush, init, shutdown } from "@telemetry-dev/sdk";
+import { wrapOpenAI } from "@telemetry-dev/openai";
+
+init({ serviceName: "openai-app" });
+const client = wrapOpenAI(new OpenAI());
+
+try {
+  const completion = await client.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: "You are a helpful bot" },
+      { role: "user", content: "Tell me a joke about OpenTelemetry" },
+    ],
+    max_completion_tokens: 200,
+  });
+  console.log(completion.choices[0]?.message.content ?? "(no content)");
+} finally {
+  await flush();
+  await shutdown();
+}
+```
+
+```python Python
+import os
+
+import telemetry_dev
+from openai import OpenAI
+from telemetry_dev_openai import wrap_openai
+
+telemetry_dev.init(service_name="openai-app")
+client = wrap_openai(OpenAI())
+
+try:
+    completion = client.chat.completions.create(
+        model=os.getenv("MODEL", "gpt-4o-mini"),
+        messages=[
+            {"role": "system", "content": "You are a helpful bot"},
+            {"role": "user", "content": "Tell me a joke about OpenTelemetry"},
+        ],
+        max_completion_tokens=200,
+    )
+    print(completion.choices[0].message.content or "(no content)")
+finally:
+    telemetry_dev.flush()
+    telemetry_dev.shutdown()
+```
+
+</CodeGroup>
+
+### Global instrumentation
+
+Use global instrumentation when client wrappers are not practical:
+
+```ts
+import OpenAI from "openai";
+import { flush, init, shutdown } from "@telemetry-dev/sdk";
+import {
+  instrumentOpenAI,
+  uninstrumentOpenAI,
+} from "@telemetry-dev/openai";
+
+init({ serviceName: "openai-app" });
+instrumentOpenAI();
+const client = new OpenAI();
+
+try {
+  await client.embeddings.create({
+    model: "text-embedding-3-small",
+    input: "OpenTelemetry",
+  });
+} finally {
+  uninstrumentOpenAI();
+  await flush();
+  await shutdown();
+}
+```
+
+## API
+
+### TypeScript
+
+| Function | Purpose |
+| --- | --- |
+| `wrapOpenAI(client, options?)` | Instruments one client. More calls for the same client have no effect. |
+| `instrumentOpenAI(options?)` | Instruments clients with the OpenAI resource prototypes. |
+| `uninstrumentOpenAI()` | Restores the resource prototypes. Client wrappers stay active. |
+
+### Python
+
+| Function | Purpose |
+| --- | --- |
+| `wrap_openai(client, *, inject_stream_usage=False)` | Instruments one synchronous or asynchronous client. |
+| `instrument_openai(*, inject_stream_usage=False)` | Instruments the OpenAI resource classes. |
+| `uninstrument_openai()` | Restores the resource methods. |
+
+## Options
+
+**TypeScript**
+
+<TypeTable type={{ injectStreamUsage: { type: "boolean", description: "Add stream_options.include_usage when the caller does not set it. Hide the final usage-only chunk.", default: "false" } }} />
+
+`injectStreamUsage` is opt-in. Azure OpenAI requests with `data_sources` reject `stream_options`.
+
+**Python**
+
+<TypeTable type={{ inject_stream_usage: { type: "bool", description: "Add stream_options.include_usage and hide the final usage-only chunk.", default: "False" } }} />
+
+The integration instruments chat `create` and `parse`, Responses `create`, `retrieve`, and `parse`, and embeddings `create`. It instruments synchronous and asynchronous resources.
+
+## Calls
+
+| OpenAI call | Span |
+| --- | --- |
+| `chat.completions.create()` | `chat {model}` generation |
+| `responses.create()` | `chat {model}` generation |
+| Streamed `responses.retrieve()` | `chat unknown` generation |
+| `embeddings.create()` | `embeddings {model}` embedding |
+
+The integration keeps `asResponse()` and `withResponse()` on traced promises. These methods add the request ID and HTTP status to the span.
+
+## Streaming
+
+### TypeScript
+
+Chat streams combine content, refusal, and tool-call argument deltas. Responses streams close on completed, incomplete, failed, or error events.
+
+`responses.stream({ response_id })` has instrumentation. Its span starts as `chat unknown` because the first response event supplies the model. A non-streamed `responses.retrieve()` call has no span.
+
+The integration records an iteration error and returns the error to the caller. Consume or close each stream to finish its span.
+
+### Python
+
+`chat.completions.stream()` and `responses.stream()` use the instrumented methods. The integration does not instrument the stream helpers directly.
+
+`responses.stream(response_id=...)` has instrumentation. A `retrieve()` call without `stream=True` has no span.
+
+The default request does not change. Set `stream_options={"include_usage": True}` or use `inject_stream_usage=True` to record streamed chat usage.
+
+Instrument the client before access to `with_raw_response`. The OpenAI SDK stores bound methods at the first access to that namespace.
+
+## Provider detection
+
+`AzureOpenAI` and `AsyncAzureOpenAI` calls use provider `azure.ai.openai`. Other clients use `openai`.
+
+## Flush
+
+**TypeScript:** For a short script, call `await flush()` and `await shutdown()` before exit. In serverless code, call `await flush()` before return. You can also pass the work to `waitUntil`.
+
+**Python:** For a short script, call `telemetry_dev.flush()` and `telemetry_dev.shutdown()` before exit. In serverless code, call `flush()` before the runtime freezes.
+
+Open the [trace explorer](/platform/traces) to examine the spans. Refer to the [quickstart](/quickstart) for API-key setup.

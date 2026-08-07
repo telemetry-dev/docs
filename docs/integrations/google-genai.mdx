@@ -1,0 +1,193 @@
+---
+title: Google Gen AI
+description: Trace Gemini and Vertex AI generation, embedding, function-call, and stream operations from TypeScript or Python.
+---
+
+The integration records Google Gen AI model calls. Make a project at telemetry.dev. Copy an API key from the project setup page. Keys use the `td_live_...` format.
+
+## What it captures
+
+The integration records:
+
+- Contents, system instructions, model, sampling parameters, tools, tool configuration, safety configuration, and response format
+- Response IDs, model versions, candidate content, finish reasons, safety data, errors, and time to first chunk
+- Input, output, total, cache-read, reasoning, and tool-use prompt tokens
+- Embedding counts, dimensions, input-token counts, and billable characters
+- Gemini Developer API calls with provider `gcp.gemini`, and Vertex AI calls with provider `gcp.vertex_ai`.
+
+Embedding vectors are not part of the span output.
+
+## Install
+
+<CodeGroup>
+
+```sh TypeScript
+npm i @telemetry-dev/sdk @telemetry-dev/google-genai @google/genai
+```
+
+```sh Python
+pip install telemetry-dev-google-genai
+```
+
+</CodeGroup>
+
+**TypeScript**
+
+| Requirement | Version |
+| --- | --- |
+| `@telemetry-dev/sdk` peer | `^0.1.0` |
+| `@google/genai` peer | `>=2 <3` |
+| Node.js from `@telemetry-dev/sdk` | `>=20.19.0` |
+
+**Python**
+
+| Requirement | Version |
+| --- | --- |
+| Python | `>=3.10` |
+| `telemetry-dev` | `>=0.2.0` |
+| `google-genai` | `>=2,<3` |
+
+## Quickstart
+
+<CodeGroup>
+
+```ts TypeScript
+import { GoogleGenAI } from "@google/genai";
+import { flush, init, shutdown } from "@telemetry-dev/sdk";
+import { wrapGoogleGenAI } from "@telemetry-dev/google-genai";
+
+init({ serviceName: "google-genai-app" });
+const ai = wrapGoogleGenAI(
+  new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! }),
+);
+
+try {
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: "Tell me a joke about OpenTelemetry",
+    config: { systemInstruction: "You are a helpful bot" },
+  });
+  console.log(response.text ?? "(no content)");
+} finally {
+  await flush();
+  await shutdown();
+}
+```
+
+```python Python
+import os
+
+from google import genai
+from telemetry_dev import flush, init, shutdown
+from telemetry_dev_google_genai import wrap_google_genai
+
+init(service_name="google-genai-app")
+client = wrap_google_genai(
+    genai.Client(api_key=os.environ["GEMINI_API_KEY"]),
+)
+
+try:
+    response = client.models.generate_content(
+        model=os.environ.get("MODEL", "gemini-2.5-flash"),
+        contents="Tell me a joke about OpenTelemetry",
+        config={"system_instruction": "You are a helpful bot"},
+    )
+    print(response.text or "(no content)")
+finally:
+    flush()
+    shutdown()
+```
+
+</CodeGroup>
+
+## API
+
+### TypeScript
+
+| Function | Purpose |
+| --- | --- |
+| `wrapGoogleGenAI(client)` | Instruments one client's `models` object. |
+
+The TypeScript package has no global instrumentation and no options object. The Google SDK defines model methods as instance fields, not prototype methods.
+
+### Python
+
+| Function | Purpose |
+| --- | --- |
+| `wrap_google_genai(client)` | Instruments `client.models` and `client.aio.models`. |
+| `instrument_google_genai()` | Instruments the synchronous and asynchronous model classes. |
+| `uninstrument_google_genai()` | Restores the original class methods. |
+
+These functions have no options object. The integration instruments `generate_content`, `generate_content_stream`, and `embed_content`.
+
+It also instruments private generation methods to collect token usage from automatic function calls. Chat `send_message()` calls use the instrumented model methods.
+
+## Calls
+
+| Google Gen AI call | Span |
+| --- | --- |
+| `models.generateContent()` | `chat {model}` generation |
+| `models.generateContentStream()` | `chat {model}` generation |
+| `models.embedContent()` | `embeddings {model}` embedding |
+
+A chat from `client.chats.create()` uses these model methods. As a result, `sendMessage()` and `sendMessageStream()` also have instrumentation.
+
+## Automatic function calls
+
+### TypeScript
+
+A callable tool with a `callTool` method starts one span for the complete automatic function-call loop. The span includes total usage from the internal calls.
+
+Plain `functionDeclarations` do not start an automatic loop in the TypeScript SDK. Each manual `generateContent()` call starts one span.
+
+The usage sum uses `AsyncLocalStorage`. On an edge runtime without `AsyncLocalStorage`, the call still has instrumentation, but the internal usage sum is not available.
+
+### Python
+
+Pass a Python function in `config.tools`. The Google SDK calls the function and sends its result to the model.
+
+```python
+import os
+
+from google import genai
+from telemetry_dev_google_genai import wrap_google_genai
+
+
+def get_weather(location: str) -> str:
+    return f"rainy, 57°F in {location}"
+
+
+client = wrap_google_genai(
+    genai.Client(api_key=os.environ["GEMINI_API_KEY"]),
+)
+response = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents="Weather in Paris?",
+    config={"tools": [get_weather]},
+)
+print(response.text or "(no content)")
+```
+
+One `generate_content()` call starts one span for the complete automatic function-call loop. The integration sums usage from the internal model calls.
+
+## Streaming
+
+### TypeScript
+
+The stream state combines text parts, thinking parts, candidates, finish reasons, usage, and automatic function-call turns. The wrapper keeps `return`, `throw`, and `Symbol.asyncDispose` behavior.
+
+Consume or close each stream. A stream that has no consumption does not finish its span.
+
+### Python
+
+Gemini stream chunks contain cumulative usage data, so the integration does not change the request. The stream wrappers keep synchronous and asynchronous generator behavior.
+
+Call `close()` when you stop a synchronous stream early. Use the matching asynchronous close operation for an asynchronous stream.
+
+## Flush
+
+**TypeScript:** For a short script, call `await flush()` and `await shutdown()` before exit. In serverless code, call `await flush()` before return or pass the work to `waitUntil`.
+
+**Python:** For a short script, call `flush()` and `shutdown()` before exit. In serverless code, call `flush()` before the runtime freezes.
+
+Open the [trace explorer](/platform/traces) to examine the spans. Refer to the [quickstart](/quickstart) for API-key setup.

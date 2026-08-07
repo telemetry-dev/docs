@@ -1,0 +1,60 @@
+---
+title: API keys
+description: Create project keys, limit them to environments, and revoke them from the dashboard.
+---
+
+An API key authorizes OTLP data for one project. Keys start with `td_live_`.
+
+## Create a key
+
+An organization owner or admin can create and revoke keys. Organization members can view the key list.
+
+<Steps>
+  <Step title="Open API keys">
+    Select the project. Then select **API keys** in the sidebar.
+  </Step>
+  <Step title="Add the key">
+    Select **Create key**. Add an optional name and an optional environment.
+  </Step>
+  <Step title="Copy the key">
+    Copy the full key from the result dialog. telemetry.dev shows the full value one time.
+  </Step>
+</Steps>
+
+A new project also has a key named `default`. The project dialog shows this key one time.
+
+The key list shows only the first 16 characters and an ellipsis. telemetry.dev stores a SHA-256 hash of the full key, not the secret value.
+
+:::warning[Copy the key now]
+Copy the full key before you close the result dialog. You cannot get the full value again.
+:::
+
+## Use the key
+
+Send the key in the OTLP authorization header:
+
+```http
+Authorization: Bearer td_live_your_key
+```
+
+For a telemetry.dev SDK, set the environment variable:
+
+```bash
+export TELEMETRY_DEV_API_KEY="td_live_your_key"
+```
+
+Read [OpenTelemetry setup](/sdk/opentelemetry) for exporter settings.
+
+## Limit a key to one environment
+
+Set **Environment** when you create the key. Leave the field empty if the key must accept all environments.
+
+An environment-scoped key accepts only data with the same environment name. The ingest service compares environment names after it trims whitespace and changes letters to lowercase.
+
+If one resource block has a different environment, the ingest service rejects the full request with `403 environment_mismatch`. Read [Environments](/platform/environments) for environment setup.
+
+## Revoke a key
+
+Open the action menu for the key. Select **Revoke**, and confirm the action.
+
+The key stops authorization immediately. The key stays in the list with the **Revoked** status. You cannot activate it again.

@@ -1,0 +1,168 @@
+---
+title: Anthropic
+description: Trace Anthropic Messages API calls, token usage, tools, thinking, and streams from TypeScript or Python.
+---
+
+The integration records Anthropic Messages API calls. Make a project at telemetry.dev. Copy an API key from the project setup page. Keys use the `td_live_...` format.
+
+## What it captures
+
+The integration records:
+
+- Messages, system instructions, tool definitions, tool choice, model, and sampling parameters
+- Response IDs, response models, stop reasons, content blocks, errors, and time to first chunk
+- Input, output, cache-read, cache-creation, and thinking token usage
+- Text, `tool_use`, `server_tool_use`, citations, thinking, and signature deltas from streams
+- Anthropic, Amazon Bedrock, or Google Vertex AI as the provider from the client class.
+
+The Anthropic API does not supply a total-token field, and the integration does not calculate one.
+
+## Install
+
+<CodeGroup>
+
+```sh TypeScript
+npm i @telemetry-dev/sdk @telemetry-dev/anthropic @anthropic-ai/sdk
+```
+
+```sh Python
+pip install telemetry-dev-anthropic
+```
+
+</CodeGroup>
+
+**TypeScript**
+
+| Requirement | Version |
+| --- | --- |
+| `@telemetry-dev/sdk` peer | `^0.1.0` |
+| `@anthropic-ai/sdk` peer | `>=0.110.0 <1` |
+| Node.js from `@telemetry-dev/sdk` | `>=20.19.0` |
+
+**Python**
+
+| Requirement | Version |
+| --- | --- |
+| Python | `>=3.10` |
+| `telemetry-dev` | `>=0.2.0` |
+| `anthropic` | `>=0.116,<1` |
+
+## Quickstart
+
+<CodeGroup>
+
+```ts TypeScript
+import Anthropic from "@anthropic-ai/sdk";
+import { init, shutdown } from "@telemetry-dev/sdk";
+import { wrapAnthropic } from "@telemetry-dev/anthropic";
+
+init({ serviceName: "anthropic-app" });
+const anthropic = wrapAnthropic(new Anthropic());
+
+try {
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 200,
+    top_p: 1,
+    system: "You are a helpful bot",
+    messages: [
+      { role: "user", content: "Tell me a joke about OpenTelemetry" },
+    ],
+  });
+
+  console.log(
+    response.content
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join("\n"),
+  );
+} finally {
+  await shutdown();
+}
+```
+
+```python Python
+import telemetry_dev
+from anthropic import Anthropic
+from telemetry_dev_anthropic import wrap_anthropic
+
+telemetry_dev.init(service_name="anthropic-app")
+client = wrap_anthropic(Anthropic())
+
+try:
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1024,
+        messages=[
+            {"role": "user", "content": "Tell me a joke about OpenTelemetry"},
+        ],
+    )
+    print(message.content)
+finally:
+    telemetry_dev.flush()
+    telemetry_dev.shutdown()
+```
+
+</CodeGroup>
+
+## API
+
+### TypeScript
+
+| Function | Purpose |
+| --- | --- |
+| `wrapAnthropic(client)` | Instruments `messages.create()` for one client. |
+| `instrumentAnthropic()` | Instruments `Messages.prototype.create` for all clients. |
+| `uninstrumentAnthropic()` | Restores the original prototype method. |
+
+These functions have no options object. Call `instrumentAnthropic()` after `init()` and before you make an Anthropic client.
+
+### Python
+
+| Function | Purpose |
+| --- | --- |
+| `wrap_anthropic(client)` | Instruments `messages.create()` and `messages.stream()` for one client. |
+| `instrument_anthropic()` | Instruments synchronous and asynchronous Messages classes. |
+| `uninstrument_anthropic()` | Restores the original class methods. |
+
+These functions have no options object.
+
+## Streaming
+
+### TypeScript
+
+`messages.create({ stream: true })` and `messages.stream()` have instrumentation. The `messages.stream()` helper uses the instrumented `create()` method.
+
+The stream state combines text, citations, tool-input JSON, thinking text, and signature deltas. Invalid final tool JSON stays as a raw string.
+
+The integration records `timeToFirstChunkMs`. It also records an abort before stream consumption as an error.
+
+### Python
+
+The span starts when the `messages.stream()` context manager starts. Stream events pass to the caller without changes.
+
+The stream state combines usage from `message_start` and `message_delta`. It also combines text, tool-input JSON, and thinking blocks.
+
+Requests with an `X-Stainless-Raw-Response` header do not get instrumentation. The integration does not instrument `beta.messages`, `parse()`, or `count_tokens()`.
+
+## Response helpers
+
+Traced promises keep `asResponse()` and `withResponse()`. These methods record the `request-id` header and the HTTP status.
+
+The integration does not separately instrument the `withRawResponse` resource namespace. It also does not instrument `beta.messages` or `messages.countTokens()`.
+
+## Provider detection
+
+| Client class | Provider |
+| --- | --- |
+| `AnthropicBedrock` or `AsyncAnthropicBedrock` | `aws.bedrock` |
+| `AnthropicVertex` or `AsyncAnthropicVertex` | `gcp.vertex_ai` |
+| Other Anthropic clients | `anthropic` |
+
+## Flush
+
+**TypeScript:** For a short script, call `await shutdown()` before exit. `shutdown()` flushes pending telemetry. In serverless code, call `await flush()` before return or pass the work to `waitUntil`.
+
+**Python:** For a short script, call `telemetry_dev.flush()` and `telemetry_dev.shutdown()` before exit. In serverless code, call `flush()` before the runtime freezes.
+
+Open the [trace explorer](/platform/traces) to examine the spans. Refer to the [quickstart](/quickstart) for API-key setup.

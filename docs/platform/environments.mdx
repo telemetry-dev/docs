@@ -1,0 +1,44 @@
+---
+title: Environments
+description: Separate telemetry, API keys, filters, and capture settings by deployment environment.
+---
+
+An environment identifies the deployment that sent telemetry. Typical names include `production`, `staging`, and `development`.
+
+telemetry.dev reads the environment from the OpenTelemetry resource attribute `deployment.environment.name`. The project setup page uses `production` by default.
+
+```text
+OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
+```
+
+Use a clear environment name on each deployment. This value becomes a dimension on traces, spans, and metrics.
+
+## Use environments in the dashboard
+
+The environment value appears in these dashboard areas:
+
+| Area | Behavior |
+| --- | --- |
+| Traces and spans | Select an environment filter to limit the table |
+| Trace detail | Read the environment in the trace field grid |
+| Analytics | Group requests by environment |
+| API keys | Limit a key to one environment |
+| Privacy | Control prompt and response capture for each environment |
+
+The trace filter can show the first 100 environment values. The environment column is hidden by default. Use **Columns** to show it.
+
+## Limit an API key
+
+Open **API keys**, then set **Environment** when you create a key. A blank value gives the key access to all environments.
+
+For an environment-scoped key, each resource block must have the same environment. The ingest service trims whitespace and changes the name to lowercase before the comparison.
+
+A mismatch rejects the full OTLP request with `403 environment_mismatch`. Read [API keys](/platform/api-keys) for the key procedure.
+
+## Control content capture
+
+Open **Settings → Privacy**. Each environment row has a **Store prompts and responses** checkbox.
+
+Capture is on if an environment has no saved setting. The settings page always includes `production` and `development`. You can add more environment rows.
+
+The settings service trims each name, changes it to lowercase, and removes duplicate names. Read [Privacy and retention](/platform/privacy) for redaction and retention controls.

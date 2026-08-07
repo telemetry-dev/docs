@@ -1,0 +1,85 @@
+---
+title: Privacy and retention
+description: Control content capture, redact sensitive values, and set project retention.
+---
+
+telemetry.dev applies privacy controls before it stores telemetry. Built-in redaction, environment capture settings, and custom patterns work together.
+
+## Layer 1: Built-in redaction
+
+Built-in redaction is always on. It applies to each stored string and to attribute keys.
+
+Sensitive attribute keys are dropped. These keys include authorization, cookie, credential, password, secret, token, and API-key names. Token-count and token-time attributes remain available for analytics.
+
+The ingest service has 13 secret-value patterns. The patterns cover these secret categories:
+
+- Private-key material
+- telemetry.dev and provider API keys
+- Bearer credentials and signed web tokens
+- Secret assignments in text or JSON
+- Credentials in URLs
+- Email addresses
+
+The ingest service replaces a matched value with `[REDACTED]`.
+
+Five numeric PII patterns cover valid U.S. Social Security numbers, phone numbers, and payment-card numbers. Phone coverage includes North American and international formats. Payment-card matches must pass a Luhn check.
+
+## Layer 2: Environment capture controls
+
+Prompt and response capture is on by default. An owner or admin can change capture for each environment.
+
+<Steps>
+  <Step title="Open privacy settings">
+    Open the project. Then select **Settings → Privacy**.
+  </Step>
+  <Step title="Select an environment">
+    Use the `production` or `development` row. Select **Add environment** for a different name.
+  </Step>
+  <Step title="Set capture">
+    Select or clear **Store prompts and responses**.
+  </Step>
+  <Step title="Save settings">
+    Save the project privacy settings.
+  </Step>
+</Steps>
+
+If capture is off, telemetry.dev does not store input or output content for that environment. It also drops content attributes and replaces the span name with `[REDACTED]`.
+
+Environment names use lowercase after whitespace removal at each end. You can save at most 100 environment rows.
+
+## Layer 3: Custom redaction patterns
+
+Add one pattern per line in **Settings → Privacy**. telemetry.dev applies custom patterns after the built-in patterns.
+
+| Limit | Value |
+| --- | --- |
+| Pattern engine | RE2 linear-time expressions |
+| Patterns per project | 20 |
+| Length per pattern | 500 characters |
+| Replacement | `[REDACTED]` |
+
+RE2 does not accept lookarounds or backreferences. telemetry.dev also rejects zero-width patterns and patterns that exceed the total complexity limit. Duplicate lines become one pattern.
+
+Custom patterns apply to the complete stored telemetry value. This includes span data, resource data, events, links, metadata, logs, errors, and metric attributes.
+
+## SDK-side controls
+
+Use SDK controls when data must not leave your application. The TypeScript SDK has `captureInput`, `captureOutput`, and `mask` controls.
+
+Read [TypeScript SDK privacy controls](/sdk/typescript) for configuration details. Server-side controls still apply after the SDK sends telemetry.
+
+## Set retention
+
+Open **Settings → Privacy**, then select the retention period.
+
+| Plan | Maximum retention |
+| --- | ---: |
+| Free | 7 days |
+| Pro | 30 days |
+| Team | 90 days |
+
+A new project starts at the maximum retention for its plan. The permitted values are 7, 30, and 90 days.
+
+After a plan downgrade, a project keeps its saved retention value. You cannot increase retention beyond the new plan limit.
+
+The ingest service removes data past the project retention period. A hard 90-day TTL applies to all stored telemetry, regardless of the plan.

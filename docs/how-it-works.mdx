@@ -1,0 +1,86 @@
+---
+title: How it works
+description: Learn how telemetry.dev turns OpenTelemetry spans into traces, costs, and dashboard views.
+sidebar: { label: "How it works", order: 2 }
+---
+
+An SDK records spans and sends them through OTLP. The ingest service maps the spans to trace data for the dashboard.
+
+## Traces and spans
+
+A trace groups one end-to-end application run. Each span records one operation inside that run.
+
+```text
+Trace: answer
+├─ Span: searchWeb       tool
+└─ Span: chat gpt-4      generation
+```
+
+The first-party SDKs set `gen_ai.operation.name` from the span type:
+
+| SDK span type | `gen_ai.operation.name` | Typical use |
+| --- | --- | --- |
+| `span` | `function` | Application functions and custom work. |
+| `generation` | `chat` | Model requests and responses. |
+| `tool` | `execute_tool` | Tool calls and their results. |
+| `agent` | `invoke_agent` | Agent runs. |
+| `embedding` | `embeddings` | Embedding requests. |
+
+The SDK activates context around observed functions. As a result, spans inside an observed function become child spans in the same trace.
+
+## Projects, environments, and API keys
+
+These concepts control ownership and data scope:
+
+- **Project:** A project owns its API keys, telemetry, privacy controls, and retention value.
+- **Environment:** The SDK writes the environment to `deployment.environment.name`. The default value is `production`.
+- **API key:** A key authenticates ingest requests for one project. Keys start with `td_live_`.
+
+The dashboard makes a `default` key with each new project and shows its full value one time.
+
+An API key can apply to one environment or to all environments. A scoped key rejects a payload when its resource environment does not match.
+
+The ingest service uses the first available environment value:
+
+1. `deployment.environment.name`
+2. `deployment.environment`
+3. `default`
+
+Environment names also control trace filters, analytics groups, and input or output capture.
+
+## Ingest pipeline
+
+```text
+SDK or OpenTelemetry exporter
+  -> OTLP/HTTP
+  -> ingest.telemetry.dev
+  -> normalized trace and span fields
+  -> dashboard
+```
+
+The data path has these steps:
+
+1. The SDK maps model, token, content, tool, agent, and error fields to OpenTelemetry attributes.
+2. The exporter sends OTLP to `https://ingest.telemetry.dev`. The service accepts OTLP protobuf and JSON.
+3. The Bearer API key selects the project. An environment-scoped key also checks each resource environment.
+4. The ingest service maps supported `gen_ai.*`, `ai.*`, `llm.*`, and `td.*` attributes to stored fields.
+5. The ingest service calculates cost from the model, provider, and token usage. A client cost value has precedence.
+6. The ingest service applies capture controls and redaction before storage.
+
+Cost uses non-cached input, cached input, cache-write input, and output token prices. An unknown model or absent token usage gives no calculated cost.
+
+See [OTLP ingest](/reference/otlp), [span attributes](/reference/span-attributes), and [cost calculation](/reference/cost) for the full contracts.
+
+## Dashboard data
+
+The trace explorer shows status, input and output previews, duration, token usage, cost, span count, models, users, sessions, and environments.
+
+A trace detail page shows a span waterfall. Select a span to examine its model, provider, tokens, cost, content, attributes, events, and errors.
+
+The analytics page shows requests, total cost, p95 latency, tokens, and error rate. It also shows daily request, cost, and token charts.
+
+<CardGroup cols={2}>
+  <Card title="Trace explorer" href="/platform/traces" icon="activity">Examine traces, spans, and the waterfall.</Card>
+  <Card title="Analytics" href="/platform/analytics" icon="gauge">Monitor project cost, usage, latency, and errors.</Card>
+  <Card title="Environments" href="/platform/environments" icon="shield">Use environments for scope, filters, and privacy controls.</Card>
+</CardGroup>

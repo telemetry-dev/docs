@@ -1,0 +1,74 @@
+---
+title: Traces and logs
+description: Search traces and spans, inspect a span waterfall, and read correlated logs.
+---
+
+The trace explorer shows each request as a trace and each operation as a span. Use it to find errors, slow operations, model calls, tools, and agent steps.
+
+## Explore traces and spans
+
+Open **Traces** in a project. Select **Traces** or **Spans** above the table.
+
+The two views use the same filters:
+
+| Filter | Behavior |
+| --- | --- |
+| Search | Searches trace or span names after a 250 ms delay |
+| Status | Shows all statuses, successes, or errors |
+| Environment | Uses environment values from telemetry |
+| Framework | Uses the detected framework |
+| Session | Limits results to a selected session or conversation |
+| User | Limits results to a selected user |
+
+Search does not examine prompt or response content. The filters stay in the page URL, so you can bookmark or share the filtered view.
+
+### Trace table
+
+The trace table can show these columns:
+
+`Date · Trace · Input · Output · Duration · Tokens · Cost · Spans · Models · Session · User · Environment`
+
+Select a session or user value to apply that filter. The token cell separates input and output tokens and provides cache and reasoning details. The duration cell shows time to first token when the trace has that value.
+
+### Span table
+
+The span table can show these columns:
+
+`Date · Type · Name · Model · Tool / Agent · Conversation · Service · Environment · Status · Duration · Tokens · Cost`
+
+Select a span row to open its trace with that span selected.
+
+Open **Columns** to select table columns. The browser keeps the column selection in local storage. Select **Load more** to add the next result page.
+
+The trace explorer uses the full retention period for the project. It does not have a separate date-range control.
+
+## Inspect a trace
+
+Select a trace row to open the trace detail. The header shows status, duration, first-token time, span count, tokens, cost, service, environment, framework, user, conversation, and trace ID.
+
+The span waterfall shows the operation tree against a shared time axis. You can resize the span and operation columns. Use **Expand all** or **Collapse all** to control the tree.
+
+### Keyboard controls
+
+Focus the waterfall tree, then use these keys:
+
+| Key | Action |
+| --- | --- |
+| `↓` or `j` | Select the next span |
+| `↑` or `k` | Select the prior span |
+| `PageDown` or `PageUp` | Move eight spans |
+| `Home` or `End` | Select the first or last span |
+| `→` or `l` | Expand a span or select its first child |
+| `←` or `h` | Collapse a span or select its parent |
+
+The selected-span panel shows model, provider, tool or agent, duration, tokens, cost, operation, IDs, and finish data. Content tabs can include **Input / Output**, **Attributes**, **Events**, and **Error**.
+
+Use **Pretty** for parsed chat messages. Use **JSON** for the stored value. The detail view shows a **Truncated** badge when a payload exceeds its preview limit.
+
+## Read logs
+
+Open **Logs** in the project sidebar. The table shows `Date · Level · Entity · Message · Data`.
+
+The level filter starts at `error`. You can select `warn`, `info`, `debug`, or all levels. Message search examines the 100 rows in the loaded page.
+
+The logs view uses a fixed 30-day window and has no pagination. Select a row to open its full message and attributes. If the log has trace context, select the trace button to open its parent span.

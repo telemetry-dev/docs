@@ -1,0 +1,164 @@
+---
+title: Vercel AI SDK
+description: Trace AI SDK calls, model steps, and tools with @telemetry-dev/ai-sdk.
+---
+
+`@telemetry-dev/ai-sdk` uses the AI SDK telemetry integration API. It sends OpenTelemetry spans through its private provider and does not change your global OpenTelemetry setup.
+
+## Install
+
+```package-install
+npm i @telemetry-dev/ai-sdk ai
+```
+
+The package operates with `ai >= 6.0.111 < 8`. Use the package entry for your installed AI SDK major version.
+
+## Set the API key
+
+Create a project at telemetry.dev. Then copy an API key from the project setup page. Keys look like `td_live_...`.
+
+```bash
+export TELEMETRY_DEV_API_KEY=td_live_...
+```
+
+Without an API key, `telemetryDev()` returns an empty integration and does not send telemetry.
+
+## AI SDK 7
+
+Add `telemetryDev()` to the `telemetry.integrations` array for each call:
+
+```ts
+import { generateText } from "ai";
+import { telemetryDev } from "@telemetry-dev/ai-sdk";
+
+const { text } = await generateText({
+  model,
+  prompt: "Summarize the incident report.",
+  runtimeContext: { userId: "u_123", sessionId: "s_456", tenant: "acme" },
+  telemetry: {
+    functionId: "summarize-incident",
+    includeRuntimeContext: { userId: true, sessionId: true, tenant: true },
+    integrations: [telemetryDev()],
+  },
+});
+```
+
+The AI SDK does not send `runtimeContext` keys to integrations by default. Add each necessary key to `telemetry.includeRuntimeContext`.
+
+The integration maps the included keys as follows:
+
+| Context key | Span attribute |
+| --- | --- |
+| `userId` | `user.id` |
+| `sessionId` | `gen_ai.conversation.id` |
+| Other included keys | `td.metadata.<key>` |
+
+### Global registration
+
+AI SDK 7 also accepts one global, concurrency-safe integration:
+
+```ts
+import { registerTelemetry } from "ai";
+import { telemetryDev } from "@telemetry-dev/ai-sdk";
+
+registerTelemetry(telemetryDev());
+```
+
+The integration keeps state by the AI SDK `callId`. Overlapping calls from one integration instance get separate traces.
+
+AI SDK 7 also calls the integration context wrappers `executeLanguageModelCall` and `executeTool`. These wrappers keep provider requests, tool calls, and nested AI SDK calls in the correct span context.
+
+## Captured data
+
+| AI SDK operation | Captured data |
+| --- | --- |
+| `generateText` and `streamText` | A root `chat` or `invoke_agent` span, one `chat` span per model step, messages, models, finish reasons, tokens, sampling options, and errors |
+| `generateObject` and `streamObject` | A `chat` operation with `gen_ai.output.type: "json"`, JSON input and output, usage, and errors |
+| Local tool `execute` calls | An `execute_tool` span with the tool name, call ID, arguments, result, duration, and errors |
+| `embed`, `embedMany`, and `rerank` | `embeddings` or `rerank` operations with model and usage data |
+| Stream timing | `gen_ai.client.operation.time_to_first_chunk` for text and object operations on AI SDK 7 |
+
+Provider-executed tools do not produce an `execute_tool` span. The AI SDK only calls tool hooks for local tools that have an `execute` function.
+
+:::note
+Each AI SDK operation makes one trace. A shared `sessionId` sets `gen_ai.conversation.id` and correlates calls, but it never combines calls into one trace.
+:::
+
+AI SDK 7 records input and output content by default. Set the AI SDK `recordInputs` or `recordOutputs` telemetry option to `false` to omit payloads. IDs, models, and usage remain.
+
+For streams, drain the stream or await `result.response`. The AI SDK calls the terminal telemetry hook only after the stream settles.
+
+## AI SDK 6
+
+Import the `/v6` entry and add the integration to `experimental_telemetry.integrations`:
+
+```ts
+import { generateText } from "ai";
+import { telemetryDev } from "@telemetry-dev/ai-sdk/v6";
+
+const { text } = await generateText({
+  model,
+  prompt: "Summarize the incident report.",
+  experimental_telemetry: {
+    functionId: "summarize-incident",
+    metadata: { userId: "u_123", sessionId: "s_456", tenant: "acme" },
+    integrations: [telemetryDev()],
+  },
+});
+```
+
+AI SDK 6 reads identity from `experimental_telemetry.metadata`. It does not use the AI SDK 7 runtime-context filter.
+
+| Difference | AI SDK 7 | AI SDK 6 |
+| --- | --- | --- |
+| Package entry | `@telemetry-dev/ai-sdk` | `@telemetry-dev/ai-sdk/v6` |
+| Configuration | `telemetry.integrations` or `registerTelemetry()` | `experimental_telemetry.integrations` |
+| Operations | Text, object, embed, and rerank operations | `generateText`, `streamText`, and `Agent` only |
+| TTFT | Captured for text and object operations | Not available from the hooks |
+| Concurrent calls | One shared instance is safe | A shared global instance is not safe |
+| Content controls | Honors `recordInputs` and `recordOutputs` | Always records message and output content |
+| Thrown errors | Flushes an error trace | Does not flush because `onFinish` does not run |
+| Context wrappers | Includes model-call and tool context wrappers | No context wrappers |
+
+Use a new `telemetryDev()` instance for each AI SDK 6 call. Do not register one shared instance for overlapping calls.
+
+:::warning[AI SDK 6 content capture]
+AI SDK 6 always records message and output content. It has no input or output redaction option.
+:::
+
+## Options
+
+Explicit options take precedence over environment variables and defaults.
+
+| Option | Type | Environment variable | Default |
+| --- | --- | --- | --- |
+| `apiKey` | `string` | `TELEMETRY_DEV_API_KEY` | No key. The integration is inactive. |
+| `baseUrl` | `string` | `TELEMETRY_DEV_BASE_URL` | `https://ingest.telemetry.dev` |
+| `environment` | `string` | `TELEMETRY_DEV_ENVIRONMENT` | `production` |
+| `serviceName` | `string` | `OTEL_SERVICE_NAME` | `unknown_service` |
+| `fetch` | `typeof fetch` | None | `globalThis.fetch` |
+| `waitUntil` | `(promise: Promise<unknown>) => void` | None | The terminal hook waits for export. |
+| `onError` | `(error: unknown) => void` | None | No callback |
+
+The integration reports export errors through `onError`. Instrumentation errors do not enter the model call.
+
+## Serverless runtimes
+
+`waitUntil` is the package's only serverless-specific option. Pass the export promise to the platform lifetime function:
+
+```ts
+telemetryDev({ waitUntil: (promise) => ctx.waitUntil(promise) });
+```
+
+Without `waitUntil`, the terminal hook waits for the export. You do not need an `instrumentation.ts` file for this integration.
+
+The package has a private `BasicTracerProvider` and does not register it globally. On runtimes without `process.env`, pass `apiKey` directly.
+
+<CardGroup cols={2}>
+  <Card title="View traces" href="/platform/traces" icon="activity">
+    Open the trace explorer and examine the span waterfall.
+  </Card>
+  <Card title="API key setup" href="/quickstart" icon="key">
+    Set the telemetry.dev API key and service name.
+  </Card>
+</CardGroup>

@@ -1,0 +1,68 @@
+---
+title: Analytics
+description: Compare request volume, latency, errors, tokens, and cost across a project.
+---
+
+Open a project to see **Overview**. The page combines trace summaries with OTLP metric series for the selected period.
+
+## Select a period
+
+Select **Last 7 days**, **Last 30 days**, or **Last 90 days**. The default period is 30 days. The project retention setting limits the available data.
+
+## Read the summary
+
+The overview summarizes these values:
+
+| Value | Definition |
+| --- | --- |
+| Requests | Trace count |
+| Duration | Average duration and p95 latency |
+| Error rate | Error count divided by request count |
+| Tokens | Input tokens plus output tokens, with separate totals |
+| Total cost | Sum of calculated model cost in USD |
+
+The KPI cards compare the selected period with the immediately prior period of the same length. A lower p95 latency or error rate is a positive change.
+
+A comparison appears only if the project retention contains two full periods. For example, a 30-day view needs at least 60 days of retention.
+
+telemetry.dev calculates average and p95 duration. It does not calculate p50 duration.
+
+## Read time-series charts
+
+The overview has three daily charts:
+
+- Requests over time
+- Cost over time
+- Input and output tokens over time
+
+telemetry.dev fills dates without data with zero values. This keeps each time axis continuous.
+
+## Compare groups
+
+Use **Group by** on the request breakdown. You can select these dimensions:
+
+- Model
+- Provider
+- Environment
+- User
+- Framework
+
+The chart shows at most eight groups. It orders groups by total cost, then by request count.
+
+## Read OTLP metric series
+
+The metric section shows one small chart for each ingested OTLP metric series. telemetry.dev selects the aggregation from the metric type:
+
+| Metric type | Aggregation |
+| --- | --- |
+| Duration histogram with unit `s` or `ms` | p95 |
+| Gauge | Average |
+| Other metric type | Total |
+
+For duration histograms, telemetry.dev rebuilds p95 from the explicit bounds and bucket counts. It uses linear interpolation inside the selected bucket.
+
+The page uses hourly points for a period of 7 days or less. Longer periods use daily points.
+
+The page can show 100 metric series. If a project has more series, it shows the most frequent series and a truncation notice.
+
+If the period has no traces or metric series, select **Go to Setup** to connect an application.

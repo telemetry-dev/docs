@@ -1,0 +1,396 @@
+---
+title: TypeScript SDK
+description: Add spans, logs, metrics, and trace context to TypeScript applications.
+---
+
+`@telemetry-dev/sdk` is the full TypeScript SDK. It uses an isolated OpenTelemetry provider by default and sends OTLP data to telemetry.dev.
+
+Use Node.js 20.19.0 or later. The package is ESM-only.
+
+## Install
+
+```package-install
+npm install @telemetry-dev/sdk
+```
+
+Make a project at telemetry.dev. Then copy an API key from the project setup page. Keys look like `td_live_...`.
+
+```bash .env
+TELEMETRY_DEV_API_KEY=td_live_...
+OTEL_SERVICE_NAME=my-service
+TELEMETRY_DEV_ENVIRONMENT=production
+```
+
+## Start the SDK
+
+Call `init()` one time when the application starts. This verified example uses the full core API:
+
+```ts src/index.ts lineNumbers
+import { config } from "dotenv";
+import {
+  flush, getTraceparent, init, log, observe,
+  propagateAttributes, shutdown, startActiveSpan, startSpan,
+} from "@telemetry-dev/sdk";
+
+config();
+
+init({
+  serviceName: process.env.OTEL_SERVICE_NAME ?? "08-sdk-basic",
+  onError: (e) => console.error("[telemetry.dev]", e),
+});
+
+const searchWeb = observe(
+  async function searchWeb(query: string) {
+    return { hits: [`result for ${query}`] };
+  },
+  { type: "tool", toolName: "web-search" },
+);
+
+async function answer(question: string) {
+  return startActiveSpan("answer", { type: "agent", agentName: "demo-agent" }, async () => {
+    console.log("traceparent for downstream services:", getTraceparent());
+    await searchWeb(question);
+
+    const generation = startSpan("chat-completion", {
+      type: "generation",
+      model: "fake-llm-1",
+      provider: "example",
+      input: [{ role: "user", content: question }],
+    });
+    const res = await fakeChat(question);
+    generation.end({ output: res.message, usage: res.usage, finishReason: "stop" });
+
+    log("generation finished", { attributes: { promptChars: question.length } });
+    return res.message.content;
+  });
+}
+
+const reply = await propagateAttributes(
+  { userId: "u_demo", sessionId: crypto.randomUUID(), metadata: { example: "08-sdk-basic" } },
+  () => answer("What is OTLP?"),
+);
+
+await flush();
+await shutdown();
+```
+
+`init()` returns a `TelemetryClient`. The client has `enabled`, `flush()`, and `shutdown()` members. The module functions operate on the active client.
+
+## `init()` options
+
+An explicit option has precedence over an environment variable.
+
+| Option | Type | Environment fallback | Default | Purpose |
+| --- | --- | --- | --- | --- |
+| `apiKey` | `string` | `TELEMETRY_DEV_API_KEY` | None | Authenticates exports. Without a key, the SDK is a no-op. |
+| `baseUrl` | `string` | `TELEMETRY_DEV_BASE_URL` | `https://ingest.telemetry.dev` | Sets the ingest base URL. The SDK removes trailing slashes. |
+| `environment` | `string` | `TELEMETRY_DEV_ENVIRONMENT` | `production` | Sets `deployment.environment.name`. |
+| `serviceName` | `string` | `OTEL_SERVICE_NAME` | `unknown_service` | Sets `service.name`. |
+| `enabled` | `boolean` | None | `true` | Deactivates the client when set to `false`. |
+| `registerGlobal` | `boolean` | None | `false` | Registers the SDK provider as the global OpenTelemetry provider. |
+| `exportMode` | `"batched" \| "immediate"` | None | `"batched"` | Selects batch export or immediate export for spans and logs. |
+| `captureInput` | `boolean` | None | `true` | Sets the default input capture. |
+| `captureOutput` | `boolean` | None | `true` | Sets the default output capture. |
+| `mask` | `(value: unknown, ctx: { key: string }) => unknown` | None | `undefined` | Changes captured content before serialization. |
+| `maxAttributeLength` | `number` | None | `65536` | Limits each captured content attribute. |
+| `batch` | `BatchOptions` | None | See the next table | Changes the batch processor limits. |
+| `spanFilter` | `(span: ReadableSpan) => boolean` | None | `undefined` | Selects spans at export time. |
+| `resourceAttributes` | `Record<string, AttributeValue>` | None | `undefined` | Adds OpenTelemetry resource attributes. |
+| `logLevel` | `"debug" \| "info" \| "warn" \| "error" \| "silent"` | None | `"warn"` | Controls SDK diagnostic output. |
+| `fetch` | `typeof fetch` | None | `globalThis.fetch` | Supplies the HTTP function. |
+| `waitUntil` | `(promise: Promise<unknown>) => void` | None | `undefined` | Gives flush work to a serverless runtime. |
+| `onError` | `(error: unknown) => void` | None | `undefined` | Receives internal SDK errors. |
+
+`batch` combines these defaults with the values that you supply:
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `maxExportBatchSize` | `number` | `64` |
+| `scheduledDelayMillis` | `number` | `1000` |
+| `maxQueueSize` | `number` | `2048` |
+| `exportTimeoutMillis` | `number` | `30000` |
+
+The optional second argument accepts `spanExporter`, `logRecordExporter`, and `metricExporter`. These exporter overrides are test seams. A `spanExporter` override activates the client without an API key.
+
+Environment fallbacks do not operate on runtimes without `process`. On these runtimes, pass the key and base URL directly.
+
+## Observe functions
+
+`observe(fn, options)` returns a function that records one span for each call. It operates with synchronous and asynchronous functions.
+
+```ts
+const loadAccount = observe(
+  async function loadAccount(accountId: string) {
+    return database.accounts.get(accountId);
+  },
+  { name: "load-account", type: "tool", toolName: "database" },
+);
+```
+
+The wrapper uses `options.name`, then the function name, then `anonymous`. It uses one argument directly and an array for multiple arguments.
+
+The wrapper activates the span, and nested SDK calls become children. It records the return value as output. It records and rethrows errors.
+
+The wrapper gets the client when the function runs. Thus, you can define observed functions before `init()`.
+
+## Create and update spans
+
+Use `startActiveSpan()` to do work in the new span context:
+
+```ts
+const result = await startActiveSpan(
+  "run-agent",
+  { type: "agent", agentName: "planner" },
+  async () => runAgent(),
+);
+```
+
+Use `startSpan()` for a detached span. End the returned handle explicitly:
+
+```ts
+const span = startSpan("model-call", {
+  type: "generation",
+  model: "gpt-4o",
+  provider: "openai",
+  input: messages,
+});
+
+try {
+  const response = await callModel(messages);
+  span.end({
+    output: response.message,
+    usage: response.usage,
+    finishReason: "stop",
+  });
+} catch (error) {
+  span.end({ error });
+  throw error;
+}
+```
+
+`updateActiveSpan(fields)` changes the active span. It is a no-op when no SDK span is active.
+
+### `SpanHandle`
+
+A `SpanHandle` gives access to the raw OpenTelemetry `span` and `context`. It also gives `traceId`, `spanId`, `traceparent`, and `isRecording`.
+
+- `update(fields)` changes fields and returns the same handle.
+- `end(fields)` applies final fields and ends the span.
+- `end()` accepts `endTime` as a `Date` or number.
+
+Before `init()`, `startSpan()` returns a safe no-op handle. Its `traceparent` is `null`, and `isRecording` is `false`.
+
+### Span types
+
+Each span type sets `gen_ai.operation.name`:
+
+| `type` | Operation | Work |
+| --- | --- | --- |
+| `"span"` | `function` | General application work |
+| `"generation"` | `chat` | Model generation |
+| `"tool"` | `execute_tool` | Tool execution |
+| `"agent"` | `invoke_agent` | Agent execution |
+| `"embedding"` | `embeddings` | Embedding generation |
+
+All SDK spans use OpenTelemetry span kind `INTERNAL`.
+
+Tool spans use `gen_ai.tool.call.arguments` and `gen_ai.tool.call.result`. Other spans use `gen_ai.input.messages` and `gen_ai.output.messages`.
+
+### Span fields
+
+| Field | Type | Exported value |
+| --- | --- | --- |
+| `input` | `unknown` | Input content for the span type |
+| `output` | `unknown` | Output content for the span type |
+| `model` | `string` | `gen_ai.request.model` |
+| `provider` | `string` | `gen_ai.provider.name` |
+| `responseModel` | `string` | `gen_ai.response.model` |
+| `responseId` | `string` | `gen_ai.response.id` |
+| `usage` | `TokenUsage` | `gen_ai.usage.*` token attributes |
+| `costUsd` | `number` | `gen_ai.usage.cost` |
+| `finishReason` | `string` | One value in `gen_ai.response.finish_reasons` |
+| `outputType` | `string` | `gen_ai.output.type` |
+| `temperature` | `number` | `gen_ai.request.temperature` |
+| `topP` | `number` | `gen_ai.request.top_p` |
+| `topK` | `number` | `gen_ai.request.top_k` |
+| `maxTokens` | `number` | `gen_ai.request.max_tokens` |
+| `stopSequences` | `string[]` | `gen_ai.request.stop_sequences` |
+| `seed` | `number` | `gen_ai.request.seed` |
+| `frequencyPenalty` | `number` | `gen_ai.request.frequency_penalty` |
+| `presencePenalty` | `number` | `gen_ai.request.presence_penalty` |
+| `timeToFirstChunkMs` | `number` | Seconds in `gen_ai.response.time_to_first_chunk` |
+| `toolName` | `string` | `gen_ai.tool.name` |
+| `toolCallId` | `string` | `gen_ai.tool.call.id` |
+| `toolDescription` | `string` | `gen_ai.tool.description` |
+| `agentName` | `string` | `gen_ai.agent.name` |
+| `agentId` | `string` | `gen_ai.agent.id` |
+| `metadata` | `Record<string, unknown>` | Values under `td.metadata.*` |
+| `attributes` | OpenTelemetry attributes | Raw attributes merged last |
+| `error` | `unknown` | Error status, attributes, and an exception event |
+
+`TokenUsage` accepts `inputTokens`, `outputTokens`, `totalTokens`, `cacheReadInputTokens`, `cacheCreationInputTokens`, and `reasoningOutputTokens`.
+
+`metadata` drops `userId`, `sessionId`, `user_id`, and `session_id`. Use `propagateAttributes()` for user and session correlation.
+
+`StartSpanOptions` adds `parent`, `startTime`, `captureInput`, and `captureOutput`. Its `type` default is `"span"`.
+
+## Propagate user, session, and metadata attributes
+
+`propagateAttributes()` applies correlation attributes to each span and log in its callback:
+
+```ts
+await propagateAttributes(
+  {
+    userId: "user_123",
+    sessionId: "session_456",
+    metadata: { tenant: "acme" },
+  },
+  () => handleRequest(),
+);
+```
+
+The SDK maps `userId` to `user.id` and `sessionId` to `gen_ai.conversation.id`. It maps metadata to `td.metadata.*`.
+
+Nested calls combine attributes. Inner values replace outer values with the same key. Propagation operates before `init()`.
+
+## Send logs
+
+`log()` emits an OpenTelemetry log record in the active trace context:
+
+```ts
+log("model request complete", {
+  level: "info",
+  eventName: "model.complete",
+  attributes: { attempt: 1, cached: false },
+  timestamp: new Date(),
+});
+```
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `level` | `"debug" \| "info" \| "warn" \| "error"` | `"info"` |
+| `eventName` | `string` | `undefined` |
+| `attributes` | `Record<string, unknown>` | `undefined` |
+| `timestamp` | `Date \| number` | `undefined` |
+
+Numbers and booleans stay raw. The capture pipeline serializes other values. Each record also gets propagated attributes.
+
+The SDK starts the log provider after the first `log()` call.
+
+## Continue a trace across services
+
+`getTraceparent()` returns the W3C traceparent for the active context. It returns `null` when no context is active.
+
+Send this value to a downstream service. Pass the received value as `parent`:
+
+```ts
+const span = startSpan("downstream-work", {
+  parent: request.headers.get("traceparent") ?? undefined,
+});
+
+try {
+  await doWork();
+  span.end();
+} catch (error) {
+  span.end({ error });
+  throw error;
+}
+```
+
+`ParentRef` accepts a W3C traceparent string, a `SpanHandle`, an OpenTelemetry `SpanContext`, or an OpenTelemetry `Context`. An invalid string uses the active context.
+
+## Control captured content
+
+Input and output capture are active by default. Set `captureInput` or `captureOutput` globally, or override each value for one span.
+
+```ts
+init({
+  captureInput: true,
+  captureOutput: false,
+  mask(value, { key }) {
+    if (key === "input") return "[redacted]";
+    return value;
+  },
+  maxAttributeLength: 16_384,
+});
+```
+
+The capture sequence is:
+
+1. The `mask` function changes the value.
+2. The SDK serializes the result as JSON.
+3. The SDK truncates the string to `maxAttributeLength`.
+
+A truncated value ends with `...[truncated]`. The marker stays inside the configured limit.
+
+If `mask` throws, the SDK drops the value and sends the error to `onError`.
+
+See [Privacy](/platform/privacy) for server-side capture and redaction controls.
+
+## Errors and fail-open behavior
+
+Pass an error to `update()`, `end()`, or an observed function. The SDK sets status `ERROR`, adds `error.type`, and records an `exception` event.
+
+The SDK does not throw internal errors into application code. This rule includes initialization, export, masking, filtering, and the `onError` callback.
+
+Without an API key, all module functions are safe no-ops. `enabled: false` has the same result. `flush()` does not reject.
+
+A `spanFilter` error does not drop the span. The SDK sends the error to `onError` and exports the span.
+
+## Global OpenTelemetry registration and filtering
+
+The SDK uses an isolated provider by default. Set `registerGlobal: true` when other instrumentation must use the SDK provider.
+
+With global registration, the default filter exports only spans from the `@telemetry-dev/sdk` instrumentation scope. Pass `spanFilter` to select a different scope.
+
+```ts
+init({
+  registerGlobal: true,
+  spanFilter: (span) => span.instrumentationScope.name.startsWith("my-app"),
+});
+```
+
+`shutdown()` releases the global tracer, context manager, and propagator registrations. A second `init()` call first shuts down and replaces the active client.
+
+For an application with an OpenTelemetry provider, use [OpenTelemetry](/sdk/opentelemetry) instead.
+
+## Automatic metrics
+
+The SDK records `gen_ai.client.operation.duration` for generation, agent, embedding, and tool spans. It records `gen_ai.client.token.usage` for generation, agent, and embedding spans.
+
+Tool spans do not add data to the token histogram. Plain `function` spans do not add data to either histogram.
+
+In batched mode, the metric interval is 60 seconds. Immediate mode sends metrics only during `flush()` or `shutdown()`.
+
+## Flush and shutdown
+
+`flush()` sends pending traces, logs, and metrics. `shutdown()` flushes, releases resources, and makes the client inert. The two functions are idempotent.
+
+For a long-running server, use the default batched mode. Call `shutdown()` during a clean process stop.
+
+For a short script, flush and shut down before exit:
+
+```ts
+await flush();
+await shutdown();
+```
+
+For a serverless runtime, use immediate export. Flush before the runtime freezes:
+
+```ts
+init({ exportMode: "immediate" });
+
+// Handle the request.
+await flush();
+```
+
+If the runtime supplies an execution extender, pass it as `waitUntil`:
+
+```ts
+init({
+  exportMode: "immediate",
+  waitUntil: (promise) => executionContext.waitUntil(promise),
+});
+```
+
+With `waitUntil`, `flush()` and `shutdown()` give the export promise to the runtime and return immediately.

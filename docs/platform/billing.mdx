@@ -1,0 +1,69 @@
+---
+title: Plans and billing
+description: Compare plan limits, monitor ingestion units, and manage a Polar subscription.
+---
+
+Each organization has one plan. The plan sets project, seat, retention, and monthly ingestion-unit limits.
+
+## Plans
+
+| Plan | Price | Projects | Seats | Retention | Ingestion units per month |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Free | $0 | 1 | 2 | 7 days | 10,000 |
+| Pro | $25 per month | 5 | 5 | 30 days | 250,000 |
+| Team | $100 per month | Unlimited | Unlimited | 90 days | 1,000,000 |
+
+For the latest purchase terms, read [telemetry.dev/pricing](https://telemetry.dev/pricing).
+
+## Ingestion units
+
+One ingestion unit is one span, one log record, or one metric data point.
+
+The limit belongs to the organization, not to one project. Usage resets at the first day of each UTC month.
+
+### Hard quota behavior
+
+The Free plan has a 1.2 hard-quota factor. Its 10,000-unit plan limit becomes a hard stop at 12,000 units.
+
+After the hard stop, the ingest service rejects more data with `429 quota_exceeded`. The response has a `Retry-After` value for the next UTC month boundary.
+
+At this time, paid plans record usage but do not reject ingestion at the listed monthly limit.
+
+## Monitor usage
+
+Open **Organization settings → Usage** to read:
+
+- Ingestion units used and the plan limit
+- Spans in the current month
+- Projects used and the plan limit
+- Seats used and the plan limit
+- The next reset time
+
+The seat count includes members and active pending invitations.
+
+Open **Project settings → Usage** for one project's ingestion units and span count. This tab also shows retained traces, spans, logs, and metric points. The monthly plan limit still applies across the full organization.
+
+## Change a plan
+
+An organization owner or admin can change the plan.
+
+<Steps>
+  <Step title="Open billing">
+    Open **Organization settings → Billing**.
+  </Step>
+  <Step title="Select a plan">
+    Select the Pro or Team plan.
+  </Step>
+  <Step title="Complete checkout">
+    Complete the Polar checkout.
+  </Step>
+  <Step title="Return to telemetry.dev">
+    After checkout, telemetry.dev refreshes the organization plan.
+  </Step>
+</Steps>
+
+## Manage a subscription
+
+Select **Manage billing** to open the Polar customer portal. The admin whose Polar customer owns the subscription gets this action.
+
+A different admin sees that another organization admin manages billing. That admin cannot open the subscription portal for the purchaser.

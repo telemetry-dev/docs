@@ -1,0 +1,164 @@
+---
+title: Quickstart
+description: Send a trace to telemetry.dev with TypeScript or Python in five minutes.
+sidebar: { label: "Quickstart", order: 1 }
+---
+
+These examples record an offline sample. You do not need a model-provider key.
+
+<Steps>
+  <Step title="Make a project and API key">
+
+Open [telemetry.dev](https://telemetry.dev). Make a project, then copy the API key from the project setup page.
+
+A new project includes a `default` key. The dashboard shows the full key one time, and keys start with `td_live_`.
+
+  </Step>
+
+  <Step title="Install an SDK">
+
+<CodeGroup>
+
+```sh TypeScript
+npm i @telemetry-dev/sdk
+```
+
+```sh Python
+pip install telemetry-dev
+```
+
+</CodeGroup>
+
+  </Step>
+
+  <Step title="Initialize and record a trace">
+
+Put the API key and resource values in your environment:
+
+```sh .env
+TELEMETRY_DEV_API_KEY=td_live_...
+TELEMETRY_DEV_ENVIRONMENT=development
+OTEL_SERVICE_NAME=quickstart
+```
+
+Save one example as `quickstart.ts` or `quickstart.py`:
+
+<CodeGroup>
+
+```ts TypeScript
+import {
+  flush,
+  init,
+  observe,
+  shutdown,
+  startSpan,
+} from "@telemetry-dev/sdk";
+
+init();
+
+const answer = observe(
+  function answer(question: string) {
+    const generation = startSpan("chat gpt-4", {
+      type: "generation",
+      model: "gpt-4",
+      provider: "openai",
+      input: [{ role: "user", content: question }],
+    });
+
+    generation.end({
+      output: [{ role: "assistant", content: "Take the scenic route." }],
+      usage: { inputTokens: 11, outputTokens: 7 },
+      finishReason: "stop",
+    });
+
+    return "Take the scenic route.";
+  },
+  { type: "agent", agentName: "trip-planner" },
+);
+
+console.log(answer("Plan a day trip"));
+await flush();
+await shutdown();
+```
+
+```python Python
+import telemetry_dev
+from telemetry_dev import observe, start_span, update_current_span
+
+telemetry_dev.init()
+
+@observe
+def plan_route(city: str) -> dict[str, str]:
+    with start_span(
+        "chat gpt-4",
+        type="generation",
+        model="gpt-4",
+        provider="openai",
+        input=[{"role": "user", "content": f"Plan a day trip to {city}"}],
+    ):
+        update_current_span(
+            output=[{"role": "assistant", "content": "Take the scenic route."}],
+            usage={"input_tokens": 11, "output_tokens": 7},
+            finish_reason="stop",
+        )
+    return {"city": city, "route": "scenic"}
+
+print(plan_route("Kyoto"))
+telemetry_dev.flush()
+telemetry_dev.shutdown()
+```
+
+</CodeGroup>
+
+  </Step>
+
+  <Step title="Run the example">
+
+<CodeGroup>
+
+```sh TypeScript
+node --experimental-strip-types quickstart.ts
+```
+
+```sh Python
+python quickstart.py
+```
+
+</CodeGroup>
+
+  </Step>
+
+  <Step title="Open the trace">
+
+Open your project in the dashboard. Select **Traces**, then select the new trace.
+
+The trace contains the observed parent span and its generation span. The dashboard shows duration, tokens, status, and cost when pricing exists.
+
+  </Step>
+</Steps>
+
+## Environment variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `TELEMETRY_DEV_API_KEY` | None | Authenticates OTLP requests. Keys start with `td_live_`. |
+| `TELEMETRY_DEV_BASE_URL` | `https://ingest.telemetry.dev` | Sets a different ingest base URL. |
+| `TELEMETRY_DEV_ENVIRONMENT` | `production` | Sets `deployment.environment.name`. |
+| `OTEL_SERVICE_NAME` | `unknown_service` | Sets `service.name`. |
+
+:::note
+If `TELEMETRY_DEV_API_KEY` is not set, initialization returns a silent no-op client. SDK calls do not interrupt your application.
+:::
+
+:::tip[Serverless runtimes]
+Before a serverless runtime freezes, flush all telemetry. In TypeScript, await `flush()` or pass the platform `waitUntil` function to `init()`. In Python, call `telemetry_dev.flush()`. The Python `export_mode="immediate"` option does not flush metrics by itself.
+:::
+
+## Connect your model provider
+
+<CardGroup cols={2}>
+  <Card title="Vercel AI SDK" href="/integrations/vercel-ai-sdk" icon="bot">Connect the Vercel AI SDK.</Card>
+  <Card title="OpenAI" href="/integrations/openai" icon="bot">Connect the OpenAI SDK for TypeScript or Python.</Card>
+  <Card title="Anthropic" href="/integrations/anthropic" icon="bot">Connect the Anthropic SDK for TypeScript or Python.</Card>
+  <Card title="All integrations" href="/integrations" icon="plug">Find all model-provider and agent integrations.</Card>
+</CardGroup>

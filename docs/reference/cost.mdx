@@ -1,0 +1,114 @@
+---
+title: Cost calculation
+description: Learn how telemetry.dev calculates model cost from token usage and model prices.
+---
+
+telemetry.dev calculates span cost at ingest. The server uses normalized token usage and a vendored pricing snapshot from [models.dev](https://models.dev).
+
+A client cost value has priority over the server calculation.
+
+## Client cost override
+
+The first-party TypeScript and Python SDKs map `costUsd` to `gen_ai.usage.cost`. If this value is present and valid, the ingest API stores it without a server calculation.
+
+The ingest API checks client cost attributes in this order:
+
+1. `gen_ai.usage.cost`
+2. `ai.usage.cost`
+3. `td.cost_usd`
+4. `telemetry.dev.cost_usd`
+
+A client cost must be a nonnegative number. The ingest API also accepts a decimal string with at most eight fractional digits.
+
+A client cost does not require a model match. Thus, you can send `gen_ai.usage.cost` for a custom or private model.
+
+## Server calculation
+
+The pricing snapshot gives prices in US dollars per 1,000,000 tokens. The server calculates these token kinds:
+
+| Token kind | Normalized usage | Price field |
+| --- | --- | --- |
+| Noncached input | Input minus cache read and cache creation | `input` |
+| Cache read | Cache-read input tokens | `cachedInput`, or `input` as a fallback |
+| Cache creation | Cache-creation input tokens | `cacheWrite`, or `input` as a fallback |
+| Output | Output tokens | `output` |
+| Reasoning | Reasoning output tokens | No separate price |
+
+The calculation is:
+
+```text
+nonCached = max(0, input - cacheRead - cacheCreation)
+
+cost = (
+  nonCached    * price.input
+  + cacheRead  * (price.cachedInput ?? price.input)
+  + cacheCreation * (price.cacheWrite ?? price.input)
+  + output     * price.output
+) / 1_000_000
+```
+
+The server accepts reasoning-token attributes, but it does not add a separate reasoning charge. Providers count those tokens inside output usage.
+
+If output usage is absent, normalization can use reasoning output as the output total. If input usage is absent, normalization can use cache-read plus cache-creation usage.
+
+The server formats the result with at most eight decimal places. The stored cost has eight decimal places of precision.
+
+## Usage attributes
+
+The primary first-party usage attributes are:
+
+| Usage | Attribute |
+| --- | --- |
+| Input | `gen_ai.usage.input_tokens` |
+| Output | `gen_ai.usage.output_tokens` |
+| Total fallback | `gen_ai.usage.total_tokens` |
+| Cache read | `gen_ai.usage.cache_read.input_tokens` |
+| Cache creation | `gen_ai.usage.cache_creation.input_tokens` |
+| Reasoning output | `gen_ai.usage.reasoning.output_tokens` |
+
+The ingest API also normalizes compatibility attributes. See [Span attributes](/reference/span-attributes) for the complete priority order.
+
+## Pricing snapshot
+
+The ingest service vendors `https://models.dev/api.json` into its deployment image. The build process refreshes the snapshot for a build, test, development run, or deployment.
+
+If the refresh is not successful, an existing snapshot stays in use. The ingest API does not request models.dev for each span.
+
+The snapshot file is generated and is not in the source repository. As a result, the repository does not prove a fixed model count.
+
+## Model matching
+
+Before a lookup, the server trims and lowercases the model. It also removes these Google Vertex model prefixes:
+
+- `projects/…/publishers/google/models/`
+- `publishers/google/models/`
+- `models/`
+
+The server lowercases the provider and applies these provider mappings:
+
+| Received provider | Lookup provider |
+| --- | --- |
+| `gcp.vertex_ai` | `google-vertex` |
+| `google-vertex` | `google` |
+| `vertex` | `google` |
+| `gcp` | `google` |
+| `azure` | `openai` |
+| A provider with `.` | The segment before the first `.` |
+
+The lookup tries these model forms in order:
+
+1. `provider:model`
+2. `provider/model`
+3. The model without a provider
+4. The same forms after removal of a version or date suffix
+5. An Anthropic form that changes `claude-N-M-` to `claude-N.M-`
+
+The suffix matcher removes `-YYYY-MM-DD`, `-YYYYMMDD`, `-vN`, `-latest`, or `-NNN`.
+
+## Unknown models and absent usage
+
+If no snapshot entry matches the model, the calculated cost is null. If each token field is null, the calculated cost is also null.
+
+A real zero stays different from null. Trace cost totals stay null until at least one span supplies a cost.
+
+Use `gen_ai.usage.cost` when the pricing snapshot cannot identify your model or price. Client cost remains the highest-priority value.

@@ -1,0 +1,67 @@
+---
+title: Team members
+description: Manage roles, invitations, seats, member access, and workspace departure.
+---
+
+Open **Organization settings → Members** to manage access to the organization and its projects.
+
+## Roles
+
+An organization has three roles:
+
+| Role | Access |
+| --- | --- |
+| Member | View telemetry, usage, and privacy settings. Create projects. |
+| Admin | Member access, plus project settings, API keys, privacy, retention, and organization settings. |
+| Owner | Admin access, plus the ability to assign the owner role and change other owners. |
+
+An admin can assign the `member` or `admin` role. Only an owner can assign the `owner` role. An admin cannot change another owner. An owner cannot change their own role from the member table.
+
+## Invite a member
+
+<Steps>
+  <Step title="Open members">
+    Open **Organization settings → Members**.
+  </Step>
+  <Step title="Start an invitation">
+    Select **Invite member**.
+  </Step>
+  <Step title="Set access">
+    Enter the email address. Then select a role.
+  </Step>
+  <Step title="Send the invitation">
+    Submit the invitation.
+  </Step>
+</Steps>
+
+An admin can invite a member or admin. An owner can also invite an owner.
+
+The seat count includes organization members and active pending invitations. At the plan limit, the invite button is not available. The server also rejects an invitation if a concurrent invitation takes the last seat.
+
+| Plan | Seats |
+| --- | ---: |
+| Free | 2 |
+| Pro | 5 |
+| Team | Unlimited |
+
+Read [Plans and billing](/platform/billing) to change the seat limit.
+
+## Manage pending invitations
+
+The pending invitation table shows the email address, role, and expiration. Use its action menu to:
+
+- **Copy link** for direct delivery
+- **Resend** the invitation email
+- **Revoke** the invitation
+
+A new member can accept or decline the invitation. telemetry.dev asks an unverified account to complete email verification before it shows the invitation.
+
+## Change or remove a member
+
+Use the role menu in the member row to change access. Role limits still apply to owners and admins.
+
+Select **Remove member** to revoke a member's organization and project access. Confirm the removal in the dialog.
+
+## Leave an organization
+
+Select **Leave organization** in the Members tab, then confirm the action. telemetry.dev removes the active organization and sends you to onboarding.

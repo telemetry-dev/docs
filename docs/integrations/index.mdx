@@ -1,0 +1,63 @@
+---
+title: Integrations
+description: Send traces from AI frameworks, model providers, and coding agents to telemetry.dev.
+sidebar: { label: "Overview" }
+---
+
+telemetry.dev SDKs wrap your model client or add hooks through the client telemetry API. The SDKs send OpenTelemetry traces for model calls, tool steps, and agent runs.
+
+## Frameworks
+
+<CardGroup cols={2}>
+  <Card title="Vercel AI SDK" href="/integrations/vercel-ai-sdk" icon="plug">
+    Add telemetry through the AI SDK telemetry API.
+  </Card>
+  <Card title="TanStack AI" href="/integrations/tanstack-ai" icon="plug">
+    Add telemetry as TanStack AI chat middleware.
+  </Card>
+</CardGroup>
+
+## Model providers
+
+<CardGroup cols={2}>
+  <Card title="OpenAI" href="/integrations/openai" icon="activity">
+    Trace OpenAI SDK calls from TypeScript or Python.
+  </Card>
+  <Card title="Anthropic" href="/integrations/anthropic" icon="activity">
+    Trace Anthropic SDK calls from TypeScript or Python.
+  </Card>
+  <Card title="Google Gen AI" href="/integrations/google-genai" icon="activity">
+    Trace Google Gen AI SDK calls from TypeScript or Python.
+  </Card>
+  <Card title="Amazon Bedrock" href="/integrations/bedrock" icon="activity">
+    Trace Amazon Bedrock calls from TypeScript or Python.
+  </Card>
+  <Card title="LiteLLM" href="/integrations/litellm" icon="activity">
+    Trace LiteLLM calls from Python.
+  </Card>
+</CardGroup>
+
+## Coding agents and harnesses
+
+<CardGroup cols={2}>
+  <Card title="OpenCode" href="/integrations/opencode" icon="bot">
+    Trace OpenCode agent runs.
+  </Card>
+  <Card title="Oh My Pi" href="/integrations/omp" icon="bot">
+    Trace Oh My Pi harness runs.
+  </Card>
+  <Card title="Pi" href="/integrations/pi" icon="bot">
+    Trace Pi coding-agent runs.
+  </Card>
+  <Card title="Eve" href="/integrations/eve" icon="bot">
+    Trace Eve agent-framework runs.
+  </Card>
+</CardGroup>
+
+## Anything else
+
+<CardGroup cols={2}>
+  <Card title="Bring your own OpenTelemetry" href="/sdk/opentelemetry" icon="activity">
+    Send OTLP traces from a different language, library, or framework.
+  </Card>
+</CardGroup>

@@ -1,0 +1,61 @@
+---
+title: Projects
+description: Use workspaces and projects to keep telemetry and settings separate.
+---
+
+An organization is a workspace for projects, members, billing, and usage. Each project contains separate telemetry, API keys, environments, privacy settings, and retention settings.
+
+## Sign in and get a workspace
+
+You can use an email address and a password. GitHub and Google OAuth appear if the deployment has these providers.
+
+At your first sign-in, telemetry.dev usually makes a personal workspace with your name. A pending invitation for your email sends you to onboarding instead. You can accept the invitation or make a workspace there.
+
+## Create a project
+
+<Steps>
+  <Step title="Open the project list">
+    Select **All projects** in the sidebar.
+  </Step>
+  <Step title="Create the project">
+    Select **Create project**. Enter a project name and submit the form.
+  </Step>
+  <Step title="Copy the first API key">
+    telemetry.dev makes a `default` API key with the project. Copy the full key when it appears.
+  </Step>
+  <Step title="Open setup">
+    Select **Go to setup** to connect an application.
+  </Step>
+</Steps>
+
+A project name must contain 1 to 100 characters. Each organization plan has a project limit.
+
+| Plan | Projects |
+| --- | ---: |
+| Free | 1 |
+| Pro | 5 |
+| Team | Unlimited |
+
+At the limit, the project list shows **Upgrade to add projects** instead of the create button. Read [Plans and billing](/platform/billing) for all limits.
+
+## Set up a project
+
+Open **Setup** for the project. Set the service name and environment. Then select a framework tab.
+
+| Tab | Setup content |
+| --- | --- |
+| Vercel AI SDK | `@telemetry-dev/ai-sdk` with an API key, service name, and environment |
+| TanStack AI | `@telemetry-dev/tanstack-ai` middleware with the same project settings |
+| OpenTelemetry | OTLP endpoint, authorization header, service name, and resource attributes |
+
+The setup page starts with a service name from the project name. The environment starts as `production`. Use `https://ingest.telemetry.dev` as the OTLP endpoint.
+
+Read the [Vercel AI SDK](/integrations/vercel-ai-sdk), [TanStack AI](/integrations/tanstack-ai), or [OpenTelemetry](/sdk/opentelemetry) guide for full instructions.
+
+## Manage a project
+
+Open **Settings → General** to rename or delete a project. An organization owner or admin must do these actions.
+
+A project deletion revokes its API keys. It also removes stored telemetry and the project. You cannot undo this action.
+
+Open **Organization settings → General** to rename the organization. An owner or admin must rename it.

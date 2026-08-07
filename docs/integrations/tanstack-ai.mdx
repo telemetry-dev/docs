@@ -1,0 +1,118 @@
+---
+title: TanStack AI
+description: Trace TanStack AI chat calls with native @telemetry-dev/tanstack-ai middleware.
+---
+
+`@telemetry-dev/tanstack-ai` is a native TanStack AI `ChatMiddleware`. Add it to an existing `chat()` call to send OpenTelemetry traces to telemetry.dev.
+
+## Install
+
+```package-install
+npm i @telemetry-dev/tanstack-ai @tanstack/ai
+```
+
+The package operates with `@tanstack/ai >= 0.28.0 < 1`.
+
+## Set the API key
+
+Create a project at telemetry.dev. Then copy an API key from the project setup page. Keys look like `td_live_...`.
+
+```bash
+export TELEMETRY_DEV_API_KEY=td_live_...
+```
+
+Without an API key, `telemetryDev()` returns a named but inactive middleware. Your chat call continues without telemetry.
+
+## Add the middleware
+
+Add `telemetryDev()` to the `middleware` array of the existing `chat()` call:
+
+```ts
+import { chat } from "@tanstack/ai";
+import { telemetryDev } from "@telemetry-dev/tanstack-ai";
+
+const stream = chat({
+  adapter,
+  messages,
+  metadata: { userId: "u_123", sessionId: "s_456", tenant: "acme" },
+  middleware: [telemetryDev()],
+});
+```
+
+The middleware maps chat metadata as follows:
+
+| Metadata key | Span attribute |
+| --- | --- |
+| `userId` | `user.id` |
+| `sessionId` | `gen_ai.conversation.id` |
+| Other keys | `td.metadata.<key>` |
+
+If `metadata.sessionId` is absent, the middleware uses the TanStack AI `threadId` for `gen_ai.conversation.id`.
+
+## Reuse one middleware instance
+
+The middleware keeps run state in a `WeakMap<ChatMiddlewareContext, RunState>`. One instance is safe for overlapping `chat()` calls.
+
+```ts
+const telemetry = telemetryDev();
+
+chat({ adapter, messages, middleware: [telemetry] });
+```
+
+Each middleware context has separate state. One call cannot add spans or usage to a different call.
+
+## Captured data
+
+Each `chat()` call makes one trace. The trace has a root span, one `chat` span per model iteration, and one `execute_tool` span per local tool call.
+
+| Data | Span attributes and behavior |
+| --- | --- |
+| Model input and output | Request messages, assistant text, model names, finish reasons, and text or JSON output type |
+| Tokens | Input, output, cache-read, cache-write, and reasoning token counts per model iteration |
+| Cost | `gen_ai.usage.cost` when the adapter supplies `usage.cost`. The server calculates cost when the adapter does not supply it. |
+| Tools | Tool name, call ID, arguments, result, duration, and tool errors |
+| Sampling | Temperature, top-p, and max-token values from supported provider option names |
+| Structured output | A separate `chat` span with `gen_ai.output.type: "json"` for the structured-output model call |
+| Errors and aborts | The middleware closes open spans, marks errors, and flushes the trace |
+| Metrics | Operation duration and token usage for model iterations and tools |
+
+TanStack AI does not give the middleware a time-to-first-chunk signal. As a result, this integration does not record TTFT.
+
+A shared `sessionId` correlates calls through `gen_ai.conversation.id`. It does not combine calls into one trace.
+
+## Options
+
+Explicit options take precedence over environment variables and defaults.
+
+| Option | Type | Environment variable | Default |
+| --- | --- | --- | --- |
+| `apiKey` | `string` | `TELEMETRY_DEV_API_KEY` | No key. The middleware is inactive. |
+| `baseUrl` | `string` | `TELEMETRY_DEV_BASE_URL` | `https://ingest.telemetry.dev` |
+| `environment` | `string` | `TELEMETRY_DEV_ENVIRONMENT` | `production` |
+| `serviceName` | `string` | `OTEL_SERVICE_NAME` | `unknown_service` |
+| `fetch` | `typeof fetch` | None | `globalThis.fetch` |
+| `waitUntil` | `(promise: Promise<unknown>) => void` | None | The terminal hook waits for export. |
+| `onError` | `(error: unknown) => void` | None | No callback |
+
+The middleware reports instrumentation and export errors through `onError`. These errors do not enter the chat call.
+
+## Serverless runtimes
+
+By default, the terminal middleware hook waits for the export. Use `waitUntil` to give the export promise to the platform:
+
+```ts
+const telemetry = telemetryDev({
+  waitUntil: (promise) => ctx.waitUntil(promise),
+});
+```
+
+On runtimes without `process.env`, pass `apiKey` directly. The middleware uses `fetch` and a private `BasicTracerProvider`.
+
+<CardGroup cols={2}>
+  <Card title="View traces" href="/platform/traces" icon="activity">
+    Open the trace explorer and examine the span waterfall.
+  </Card>
+  <Card title="API key setup" href="/quickstart" icon="key">
+    Set the telemetry.dev API key and service name.
+  </Card>
+</CardGroup>

@@ -1,0 +1,253 @@
+---
+title: Span attributes
+description: Send recognized OpenTelemetry attributes for models, tools, agents, users, and content.
+---
+
+Send these attributes with your OpenTelemetry spans. The ingest API normalizes them into searchable fields, token totals, content, and cost.
+
+For a minimal model span, send `gen_ai.operation.name`, `gen_ai.request.model`, `gen_ai.provider.name`, and token usage. Add content attributes only when you want content capture.
+
+## Core GenAI attributes
+
+### Operations
+
+The ingest API accepts `gen_ai.operation.name` verbatim. These values match the normalized model, tool, and first-party SDK operations:
+
+| Value | Use |
+| --- | --- |
+| `chat` | Chat generation |
+| `text_completion` | Text completion |
+| `generate_content` | Content generation |
+| `embeddings` | Embedding operation |
+| `create_agent` | Agent creation |
+| `invoke_agent` | Agent invocation |
+| `invoke_workflow` | Workflow invocation |
+| `llm` | Generic model operation |
+| `execute_tool` | Tool execution |
+| `function` | Plain instrumented function |
+
+Set this attribute explicitly for a bring-your-own OpenTelemetry exporter. Otherwise, one `gen_ai.*` attribute causes the generic `llm` classification unless a higher-priority rule matches.
+
+### Model, provider, and response
+
+| Attribute | Normalized field or behavior |
+| --- | --- |
+| `gen_ai.request.model` | Request model and server cost lookup |
+| `gen_ai.response.model` | Response model and model fallback |
+| `gen_ai.provider.name` | Provider and server cost lookup |
+| `gen_ai.system` | Provider compatibility key |
+| `gen_ai.response.id` | Response ID |
+| `gen_ai.response.finish_reasons` | Finish reason. A string or array is accepted. |
+| `gen_ai.response.finish_reason` | Singular finish-reason compatibility key |
+| `gen_ai.output.type` | Output type |
+
+The first-party SDKs send `gen_ai.response.finish_reasons` as an array with one value.
+
+### Request parameters
+
+The first-party SDKs use these request attributes:
+
+| Attribute | Value type |
+| --- | --- |
+| `gen_ai.request.temperature` | Number |
+| `gen_ai.request.top_p` | Number |
+| `gen_ai.request.top_k` | Number |
+| `gen_ai.request.max_tokens` | Number |
+| `gen_ai.request.stop_sequences` | String array |
+| `gen_ai.request.seed` | Number |
+| `gen_ai.request.frequency_penalty` | Number |
+| `gen_ai.request.presence_penalty` | Number |
+
+### Token usage and cost
+
+The ingest API uses the first matching key for each token kind.
+
+| Token kind | Recognized attributes, in priority order |
+| --- | --- |
+| Input | `gen_ai.usage.input_tokens`, `gen_ai.usage.prompt_tokens` |
+| Output | `gen_ai.usage.output_tokens`, `gen_ai.usage.completion_tokens` |
+| Total fallback | `gen_ai.usage.total_tokens` |
+| Cache read | `gen_ai.usage.cache_read.input_tokens`, `gen_ai.usage.cache_read_input_tokens`, `gen_ai.usage.cached_input_tokens` |
+| Cache creation | `gen_ai.usage.cache_creation.input_tokens`, `gen_ai.usage.cache_creation_input_tokens` |
+| Reasoning output | `gen_ai.usage.reasoning.output_tokens`, `gen_ai.usage.reasoning_tokens` |
+| Client cost | `gen_ai.usage.cost` |
+
+A nonnegative numeric string is valid for token usage. The string must contain decimal digits only. See [Cost](/reference/cost) for cost precedence and model pricing.
+
+### Streaming latency
+
+| Attribute | Unit at ingest |
+| --- | --- |
+| `gen_ai.client.operation.time_to_first_chunk` | Seconds |
+| `gen_ai.response.time_to_first_chunk` | Seconds |
+| `gen_ai.response.time_to_first_token` | Seconds |
+| `gen_ai.server.time_to_first_token` | Seconds |
+
+The ingest API multiplies values by 1,000 unless the lowercase attribute key contains `ms`. Thus, `gen_ai.response.time_to_first_chunk = 0.25` becomes 250 ms.
+
+The first-party SDK property `timeToFirstChunkMs` sends `gen_ai.response.time_to_first_chunk` in seconds.
+
+## Errors
+
+Set the OpenTelemetry span status to `ERROR`. Add `error.type` for error classification and trace error totals.
+
+## Tools and agents
+
+| Attribute | Normalized field or behavior |
+| --- | --- |
+| `gen_ai.tool.name` | Tool name |
+| `gen_ai.tool.call.id` | Tool-call ID |
+| `gen_ai.tool.description` | Tool description |
+| `gen_ai.tool.call.arguments` | Tool input |
+| `gen_ai.tool.call.result` | Tool output |
+| `gen_ai.agent.name` | Agent name |
+| `gen_ai.agent.id` | Agent ID |
+
+For an `execute_tool` operation, the ingest API reads the tool-call attributes before the Vercel compatibility attributes.
+
+## User, conversation, and metadata
+
+| Attribute or prefix | Normalized field or behavior |
+| --- | --- |
+| `user.id` | User ID. A span value has priority over a resource value. |
+| `gen_ai.conversation.id` | Conversation and session ID |
+| `session.id` | Session compatibility fallback |
+| `eve.session.id` | Session compatibility fallback |
+| `td.user_id` | User compatibility fallback |
+| `td.session_id` | Session compatibility fallback |
+| `td.metadata.userId` | User compatibility fallback |
+| `td.metadata.user_id` | User compatibility fallback |
+| `td.metadata.sessionId` | Session compatibility fallback |
+| `td.metadata.session_id` | Session compatibility fallback |
+| `td.metadata.<key>` | Custom metadata. The ingest API removes the prefix. |
+
+The first-party SDKs propagate `user.id` and `gen_ai.conversation.id` to each span and log in the scope. They send per-span metadata as `td.metadata.<key>`.
+
+The reserved user and session suffixes do not enter `metadata_json`. The ingest API promotes those values to the user or session field instead.
+
+## Input and output content
+
+The operation selects the content extraction path. The ingest API JSON-parses a string that starts with `{` or `[`. If parsing is not successful, it stores the raw string and records `extraction_failed`.
+
+### Model operations
+
+| Direction | Recognized attributes, in priority order |
+| --- | --- |
+| Input | `gen_ai.input.messages`, `gen_ai.prompt.N.*`, `gen_ai.prompt`, `ai.prompt.messages`, `ai.prompt`, `langchain.inputs`, `traceloop.entity.input`, `llm.prompts` |
+| Output | `gen_ai.output.messages`, `gen_ai.completion.N.*`, `gen_ai.completion`, `ai.response.text`, `ai.response.object`, `ai.response.toolCalls`, `langchain.outputs`, `traceloop.entity.output`, `llm.completions` |
+
+`gen_ai.system_instructions` becomes a system message before the input content. The ingest API uses this path for model and agent operations.
+
+For a `function` operation, only `gen_ai.input.messages` and `gen_ai.output.messages` become normalized content.
+
+### Tool operations
+
+| Direction | Recognized attributes, in priority order |
+| --- | --- |
+| Input | `gen_ai.tool.call.arguments`, `ai.toolCall.args` |
+| Output | `gen_ai.tool.call.result`, `ai.toolCall.result` |
+
+When a content attribute supplies normalized content, the ingest API removes that source attribute from stored attribute JSON.
+
+## Compatibility attributes
+
+Send these compatibility attributes without translation. The ingest API maps them to the same normalized fields as the core GenAI attributes.
+
+### Vercel AI SDK
+
+| Purpose | Recognized attributes |
+| --- | --- |
+| Input tokens | `ai.usage.inputTokens`, `ai.usage.promptTokens` |
+| Output tokens | `ai.usage.outputTokens`, `ai.usage.completionTokens` |
+| Total tokens | `ai.usage.tokens` |
+| Cache-read tokens | `ai.usage.cachedInputTokens` |
+| Cache-creation tokens | `ai.usage.cacheCreationInputTokens` |
+| Reasoning tokens | `ai.usage.reasoningTokens` |
+| Cost | `ai.usage.cost` |
+| Model | `ai.model.id`, `ai.response.model` |
+| Provider | `ai.model.provider` |
+| Finish reason | `ai.response.finishReason` |
+| First chunk | `ai.response.msToFirstChunk`, `ai.stream.firstChunkMs` |
+| Input | `ai.prompt.messages`, `ai.prompt` |
+| Output | `ai.response.text`, `ai.response.object`, `ai.response.toolCalls` |
+| Tool input and output | `ai.toolCall.args`, `ai.toolCall.result` |
+
+The ingest API also reads user, session, and metadata values from these prefixes and attributes:
+
+- `ai.telemetry.metadata.userId`
+- `ai.telemetry.metadata.user_id`
+- `ai.telemetry.metadata.sessionId`
+- `ai.telemetry.metadata.session_id`
+- `ai.telemetry.metadata.<key>`
+- `ai.settings.context.user.id`
+- `ai.settings.context.userId`
+- `ai.settings.context.user_id`
+- `ai.settings.context.sessionId`
+- `ai.settings.context.session_id`
+- `ai.settings.context.eve.session.id`
+- `ai.settings.context.<key>`
+
+### OpenInference and Traceloop `llm.*`
+
+| Purpose | Recognized attributes |
+| --- | --- |
+| Input tokens | `llm.token_count.prompt` |
+| Output tokens | `llm.token_count.completion` |
+| Model | `llm.model_name` |
+| Provider | `llm.system` |
+| First token | `llm.time_to_first_token`, `llm.ttft` |
+| Input | `llm.prompts` |
+| Output | `llm.completions` |
+
+### LangChain
+
+| Purpose | Recognized attribute |
+| --- | --- |
+| Input | `langchain.inputs` |
+| Output | `langchain.outputs` |
+
+### Traceloop entity content
+
+| Purpose | Recognized attribute |
+| --- | --- |
+| Input | `traceloop.entity.input` |
+| Output | `traceloop.entity.output` |
+
+### telemetry.dev cost aliases
+
+The ingest API also accepts `td.cost_usd` and `telemetry.dev.cost_usd` as client cost values.
+
+## Operation derivation
+
+If `gen_ai.operation.name` is absent, the ingest API applies this ordered rule set:
+
+| Priority | Trigger | Derived operation |
+| --- | --- | --- |
+| 1 | An attribute starts with `gen_ai.tool.` | `execute_tool` |
+| 2 | The span name starts with `ai.eve.turn` and has `eve.session.id` | `invoke_agent` |
+| 3 | An attribute starts with `gen_ai.` | `llm` |
+| 4 | An attribute starts with `ai.toolCall` or the span name starts with `ai.toolCall` | `execute_tool` |
+| 5 | An attribute starts with `db.system` or the span name contains `retriev` | `retrieval` |
+| 6 | The span name starts with `ai.streamText` | `stream` |
+| 7 | The span name starts with `ai.embed` or `ai.embedMany` | `embeddings` |
+| 8 | The span name starts with `ai.generateText` or `ai.generateObject` | `llm` |
+| 9 | The span kind is `client` and an attribute starts with `http.` | `http` |
+| 10 | No rule matches | No operation |
+
+## Framework derivation and scope names
+
+Framework detection uses this priority order:
+
+| Framework | Scope or attribute trigger |
+| --- | --- |
+| `vercel-ai-sdk` | Scope `ai`, `@telemetry-dev/ai-sdk`, a scope that starts with `@ai-sdk`, or an `ai.*` span attribute |
+| `tanstack-ai` | Scope `@telemetry-dev/tanstack-ai`, `@tanstack/ai`, or a scope under `@tanstack/ai/` |
+| `langchain` | A scope name that contains `langchain` |
+| `otel` | All other scopes |
+
+The first-party core SDK scope names are exact:
+
+| SDK | Instrumentation scope | Derived framework |
+| --- | --- | --- |
+| TypeScript | `@telemetry-dev/sdk` | `otel` |
+| Python | `telemetry_dev` | `otel` |

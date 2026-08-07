@@ -1,0 +1,231 @@
+---
+title: OpenTelemetry
+description: Connect an existing TypeScript provider or a standard OTLP exporter to telemetry.dev.
+---
+
+Use this page when your application already owns its OpenTelemetry setup. You can add the telemetry.dev span processor or send standard OTLP/HTTP data directly.
+
+## TypeScript: add the telemetry.dev span processor
+
+`@telemetry-dev/otel` connects a provider that your application owns. The package requires Node.js 20.19.0 or later and is ESM-only.
+
+```package-install
+npm install @telemetry-dev/otel @opentelemetry/api
+```
+
+Make a project at telemetry.dev. Then copy an API key from the project setup page. Keys look like `td_live_...`.
+
+```bash .env
+TELEMETRY_DEV_API_KEY=td_live_...
+OTEL_SERVICE_NAME=my-service
+TELEMETRY_DEV_ENVIRONMENT=production
+```
+
+### `NodeSDK`
+
+Add `TelemetrySpanProcessor` to `spanProcessors`:
+
+```ts instrumentation.ts lineNumbers
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { TelemetrySpanProcessor } from "@telemetry-dev/otel";
+
+const sdk = new NodeSDK({
+  spanProcessors: [new TelemetrySpanProcessor()],
+});
+
+sdk.start();
+```
+
+Call `sdk.shutdown()` during a clean process stop.
+
+### `@vercel/otel`
+
+Pass the processor to `registerOTel()`:
+
+```ts instrumentation.ts lineNumbers
+import { registerOTel } from "@vercel/otel";
+import { TelemetrySpanProcessor } from "@telemetry-dev/otel";
+
+registerOTel({
+  spanProcessors: [new TelemetrySpanProcessor()],
+});
+```
+
+### `BasicTracerProvider`
+
+Add the processor when you make the provider:
+
+```ts instrumentation.ts lineNumbers
+import { trace } from "@opentelemetry/api";
+import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
+import { TelemetrySpanProcessor } from "@telemetry-dev/otel";
+
+const provider = new BasicTracerProvider({
+  spanProcessors: [new TelemetrySpanProcessor()],
+});
+
+trace.setGlobalTracerProvider(provider);
+```
+
+The trace resource is the host provider's responsibility. Set `service.name` and `deployment.environment.name` on that provider's resource.
+
+### Processor options
+
+`TelemetrySpanProcessor` accepts these options:
+
+| Option | Type | Environment fallback | Default | Purpose |
+| --- | --- | --- | --- | --- |
+| `apiKey` | `string` | `TELEMETRY_DEV_API_KEY` | None | Authenticates exports. Without a key or exporter, the processor is a no-op. |
+| `baseUrl` | `string` | `TELEMETRY_DEV_BASE_URL` | `https://ingest.telemetry.dev` | Sets the ingest base URL. The processor removes trailing slashes. |
+| `exportMode` | `"batched" \| "immediate"` | None | `"batched"` | Selects a batch or simple span processor. |
+| `batch` | `BatchOptions` | None | See the next table | Changes the batch processor limits. |
+| `spanFilter` | `(span: ReadableSpan) => boolean` | None | `undefined` | Selects spans at export time. |
+| `metrics` | `boolean` | None | `true` | Activates automatic metrics when an API key is present. |
+| `serviceName` | `string` | `OTEL_SERVICE_NAME` | `unknown_service` | Sets `service.name` on the metrics resource. |
+| `environment` | `string` | `TELEMETRY_DEV_ENVIRONMENT` | `production` | Sets `deployment.environment.name` on the metrics resource. |
+| `fetch` | `typeof fetch` | None | `globalThis.fetch` | Supplies the HTTP function. |
+| `onError` | `(error: unknown) => void` | None | `undefined` | Receives internal processor errors. |
+| `spanExporter` | `SpanExporter` | None | `undefined` | Replaces the telemetry.dev OTLP span exporter. |
+
+`batch` combines these defaults with the values that you supply:
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `maxExportBatchSize` | `number` | `64` |
+| `scheduledDelayMillis` | `number` | `1000` |
+| `maxQueueSize` | `number` | `2048` |
+| `exportTimeoutMillis` | `number` | `30000` |
+
+Without an API key or `spanExporter`, the processor is a silent no-op. You can attach it unconditionally.
+
+A `spanExporter` activates span export without an API key. Automatic metrics still stay inactive without an API key.
+
+### Span scope and filters
+
+`TelemetrySpanProcessor` exports every span by default. This behavior differs from `@telemetry-dev/sdk` with `registerGlobal: true`.
+
+The full SDK applies a default filter for the `@telemetry-dev/sdk` scope. The processor for a provider that you own does not apply that filter.
+
+Use `spanFilter` to select spans:
+
+```ts
+new TelemetrySpanProcessor({
+  spanFilter: (span) => span.instrumentationScope.name.startsWith("my-app"),
+});
+```
+
+A filter error does not drop the span. The processor sends the error to `onError` and exports the span.
+
+### Correlation attributes
+
+`@telemetry-dev/otel` also exports `propagateAttributes()`. It stamps attributes on each span that the processor sees:
+
+```ts
+import { propagateAttributes } from "@telemetry-dev/otel";
+
+await propagateAttributes(
+  {
+    userId: "user_123",
+    sessionId: "session_456",
+    metadata: { tenant: "acme" },
+  },
+  () => handleRequest(),
+);
+```
+
+The function maps `userId` to `user.id` and `sessionId` to `gen_ai.conversation.id`. It maps metadata to `td.metadata.*`.
+
+Inner calls replace outer values with the same key. Propagation operates before processor construction.
+
+### Export and metrics behavior
+
+Batched mode uses a `BatchSpanProcessor`. Immediate mode uses a `SimpleSpanProcessor`.
+
+The processor records `gen_ai.client.operation.duration` for generation, agent, embedding, and tool operations. It records token usage for generation, agent, and embedding operations.
+
+Tool spans do not add data to the token histogram.
+
+In batched mode, the metric interval is 60 seconds. In immediate mode, metrics leave only during provider flush or shutdown.
+
+The processor does not make a log exporter. Use your OpenTelemetry log pipeline for logs.
+
+## Any language: send OTLP/HTTP directly
+
+A telemetry.dev SDK is not necessary. Point a standard OTLP/HTTP exporter at the trace endpoint:
+
+```text
+https://ingest.telemetry.dev/v1/traces
+```
+
+Add this request header:
+
+```text
+Authorization: Bearer td_live_...
+```
+
+The endpoint accepts these payload encodings:
+
+| Request `Content-Type` | Payload |
+| --- | --- |
+| `application/x-protobuf` | OTLP protobuf |
+| `application/json` | OTLP JSON with lower-camel-case field names |
+
+The endpoint accepts `gzip` and `identity` content encoding. The response uses the same protobuf or JSON encoding as the request.
+
+### Verified vanilla OpenTelemetry example
+
+This Node example uses only standard OpenTelemetry packages. It does not use a telemetry.dev package.
+
+```package-install
+npm install @opentelemetry/api @opentelemetry/exporter-trace-otlp-proto @opentelemetry/resources @opentelemetry/sdk-trace-base @opentelemetry/sdk-trace-node
+```
+
+```ts instrumentation.ts lineNumbers
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
+import { resourceFromAttributes } from "@opentelemetry/resources";
+import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+
+const apiKey = process.env.TELEMETRY_DEV_API_KEY!;
+const baseUrl = (process.env.TELEMETRY_DEV_BASE_URL ?? "https://ingest.telemetry.dev")
+  .replace(/\/+$/, "");
+
+const provider = new NodeTracerProvider({
+  resource: resourceFromAttributes({
+    "service.name": process.env.OTEL_SERVICE_NAME ?? "otel-chat",
+    "deployment.environment.name": process.env.TELEMETRY_DEV_ENVIRONMENT ?? "development",
+  }),
+  spanProcessors: [
+    new BatchSpanProcessor(
+      new OTLPTraceExporter({
+        url: `${baseUrl}/v1/traces`,
+        headers: { authorization: `Bearer ${apiKey}` },
+      }),
+    ),
+  ],
+});
+
+provider.register();
+
+// Start application work and spans here.
+
+await provider.shutdown(); // Short-lived CLIs must flush explicitly.
+```
+
+A short process must flush or shut down its provider before exit. A long-running service can use its normal OpenTelemetry lifecycle.
+
+Set `gen_ai.operation.name` explicitly on generative AI spans. The ingest uses this attribute for operation classification.
+
+Use the OpenTelemetry semantic conventions where possible. telemetry.dev also recognizes provider and framework attribute sets.
+
+See the complete wire contract in [OTLP ingest API](/reference/otlp). See recognized fields in [Span attributes](/reference/span-attributes).
+
+## Endpoint summary
+
+| Signal | Endpoint | telemetry.dev package behavior |
+| --- | --- | --- |
+| Traces | `POST /v1/traces` | The SDK and processor send spans here. |
+| Logs | `POST /v1/logs` | The full SDK sends logs here. |
+| Metrics | `POST /v1/metrics` | The full SDK and processor send automatic metrics here. |
+
+All endpoints use `Authorization: Bearer td_live_...`. The ingest accepts OTLP protobuf and OTLP JSON for all three signals.
