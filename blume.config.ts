@@ -29,6 +29,6 @@ export default defineConfig({
   },
   deployment: {
     output: "static",
-    site: "https://telemetry-docs.pages.dev",
+    site: "https://docs.telemetry.dev",
   },
 });
