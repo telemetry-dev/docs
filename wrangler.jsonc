@@ -1,0 +1,14 @@
+{
+  "name": "telemetry-docs",
+  "compatibility_date": "2026-08-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "404-page"
+  },
+  "routes": [
+    {
+      "pattern": "docs.telemetry.dev",
+      "custom_domain": true
+    }
+  ]
+}
