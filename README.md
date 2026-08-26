@@ -1,5 +1,9 @@
 <div align="center">
 
+<a href="https://telemetry.dev">
+  <img src="public/logo.svg" alt="telemetry.dev" width="96" />
+</a>
+
 # telemetry.dev
 
 ### See every AI call, tool run, token, and error in one trace.
