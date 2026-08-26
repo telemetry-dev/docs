@@ -1,14 +1,11 @@
 ---
 title: Pi coding agent
 description: Trace pi agent loops, model calls, tool executions, usage, cost, and lifecycle events.
-lastModified: 2026-08-03
+lastModified: 2026-08-26
 ---
 
 `@telemetry-dev/pi` adds telemetry.dev to `@earendil-works/pi-coding-agent`. It targets pi 0.82.1 and accepts pi 0.80.4 or later.
 
-:::note
-`@telemetry-dev/pi` is not on the public npm registry yet. The integration ships with the next release.
-:::
 
 ## What it captures
 
@@ -47,7 +44,7 @@ The integration reads all setup values from the environment when pi loads the pa
 
 ### Pi package
 
-After the public release, add the package to `~/.pi/agent/settings.json`:
+Add the package to `~/.pi/agent/settings.json`:
 
 ```json ~/.pi/agent/settings.json
 {

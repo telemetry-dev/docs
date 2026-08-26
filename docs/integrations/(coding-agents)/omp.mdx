@@ -1,14 +1,11 @@
 ---
 title: Oh My Pi
 description: Trace Oh My Pi turns, model calls, tools, usage, timing, retries, and compaction.
-lastModified: 2026-08-03
+lastModified: 2026-08-26
 ---
 
 `@telemetry-dev/omp` adds telemetry.dev to Oh My Pi through its extension API. It accepts `@oh-my-pi/pi-coding-agent` 17 or later.
 
-:::note
-`@telemetry-dev/omp` is not on the public npm registry yet. The integration ships with the next release.
-:::
 
 ## What it captures
 
@@ -51,7 +48,7 @@ The package also exposes this entry as `@telemetry-dev/omp/register`. Oh My Pi l
 
 ### Extension file
 
-After the public release, install the package where Oh My Pi can resolve it. Then add one of these files:
+Install the package where Oh My Pi can find it. Then add one of these files:
 
 - `~/.omp/agent/extensions/telemetry-dev.ts` for all projects
 - `.omp/extensions/telemetry-dev.ts` for one project
