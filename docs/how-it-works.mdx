@@ -11,11 +11,7 @@ An SDK records spans and sends them through OTLP. The ingest service maps the sp
 
 A trace groups one end-to-end application run. Each span records one operation inside that run.
 
-```text
-Trace: answer
-├─ Span: searchWeb       tool
-└─ Span: chat gpt-4      generation
-```
+![A trace and its spans in the telemetry.dev dashboard](/dashboard-trace.png)
 
 The first-party SDKs set `gen_ai.operation.name` from the span type:
 
@@ -51,12 +47,10 @@ Environment names also control trace filters, analytics groups, and input or out
 
 ## Ingest pipeline
 
-```text
-SDK or OpenTelemetry exporter
-  -> OTLP/HTTP
-  -> ingest.telemetry.dev
-  -> normalized trace and span fields
-  -> dashboard
+```mermaid
+flowchart LR
+  SDK["SDK or OpenTelemetry exporter"] -->|"OTLP/HTTP"| Ingest["ingest.telemetry.dev"]
+  Ingest -->|"normalized trace and span fields"| Dash["Dashboard"]
 ```
 
 The data path has these steps:
