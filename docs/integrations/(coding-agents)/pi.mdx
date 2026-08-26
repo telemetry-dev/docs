@@ -1,14 +1,11 @@
 ---
-title: Oh My Pi
-description: Trace Oh My Pi turns, model calls, tools, usage, timing, retries, and compaction.
-lastModified: 2026-08-03
+title: Pi coding agent
+description: Trace pi agent loops, model calls, tool executions, usage, cost, and lifecycle events.
+lastModified: 2026-08-26
 ---
 
-`@telemetry-dev/omp` adds telemetry.dev to Oh My Pi through its extension API. It accepts `@oh-my-pi/pi-coding-agent` 17 or later.
+`@telemetry-dev/pi` adds telemetry.dev to `@earendil-works/pi-coding-agent`. It targets pi 0.82.1 and accepts pi 0.80.4 or later.
 
-:::note
-`@telemetry-dev/omp` is not on the public npm registry yet. The integration ships with the next release.
-:::
 
 ## What it captures
 
@@ -22,12 +19,10 @@ invoke_agent
 └── chat {model}
 ```
 
-- `invoke_agent` records one complete prompt turn, including continuations, retries, and compaction.
-- `chat {model}` records provider, model, response ID, finish reason, token usage, duration, TTFT, and errors.
+- `invoke_agent` records the prompt, final assistant text, result, and session ID.
+- `chat {model}` records provider, models, response ID, finish reason, token usage, and pi's estimated USD cost.
 - `execute_tool {toolName}` records the tool-call ID, arguments, result, and error state.
-- Session, branch, compaction, retry, and shutdown events become logs.
-
-Oh My Pi does not report client-side cost for these messages. The integration exports token usage, but it does not add a cost value.
+- Session, turn, compaction, model-change, and shutdown events become logs.
 
 Tool spans nest under the chat span that issued the tool call. A tool without a matching chat span nests under `invoke_agent`.
 
@@ -37,38 +32,45 @@ Only text blocks become assistant output. Thinking and tool-call blocks do not b
 
 Make a project at [telemetry.dev](https://telemetry.dev). Then copy an API key from the project's setup page.
 
-Set these variables in the environment that starts Oh My Pi:
+Set these variables in the environment that starts pi:
 
 ```sh
 export TELEMETRY_DEV_API_KEY=td_live_...
 export TELEMETRY_DEV_ENVIRONMENT=development
-export OTEL_SERVICE_NAME=omp
+export OTEL_SERVICE_NAME=pi
 ```
 
-The package includes an `omp.extensions` manifest. The manifest points to `./dist/register.mjs`, which exports an environment-configured extension.
+The integration reads all setup values from the environment when pi loads the package entry.
 
-The package also exposes this entry as `@telemetry-dev/omp/register`. Oh My Pi loads the manifest entry when it finds the installed package.
+### Pi package
+
+Add the package to `~/.pi/agent/settings.json`:
+
+```json ~/.pi/agent/settings.json
+{
+  "packages": ["npm:@telemetry-dev/pi"]
+}
+```
+
+The package manifest points to `./dist/register.mjs`. The public `@telemetry-dev/pi/register` entry exports `telemetryDevExtension()` with environment setup.
 
 ### Extension file
 
-After the public release, install the package where Oh My Pi can resolve it. Then add one of these files:
+If pi can resolve the package, add `~/.pi/agent/extensions/telemetry-dev.ts`:
 
-- `~/.omp/agent/extensions/telemetry-dev.ts` for all projects
-- `.omp/extensions/telemetry-dev.ts` for one project
-
-```ts telemetry-dev.ts
-import { telemetryDevExtension } from "@telemetry-dev/omp";
+```ts ~/.pi/agent/extensions/telemetry-dev.ts
+import { telemetryDevExtension } from "@telemetry-dev/pi";
 
 export default telemetryDevExtension();
 ```
 
 Use the factory form when you must set options in code:
 
-```ts telemetry-dev.ts
-import { telemetryDevExtension } from "@telemetry-dev/omp";
+```ts ~/.pi/agent/extensions/telemetry-dev.ts
+import { telemetryDevExtension } from "@telemetry-dev/pi";
 
 export default telemetryDevExtension({
-  agentName: "omp",
+  agentName: "pair-programmer",
   captureInput: false,
   captureOutput: true,
 });
@@ -76,15 +78,15 @@ export default telemetryDevExtension({
 
 ## Span lifecycle
 
-`agent_start` opens the `invoke_agent` span. A terminal `agent_end` closes the span and unfinished tool spans.
+`agent_start` opens the `invoke_agent` span. Retries and compaction can start the agent loop again, but they keep the same span.
 
-An `agent_end` event with `willContinue: true` keeps the same span open. Retries, compaction, and queued continuations remain in one prompt trace.
+:::info[Source behavior]
+`agent_end` records the current run result and starts a flush. `agent_settled` closes `invoke_agent` and unfinished tool spans, then starts another flush.
+:::
 
-The integration also compares the terminal assistant message with the latest completed message. A stale `agent_end` event does not close the trace.
+This behavior lets a later retry replace a retryable result before the prompt settles. `session_shutdown` closes an unfinished loop and waits for the final flush.
 
-If a new prompt starts before the prior loop closes, the integration closes the prior span as incomplete. `session_shutdown` also closes an unfinished span and waits for a flush.
-
-Oh My Pi supplies the message timestamp, duration, and TTFT. The integration uses those host values for each chat span.
+Pi does not supply TTFT or request-duration values. The integration measures chat duration from `message_start` to `message_end` with the local clock.
 
 ## Environment variables
 
@@ -93,7 +95,7 @@ Oh My Pi supplies the message timestamp, duration, and TTFT. The integration use
 | `TELEMETRY_DEV_API_KEY` | Yes | None | Ingest API key. Without a key, the integration is a no-op. |
 | `TELEMETRY_DEV_BASE_URL` | No | `https://ingest.telemetry.dev` | OTLP ingest base URL. |
 | `TELEMETRY_DEV_ENVIRONMENT` | No | `production` | Environment on exported telemetry. |
-| `OTEL_SERVICE_NAME` | No | `omp` | OpenTelemetry service name. |
+| `OTEL_SERVICE_NAME` | No | `pi` | OpenTelemetry service name. |
 
 ## Options
 
@@ -101,11 +103,11 @@ Oh My Pi supplies the message timestamp, duration, and TTFT. The integration use
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `agentName` | `string` | `omp` | Value for `gen_ai.agent.name`. |
+| `agentName` | `string` | `pi` | Value for `gen_ai.agent.name`. |
 | `apiKey` | `string` | `TELEMETRY_DEV_API_KEY` | Ingest API key. |
 | `baseUrl` | `string` | `TELEMETRY_DEV_BASE_URL` or production ingest | Ingest base URL. |
 | `environment` | `string` | `TELEMETRY_DEV_ENVIRONMENT` or `production` | Deployment environment. |
-| `serviceName` | `string` | `OTEL_SERVICE_NAME` or `omp` | Service name on each trace. |
+| `serviceName` | `string` | `OTEL_SERVICE_NAME` or `pi` | Service name on each trace. |
 | `enabled` | `boolean` | `true` | Set to `false` for a complete no-op. |
 | `exportMode` | `"batched" \| "immediate"` | `batched` | Span export mode. |
 | `captureInput` | `boolean` | `true` | Capture prompts and tool arguments. |
@@ -118,8 +120,8 @@ Oh My Pi supplies the message timestamp, duration, and TTFT. The integration use
 | `logLevel` | `"debug" \| "info" \| "warn" \| "error" \| "silent"` | `warn` | SDK diagnostic level. |
 | `fetch` | `typeof fetch` | `globalThis.fetch` | Custom fetch implementation. |
 | `waitUntil` | `(promise) => void` | None | Extend serverless work for export. |
-| `onError` | `(error) => void` | None | Receive integration errors. The extension does not throw them into Oh My Pi. |
+| `onError` | `(error) => void` | None | Receive integration errors. The extension does not throw them into pi. |
 
 The integration forces `registerGlobal` to `false`. The first initialization in a process supplies the SDK options.
 
-Open the [trace explorer](/platform/traces) after a prompt completes. For API key setup, refer to the [quickstart](/quickstart).
+Open the [trace explorer](/platform/traces) after a prompt settles. For API key setup, refer to the [quickstart](/quickstart).
