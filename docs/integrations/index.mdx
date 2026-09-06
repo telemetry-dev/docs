@@ -13,6 +13,8 @@ export const opencodeLogo = '<svg width="100%" height="100%" viewBox="0 0 512 51
 export const piLogo = '<svg width="100%" height="100%" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" fill-rule="evenodd" d="M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"/><path fill="currentColor" d="M517.36 400H634.72V634.72H517.36Z"/></svg>';
 export const eveLogo = '<svg width="100%" height="100%" fill="none" viewBox="0 0 78 25" xmlns="http://www.w3.org/2000/svg"><path d="M77.7002 3.89551H54.0762L37.5781 24.3818H32.3486L36.5322 19.1729L51.958 0H77.7002V3.89551ZM21.0898 24.3721H0V20.4766H21.0898V24.3721ZM77.7012 20.4766V24.3721H56.6104V20.4766H77.7012ZM17.7744 14.0537H0V10.1582H17.7744V14.0537ZM77.7012 14.0537H59.9268V10.1582H77.7012V14.0537ZM34.7197 3.89551H0V0H34.7197V3.89551Z" fill="currentColor"/></svg>';
 
+export const mcpLogo = '<svg width="100%" height="100%" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg"><g stroke="currentColor" stroke-width="11.0667" stroke-linecap="round"><path d="M23.5996 85.2532L86.2021 22.6507C94.8457 14.0071 108.86 14.0071 117.503 22.6507C126.147 31.2942 126.147 45.3083 117.503 53.9519L70.2254 101.23"/><path d="M70.8789 100.578L117.504 53.952C126.148 45.3083 140.163 45.3083 148.806 53.952L149.132 54.278C157.776 62.9216 157.776 76.9357 149.132 85.5792L92.5139 142.198C89.6327 145.079 89.6327 149.75 92.5139 152.631L104.14 164.257"/><path d="M101.853 38.3013L55.553 84.6011C46.9094 93.2447 46.9094 107.258 55.553 115.902C64.1966 124.546 78.2106 124.546 86.8543 115.902L133.154 69.6025"/></g></svg>';
+
 telemetry.dev SDKs wrap your model client or add hooks through the client telemetry API. The SDKs send OpenTelemetry traces for model calls, tool steps, and agent runs.
 
 ## Frameworks
@@ -27,7 +29,7 @@ telemetry.dev SDKs wrap your model client or add hooks through the client teleme
   <Card title="Eve" href="/integrations/eve" icon={eveLogo}>
     Trace Eve agent-framework runs.
   </Card>
-  <Card title="Model Context Protocol" href="/integrations/mcp" icon="network">
+  <Card title="Model Context Protocol" href="/integrations/mcp" icon={mcpLogo}>
     Trace official TypeScript MCP SDK v2 transports.
   </Card>
 </CardGroup>
