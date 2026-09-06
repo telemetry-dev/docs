@@ -1,7 +1,7 @@
 ---
 title: TypeScript SDK
 description: Add spans, logs, metrics, and trace context to TypeScript applications.
-lastModified: 2026-08-03
+lastModified: 2026-09-05
 ---
 
 `@telemetry-dev/sdk` is the full TypeScript SDK. It uses an isolated OpenTelemetry provider by default and sends OTLP data to telemetry.dev.
@@ -88,6 +88,7 @@ An explicit option has precedence over an environment variable.
 | `environment` | `string` | `TELEMETRY_DEV_ENVIRONMENT` | `production` | Sets `deployment.environment.name`. |
 | `serviceName` | `string` | `OTEL_SERVICE_NAME` | `unknown_service` | Sets `service.name`. |
 | `enabled` | `boolean` | None | `true` | Deactivates the client when set to `false`. |
+| `sessionMode` (unreleased) | `"explicit"` or `"process"` | None | `"explicit"` | Optionally groups otherwise uncorrelated SDK spans and logs for one client initialization. |
 | `registerGlobal` | `boolean` | None | `false` | Registers the SDK provider as the global OpenTelemetry provider. |
 | `exportMode` | `"batched" \| "immediate"` | None | `"batched"` | Selects batch export or immediate export for spans and logs. |
 | `captureInput` | `boolean` | None | `true` | Sets the default input capture. |
@@ -253,6 +254,18 @@ await propagateAttributes(
 The SDK maps `userId` to `user.id` and `sessionId` to `gen_ai.conversation.id`. It maps metadata to `td.metadata.*`.
 
 Nested calls combine attributes. Inner values replace outer values with the same key. Propagation operates before `init()`.
+
+### Optional process sessions (unreleased)
+
+Root spans are independent by default. For a single-conversation CLI process, the upcoming `sessionMode: "process"` option generates a session ID when the SDK initializes:
+
+```ts
+init({ sessionMode: "process" });
+```
+
+The ID is a fallback for SDK spans and logs without an explicit or propagated session. It does not replace a valid parent trace context. Shutting down or replacing the client ends the generated session; a later initialization creates a new ID. The ID is not persisted across processes.
+
+Do not use process sessions to group unrelated requests in a long-running server. Supply a session ID per conversation with `propagateAttributes()` instead. This option does not configure separate AI SDK or TanStack AI integrations.
 
 ## Send logs
 

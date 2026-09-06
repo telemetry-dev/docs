@@ -1,0 +1,72 @@
+---
+title: OpenClaw
+description: Export OpenClaw agent runs, model calls, tools, token usage, cost, metrics, and logs over OTLP.
+lastModified: 2026-09-05
+---
+
+OpenClaw's official `diagnostics-otel` plugin exports OTLP/HTTP protobuf directly to telemetry.dev. Setup requires configuration rather than an application SDK or collector.
+
+## Set up the exporter
+
+Create a telemetry.dev project and copy its API key. Install the plugin:
+
+```sh
+openclaw plugins install clawhub:@openclaw/diagnostics-otel
+```
+
+Add the exporter to your OpenClaw configuration:
+
+```json5
+{
+  plugins: {
+    allow: ["diagnostics-otel"],
+    entries: { "diagnostics-otel": { enabled: true } },
+  },
+  diagnostics: {
+    enabled: true,
+    otel: {
+      enabled: true,
+      endpoint: "https://ingest.telemetry.dev",
+      protocol: "http/protobuf",
+      serviceName: "openclaw-gateway",
+      headers: { Authorization: "Bearer <your-api-key>" },
+    },
+  },
+}
+```
+
+Restart the Gateway. Traces and metrics then appear in telemetry.dev. Add `logs: true` inside `diagnostics.otel` to export structured Gateway logs.
+
+## What it captures
+
+The plugin emits harness and run spans around model calls and tool executions. telemetry.dev normalizes the OpenTelemetry GenAI attributes into provider, model, latency, token, and cost fields. OpenClaw also exports operation-duration, queue, session, and token metrics; logs are opt-in.
+
+OpenClaw reports usage on model-call spans and on a run-level `openclaw.model.usage` accounting span. telemetry.dev deduplicates these records per run when computing trace totals: it uses complete per-call values and falls back to the accounting span for missing usage or cost fields.
+
+## Choose an environment
+
+OpenClaw does not set `deployment.environment.name`, so records use the project's default environment. To select an environment, set this variable on the Gateway process:
+
+```sh
+export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
+```
+
+You can use an environment-scoped telemetry.dev API key with the matching resource attribute.
+
+## Content capture and privacy
+
+OpenClaw does not put prompts, responses, or tool content on the wire by default. To export that content, set `diagnostics.otel.captureContent: true`.
+
+:::warning[Content leaves the Gateway]
+With `captureContent: true`, OpenClaw includes prompt and tool content in outbound OTLP. telemetry.dev's environment capture setting controls whether received content is stored, not whether OpenClaw transmits it. When environment capture is off, ingest discards received content before storage.
+:::
+
+OpenClaw excludes system prompts and thinking blocks even when content capture is enabled.
+
+## Trace and session limitations
+
+A run is usually one trace. A Gateway request with a W3C `traceparent` continues its upstream trace, and nested or delegated runs can share a parent trace.
+
+OpenClaw exports no session key, session ID, or `gen_ai.conversation.id`. telemetry.dev therefore cannot join separate traces into a conversation.
+
+See the [OpenClaw OpenTelemetry documentation](https://docs.openclaw.ai/gateway/opentelemetry) for exporter settings. Open the [trace explorer](/platform/traces) after a run completes.
