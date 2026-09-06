@@ -80,8 +80,8 @@ Connect `telemetry-dev/docs` to the existing `telemetry-docs` Worker in its curr
 | Production branch | `main` |
 | Root directory | `/` |
 | Build command | `pnpm install --frozen-lockfile && pnpm run build` |
-| Deploy command | `pnpm dlx wrangler@4.129.0 deploy` |
-| Non-production deploy command | `pnpm dlx wrangler@4.129.0 versions upload` |
+| Deploy command | `pnpm run deploy` |
+| Non-production deploy command | `pnpm run deploy:preview` |
 | Build variable `NODE_VERSION` | `24.20.0` |
 | Build variable `PNPM_VERSION` | `11.25.0` |
 | Build variable `SKIP_DEPENDENCY_INSTALL` | `true` |
@@ -90,7 +90,7 @@ Keep `NODE_VERSION` aligned with `.node-version`, or remove the override once th
 Skipping the automatic dependency install makes the explicit frozen-lockfile install authoritative.
 Install dev dependencies too: Wrangler is pinned there. Keep the Cloudflare-managed deploy token in Workers Builds, never in this repository.
 
-These deploy commands also work before the tooling scripts reach `main`. After merging them, switch to `pnpm run deploy` and `pnpm run deploy:preview` to use the lockfile-pinned Wrangler dependency tree instead of resolving it with `dlx`.
+The deploy commands use the lockfile-pinned Wrangler dependency tree.
 Enable non-production branch builds only if branch previews are wanted; their command uploads a version without promoting it to production.
 Wrangler custom-build configuration does not replace the Workers Builds build command.
 
