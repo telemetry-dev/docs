@@ -44,7 +44,9 @@ Prompt and response capture is on by default. An owner or admin can change captu
   </Step>
 </Steps>
 
-If capture is off, telemetry.dev does not store input or output content for that environment. It also drops content attributes and replaces the span name with `[REDACTED]`.
+If capture is off, telemetry.dev omits recognized input and output fields for that environment, drops recognized content attributes, and replaces the span name with `[REDACTED]`. It also suppresses content in legacy GenAI message logs.
+
+Capture-off does not remove all free-form text. Ordinary log bodies, unknown attributes, metadata, and error text can still be stored after built-in and custom redaction. Prompt or response text placed in those fields is not reliably identifiable as input or output. Omit sensitive content at the exporter when it must not leave your application; do not rely on capture-off or pattern matching to identify arbitrary private text.
 
 Environment names use lowercase after whitespace removal at each end. You can save at most 100 environment rows.
 
