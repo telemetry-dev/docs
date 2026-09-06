@@ -1,7 +1,7 @@
 ---
 title: Python SDK
 description: Add spans, logs, metrics, and trace context to Python applications.
-lastModified: 2026-08-03
+lastModified: 2026-09-05
 ---
 
 `telemetry-dev` is the core Python SDK. It sends traces, logs, and metrics through OTLP/HTTP.
@@ -77,6 +77,7 @@ An explicit argument has precedence over an environment variable.
 | `environment` | `str \| None` | `TELEMETRY_DEV_ENVIRONMENT` | `production` | Sets `deployment.environment.name`. |
 | `service_name` | `str \| None` | `OTEL_SERVICE_NAME` | `unknown_service` | Sets `service.name`. |
 | `enabled` | `bool` | None | `True` | Deactivates the client when set to `False`. |
+| `session_mode` (unreleased) | `"explicit"` or `"process"` | None | `"explicit"` | Optionally groups otherwise uncorrelated SDK spans and logs for one client initialization. |
 | `register_global` | `bool` | None | `False` | Registers the client tracer provider as the global provider. |
 | `export_mode` | `"batched" \| "immediate"` | None | `"batched"` | Selects batch export or immediate export for spans and logs. |
 | `log_level` | `"debug" \| "info" \| "warn" \| "error" \| "silent"` | None | `"warn"` | Controls SDK diagnostic output. |
@@ -248,6 +249,18 @@ The SDK maps `user_id` to `user.id` and `session_id` to `gen_ai.conversation.id`
 Nested scopes combine attributes. Inner values replace outer values with the same key. The context uses `contextvars`.
 
 `get_traceparent()` returns the W3C traceparent for the current context, or `None`.
+
+### Optional process sessions (unreleased)
+
+Root spans are independent by default. For a single-conversation CLI process, the upcoming `session_mode="process"` option generates a session ID when the SDK initializes:
+
+```python
+init(session_mode="process")
+```
+
+The ID is a fallback for SDK spans and logs without an explicit or propagated session. It does not replace a valid parent trace context. Shutting down or replacing the client ends the generated session; a later initialization creates a new ID. The ID is not persisted across processes.
+
+Do not use process sessions to group unrelated requests in a long-running server. Supply a session ID per conversation with `propagate_attributes()` instead.
 
 ## Send logs
 

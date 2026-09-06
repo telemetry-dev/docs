@@ -8,7 +8,7 @@
 
 ### See every AI call, tool run, token, and error in one trace.
 
-Open-source observability for AI applications and agents. Trace model calls, inspect tool use, measure cost and latency, and find errors without changing providers.
+Observability for AI applications and agents. Trace model calls, inspect tool use, measure cost and latency, and find errors without changing providers.
 
 [Start tracing](https://telemetry.dev) · [Read the docs](https://docs.telemetry.dev)
 
@@ -47,10 +47,12 @@ The SDK sends traces through OTLP, the OpenTelemetry Protocol. You can also use 
 
 ## Works with your AI stack
 
-telemetry.dev has integrations for OpenAI, Anthropic, Google Gen AI, Amazon Bedrock, LiteLLM, the Vercel AI SDK, TanStack AI, Eve, opencode, Oh My Pi, and Pi.
+telemetry.dev has integrations for OpenAI, Anthropic, Google Gen AI, Amazon Bedrock, OpenRouter, LiteLLM, the Vercel AI SDK, TanStack AI, MCP, Eve, opencode, Oh My Pi, Pi, Cursor, and OpenClaw.
 
 [See all integrations](https://docs.telemetry.dev/integrations)
 
-## Open source
+## About this repository
 
-This repository contains the documentation for telemetry.dev. The product source is available in the [telemetry.dev repository](https://github.com/telemetry-dev/telemetry).
+This public repository contains the documentation for telemetry.dev. The product source is currently maintained in a private repository.
+
+The site is built from MDX with Blume and hosted as static assets on Cloudflare Workers at [docs.telemetry.dev](https://docs.telemetry.dev). The worker and custom domain are configured in `wrangler.jsonc`.

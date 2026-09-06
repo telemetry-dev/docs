@@ -1,0 +1,87 @@
+---
+title: Model Context Protocol
+description: Trace requests across official TypeScript MCP SDK v2 client and server transports.
+lastModified: 2026-09-05
+---
+
+`@telemetry-dev/mcp` instruments transports from the official TypeScript MCP SDK v2. It traces MCP requests sent by a client or handled by a server; it is not an MCP server for querying telemetry.dev.
+
+## What it captures
+
+Each JSON-RPC request produces a client span on the sending side and a server span on the receiving side. The integration records the MCP method, request ID, protocol version, session ID when available, errors, and method-specific fields such as tool name, prompt name, or resource URI.
+
+`tools/call` requests use the `execute_tool` operation. Other MCP requests use the `mcp` operation. Notifications do not produce processing spans, and the integration does not emit metrics.
+
+Trace context propagates through MCP request metadata by default, so an instrumented server span can continue the client trace. OpenTelemetry baggage remains local unless you opt in with `propagateBaggage: true`.
+
+## Install
+
+Install the core SDK, this integration, and the official package for your side of the connection:
+
+<CodeGroup>
+
+```sh Client
+npm i @telemetry-dev/sdk @telemetry-dev/mcp @modelcontextprotocol/client
+```
+
+```sh Server
+npm i @telemetry-dev/sdk @telemetry-dev/mcp @modelcontextprotocol/server
+```
+
+</CodeGroup>
+
+The integration requires MCP SDK v2 (`@modelcontextprotocol/client` or `@modelcontextprotocol/server` version 2.x). MCP v1 is not supported.
+
+## Instrument a client
+
+Initialize telemetry.dev, then instrument the transport before connecting it:
+
+```ts
+import { Client } from "@modelcontextprotocol/client";
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { instrumentMcpTransport } from "@telemetry-dev/mcp";
+import { init } from "@telemetry-dev/sdk";
+
+init({ serviceName: "mcp-client" });
+
+const client = new Client({ name: "example-client", version: "1.0.0" });
+const transport = instrumentMcpTransport(
+  new StdioClientTransport({ command: "example-mcp-server" }),
+);
+await client.connect(transport);
+```
+
+## Instrument a server
+
+```ts
+import { McpServer } from "@modelcontextprotocol/server";
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
+import { instrumentMcpTransport } from "@telemetry-dev/mcp";
+import { init } from "@telemetry-dev/sdk";
+
+init({ serviceName: "mcp-server" });
+
+const server = new McpServer({ name: "example-server", version: "1.0.0" });
+const transport = instrumentMcpTransport(new StdioServerTransport());
+await server.connect(transport);
+```
+
+`instrumentMcpTransport()` mutates and returns the same transport. Calling it again for that transport has no effect.
+
+The same wrapper supports Streamable HTTP transports. Instrument each transport before passing it to `client.connect()` or `server.connect()`; both sides need instrumentation to record both client and server spans.
+
+## Control payload capture
+
+Tool arguments and successful tool results are not captured by default. Enable them for a transport only when that content is safe to send:
+
+```ts
+const transport = instrumentMcpTransport(mcpTransport, {
+  capturePayloads: true,
+});
+```
+
+The core SDK's `captureInput`, `captureOutput`, masking, and maximum attribute length settings still apply. Enabling `capturePayloads` permits tool content to reach those controls; it does not override them. Failed tool results are marked as errors but are not captured as output.
+
+With payload capture off, method names, tool and prompt names, resource URIs, request and session IDs, and error metadata are still recorded. Avoid placing secrets in those fields.
+
+MCP semantic conventions are in Development status and may change. Open the [trace explorer](/platform/traces) after a request completes. Refer to the [quickstart](/quickstart) for API-key setup and SDK configuration.

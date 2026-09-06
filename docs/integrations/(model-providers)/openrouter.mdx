@@ -1,0 +1,107 @@
+---
+title: OpenRouter
+description: Trace OpenRouter chat, Responses API, embeddings, streams, usage, and cost from TypeScript or Python.
+lastModified: 2026-09-05
+---
+
+The OpenRouter integrations wrap the official OpenRouter SDKs without changing request arguments. Calls remain usable when telemetry.dev is not initialized; instrumentation becomes a no-op.
+
+## What it captures
+
+- Chat and Responses API input, model parameters, output, response IDs, finish reasons, errors, and token usage
+- Embedding input, models, response IDs, and usage, but never embedding vectors
+- Stream output as your application consumes it, including time to first chunk and terminal metadata
+- Cost from `usage.cost`, falling back to upstream inference cost when OpenRouter supplies it
+
+## Install
+
+<CodeGroup>
+
+```sh TypeScript
+npm i @telemetry-dev/sdk @telemetry-dev/openrouter @openrouter/sdk
+```
+
+```sh Python
+pip install telemetry-dev-openrouter
+```
+
+</CodeGroup>
+
+The TypeScript integration supports `@openrouter/sdk` 1.1.2 through versions before 2. The Python package requires Python 3.10 or later, `telemetry-dev` 0.2 or later, and `openrouter` 1.1 through versions before 2.
+
+## Quickstart
+
+<CodeGroup>
+
+```ts TypeScript
+import { OpenRouter } from "@openrouter/sdk";
+import { flush, init, shutdown } from "@telemetry-dev/sdk";
+import { wrapOpenRouter } from "@telemetry-dev/openrouter";
+
+init({ serviceName: "openrouter-app" });
+const client = wrapOpenRouter(new OpenRouter({ apiKey: process.env.OPENROUTER_API_KEY }));
+
+try {
+  const response = await client.chat.send({
+    chatRequest: {
+      model: "openai/gpt-4o-mini",
+      messages: [{ role: "user", content: "Explain OpenTelemetry briefly" }],
+    },
+  });
+  console.log(response);
+} finally {
+  await flush();
+  await shutdown();
+}
+```
+
+```python Python
+import os
+
+import telemetry_dev
+from openrouter import OpenRouter
+from telemetry_dev_openrouter import wrap_open_router
+
+telemetry_dev.init(service_name="openrouter-app")
+client = wrap_open_router(OpenRouter(api_key=os.environ["OPENROUTER_API_KEY"]))
+
+try:
+    response = client.chat.send(
+        model="openai/gpt-4o-mini",
+        messages=[{"role": "user", "content": "Explain OpenTelemetry briefly"}],
+    )
+    print(response)
+finally:
+    telemetry_dev.flush()
+    telemetry_dev.shutdown()
+```
+
+</CodeGroup>
+
+Set `TELEMETRY_DEV_API_KEY` for telemetry.dev and `OPENROUTER_API_KEY` for OpenRouter before running either example.
+
+## API
+
+| TypeScript | Python | Purpose |
+| --- | --- | --- |
+| `wrapOpenRouter(client)` | `wrap_open_router(client)` | Instrument one client. Repeated wrapping is safe. |
+| `instrumentOpenRouter()` | `instrument_openrouter()` | Instrument all new official SDK clients. |
+| `uninstrumentOpenRouter()` | `uninstrument_openrouter()` | Restore original SDK methods. Explicit client wrappers stay active. |
+
+Both integrations cover chat `send`, Responses `send`, and embeddings `generate`. Python covers synchronous methods and their `*_async` variants.
+
+## Streaming
+
+Chat and Responses streams remain streams and async iterables. Instrumentation observes only events that your application consumes. Exhaust, close, or cancel a stream to finish its span; a returned stream that is never consumed cannot produce complete terminal telemetry.
+
+The integrations do not add or change `stream_options`. Streamed usage and cost are recorded only when OpenRouter includes them. They reconstruct supported chat and Responses output from consumed events and retain terminal errors, usage, and cost when available.
+
+TypeScript stream capture is limited to 64 KiB and 1,024 items. Python uses the core SDK capture budget. A partial capture sets `telemetry.dev.capture.truncated = true`; terminal metadata and usage can still be recorded.
+
+## Content and limitations
+
+The core SDK captures model input and output by default. Use its `captureInput`, `captureOutput`, and masking options if prompts or responses contain sensitive data. Turning capture off prevents those content fields from being added by the integration, while operational metadata and usage remain.
+
+Only the listed methods are instrumented. TypeScript global instrumentation patches the official SDK's Chat, Responses, and Embeddings resource classes; standalone generated functions and other endpoints are outside its scope.
+
+Open the [trace explorer](/platform/traces) after a call completes. Refer to the [quickstart](/quickstart) for API-key and capture configuration.

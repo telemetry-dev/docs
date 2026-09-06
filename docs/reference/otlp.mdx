@@ -1,7 +1,7 @@
 ---
 title: OTLP ingest API
 description: Send OTLP/HTTP traces, logs, and metrics to telemetry.dev.
-lastModified: 2026-08-03
+lastModified: 2026-09-05
 ---
 
 The ingest API accepts OTLP/HTTP protobuf and JSON at `https://ingest.telemetry.dev`.
@@ -76,6 +76,22 @@ Use `/v1/logs` for an `ExportLogsServiceRequest`. Use `/v1/metrics` for an `Expo
 A successful request returns HTTP `200`. The body is the canonical empty OTLP `ExportTraceServiceResponse`, `ExportLogsServiceResponse`, or `ExportMetricsServiceResponse`.
 
 The response encoding matches the request encoding. A protobuf request receives `application/x-protobuf`. A JSON request receives `application/json`.
+
+## Imperfect and out-of-order data
+
+The same ingestion rules apply to first-party SDK exports and other OTLP clients. There is no separate strict-SDK ingestion endpoint.
+
+- **Malformed batches:** a structurally invalid item rejects the complete request before persistence. The server does not return OTLP partial-success counts for valid siblings.
+- **Missing optional information:** an accepted record can have null token, cost, or extracted-content fields. Null means unavailable, not zero. Supported aliases and fallbacks can fill those fields.
+- **Out-of-order delivery:** a child span can arrive before its root, and a log can arrive before its referenced span. The server retains available correlation IDs and reconciles later arrivals within retention limits.
+- **Reversed timing:** valid source timestamps are retained, but derived durations are clamped to zero rather than displayed as negative.
+- **Isolation and privacy:** best-effort extraction never bypasses project ownership, environment scope, capture settings, redaction, or retention.
+
+A persistence error is different from a malformed batch: it can occur after some writes have completed. Follow the retry response rather than assuming either complete acceptance or a complete rollback. Identical request bytes have a project-scoped, one-hour replay marker; this is not an indefinite exactly-once guarantee.
+
+An unreleased normalization correction will omit negative, fractional, non-finite, and unsafe-integer token counts from derived usage fields while retaining the rest of the span or log. Generic signed metric measurements are unaffected.
+
+The same correction will ignore explicit costs outside the stored decimal field's range. Numeric costs are rounded to eight fractional digits before checking the ten-integer-digit limit; decimal strings must already have at most eight fractional digits. A valid lower-priority cost alias can still supply the value.
 
 ## Error response
 

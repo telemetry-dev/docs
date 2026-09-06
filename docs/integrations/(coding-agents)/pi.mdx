@@ -1,7 +1,7 @@
 ---
 title: Pi coding agent
 description: Trace pi agent loops, model calls, tool executions, usage, cost, and lifecycle events.
-lastModified: 2026-08-26
+lastModified: 2026-09-05
 ---
 
 `@telemetry-dev/pi` adds telemetry.dev to `@earendil-works/pi-coding-agent`. It targets pi 0.82.1 and accepts pi 0.80.4 or later.
@@ -9,24 +9,34 @@ lastModified: 2026-08-26
 
 ## What it captures
 
-Each prompt produces one trace with this shape:
+A session shares one trace across prompts:
 
 ```text
-invoke_agent
-├── chat {model}
-│   ├── execute_tool {toolName}
-│   └── execute_tool {toolName}
-└── chat {model}
+session
+└── invoke_agent
+    ├── chat {model}
+    │   ├── execute_tool {toolName}
+    │   └── execute_tool {toolName}
+    └── chat {model}
 ```
 
-- `invoke_agent` records the prompt, final assistant text, result, and session ID.
-- `chat {model}` records provider, models, response ID, finish reason, token usage, and pi's estimated USD cost.
+- `session` wraps the full pi session; each prompt adds an `invoke_agent` child.
+- `invoke_agent` records the prompt, final assistant content, result, and session ID.
+- `chat {model}` records provider, models, response ID, finish reason, token usage, pi's estimated USD cost, the provider-formatted request, and all returned content blocks.
 - `execute_tool {toolName}` records the tool-call ID, arguments, result, and error state.
 - Session, turn, compaction, model-change, and shutdown events become logs.
 
 Tool spans nest under the chat span that issued the tool call. A tool without a matching chat span nests under `invoke_agent`.
 
-Only text blocks become assistant output. Thinking and tool-call blocks do not become output, but usage can include reasoning tokens.
+Each event reads the current pi session ID and records it as `gen_ai.conversation.id`, so session changes keep their own telemetry.
+
+## Content capture
+
+Prompt input includes image blocks. Chat input comes from `before_provider_request`, after pi's context handlers and model-message conversion. System instructions come from the effective `ctx.getSystemPrompt()` at that request boundary.
+
+Assistant output includes text, thinking, tool-call blocks, and provider signatures. Tool arguments and results are also captured. `captureInput` and `captureOutput` default to `true`; use them to disable the corresponding content, or use `mask` to remove selected values before serialization. Model names, usage, cost, session IDs, and lifecycle metadata are still recorded when content capture is off.
+
+The request is not necessarily the final wire payload: a later handler can replace it. Custom providers must call pi's `onPayload` callback for request and system-instruction capture. Without it, those fields are absent; prompt, output, and tool capture still work.
 
 ## Set up the integration
 
@@ -84,7 +94,7 @@ export default telemetryDevExtension({
 `agent_end` records the current run result and starts a flush. `agent_settled` closes `invoke_agent` and unfinished tool spans, then starts another flush.
 :::
 
-This behavior lets a later retry replace a retryable result before the prompt settles. `session_shutdown` closes an unfinished loop and waits for the final flush.
+This behavior lets a later retry replace a retryable result before the prompt settles. `session_shutdown` closes an unfinished prompt and the session span, then waits for the final flush. A session change does not shut down the SDK.
 
 Pi does not supply TTFT or request-duration values. The integration measures chat duration from `message_start` to `message_end` with the local clock.
 
@@ -110,8 +120,8 @@ Pi does not supply TTFT or request-duration values. The integration measures cha
 | `serviceName` | `string` | `OTEL_SERVICE_NAME` or `pi` | Service name on each trace. |
 | `enabled` | `boolean` | `true` | Set to `false` for a complete no-op. |
 | `exportMode` | `"batched" \| "immediate"` | `batched` | Span export mode. |
-| `captureInput` | `boolean` | `true` | Capture prompts and tool arguments. |
-| `captureOutput` | `boolean` | `true` | Capture assistant text and tool results. |
+| `captureInput` | `boolean` | `true` | Capture prompts, images, provider requests, system instructions, and tool arguments. |
+| `captureOutput` | `boolean` | `true` | Capture assistant content blocks and tool results. |
 | `mask` | `(value, context) => unknown` | None | Change captured values before serialization. |
 | `maxAttributeLength` | `number` | `65536` | Maximum content attribute length. |
 | `batch` | `BatchOptions` | SDK defaults | Batch size, delay, queue, and timeout settings. |
