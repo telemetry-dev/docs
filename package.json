@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "blume dev",
     "build": "blume build",
+    "test": "node --test",
     "preview": "blume preview",
     "deploy": "wrangler deploy",
     "deploy:preview": "wrangler versions upload",
