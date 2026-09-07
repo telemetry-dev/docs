@@ -1,14 +1,10 @@
 <div align="center">
 
-<a href="https://telemetry.dev">
-  <img src="public/logo.svg" alt="telemetry.dev" width="96" />
-</a>
-
 # telemetry.dev
 
 ### See every AI call, tool run, token, and error in one trace.
 
-Observability for AI applications and agents. Trace model calls, inspect tool use, measure cost and latency, and find errors without changing providers.
+Open-source observability for AI applications and agents. Trace model calls, inspect tool use, measure cost and latency, and find errors without changing providers.
 
 [Start tracing](https://telemetry.dev) · [Read the docs](https://docs.telemetry.dev)
 
@@ -47,58 +43,10 @@ The SDK sends traces through OTLP, the OpenTelemetry Protocol. You can also use 
 
 ## Works with your AI stack
 
-telemetry.dev has integrations for OpenAI, Anthropic, Google Gen AI, Amazon Bedrock, OpenRouter, LiteLLM, the Vercel AI SDK, TanStack AI, MCP, Eve, opencode, Oh My Pi, Pi, Cursor, and OpenClaw.
+telemetry.dev has integrations for OpenAI, Anthropic, Google Gen AI, Amazon Bedrock, LiteLLM, the Vercel AI SDK, TanStack AI, Eve, opencode, Oh My Pi, and Pi.
 
 [See all integrations](https://docs.telemetry.dev/integrations)
 
-## About this repository
+## Open source
 
-This public repository contains the documentation for telemetry.dev. The product source is currently maintained in a private repository.
-
-The site is built from MDX with Blume and hosted as static assets on Cloudflare Workers at [docs.telemetry.dev](https://docs.telemetry.dev). The worker and custom domain are configured in `wrangler.jsonc`.
-
-## Build and deploy
-
-Use the Node.js version in `.node-version` and the pnpm version in `package.json`.
-Install dependencies from the committed lockfile, then build and validate the Worker without publishing:
-
-```sh
-pnpm install --frozen-lockfile
-pnpm run build
-pnpm run deploy:check
-```
-
-The build produces `dist/`, including the static pages and `404.html`. `pnpm run preview` serves the built site locally.
-
-### Cloudflare Workers Builds
-
-Use Workers Builds for automatic deployment, not a second deployment workflow in GitHub Actions.
-Connect `telemetry-dev/docs` to the existing `telemetry-docs` Worker in its current Cloudflare account under **Settings → Builds** with these settings:
-
-| Setting | Value |
-| --- | --- |
-| Production branch | `main` |
-| Root directory | `/` |
-| Build command | `pnpm install --frozen-lockfile && pnpm run build` |
-| Deploy command | `pnpm run deploy` |
-| Non-production deploy command | `pnpm run deploy:preview` |
-| Build variable `NODE_VERSION` | `24.20.0` |
-| Build variable `PNPM_VERSION` | `11.25.0` |
-| Build variable `SKIP_DEPENDENCY_INSTALL` | `true` |
-
-Keep `NODE_VERSION` aligned with `.node-version`, or remove the override once that file is on the production branch.
-Skipping the automatic dependency install makes the explicit frozen-lockfile install authoritative.
-Install dev dependencies too: Wrangler is pinned there. Keep the Cloudflare-managed deploy token in Workers Builds, never in this repository.
-
-The deploy commands use the lockfile-pinned Wrangler dependency tree.
-Enable non-production branch builds only if branch previews are wanted; their command uploads a version without promoting it to production.
-Wrangler custom-build configuration does not replace the Workers Builds build command.
-
-After a production build, check its commit and deployment status in Cloudflare, then check `/`, `/quickstart`, and a nonexistent path on `https://docs.telemetry.dev` (the missing path must return HTTP 404).
-
-### Manual deployment and rollback
-
-For an authorized manual release, run the install, build, and dry-run commands above, authenticate with `pnpm exec wrangler login`, verify the account with `pnpm exec wrangler whoami`, then run `pnpm run deploy`.
-The deploy scripts publish the existing `dist/`; they do not rebuild it.
-
-Inspect releases with `pnpm exec wrangler deployments list`. If a release must be reverted, select a known-good version in the Worker's **Deployments** dashboard or run `pnpm exec wrangler rollback <version-id>` after confirming the target. Rollback changes production immediately; correct the source before the next automatic build.
+This repository contains the documentation for telemetry.dev. The product source is available in the [telemetry.dev repository](https://github.com/telemetry-dev/telemetry).
