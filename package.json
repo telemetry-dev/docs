@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "blume dev",
-    "build": "blume build",
+    "build": "blume build && rm -rf .blume/cloudflare && mkdir -p .blume/cloudflare && cp -R dist .blume/cloudflare/docs && mv .blume/cloudflare/docs/_headers .blume/cloudflare/_headers",
     "test": "node --test",
     "preview": "blume preview",
     "deploy": "wrangler deploy",

@@ -57,8 +57,8 @@ This public repository contains the documentation for telemetry.dev. The product
 
 The site uses MDX and Blume, with static assets on Cloudflare Workers at [telemetry.dev/docs](https://telemetry.dev/docs).
 Blume's `deployment.base` keeps page links and assets under `/docs`.
-The Worker routes and asset binding are in `wrangler.jsonc`.
-`worker.js` serves those assets and redirects `docs.telemetry.dev` URLs to the matching pages under `/docs`.
+The static asset routes are in `wrangler.jsonc`.
+A Cloudflare Redirect Rule sends `docs.telemetry.dev` URLs to the matching pages under `/docs` and preserves query strings.
 
 ## Build and deploy
 
@@ -72,9 +72,10 @@ pnpm test
 pnpm run deploy:check
 ```
 
-The build produces `dist/`, including the static pages and `404.html`.
+The build keeps the Blume preview in `dist/` and copies the site to `.blume/cloudflare/docs/`.
+Cloudflare serves `.blume/cloudflare/`, so page and asset URLs start with `/docs/`.
 `pnpm run preview` serves the built site locally.
-`pnpm exec wrangler dev --local` also exercises the Worker routes.
+`pnpm exec wrangler dev --local` serves the Cloudflare layout locally.
 The pnpm configuration uses hoisted dependencies so Blume's generated build can load Astro's dependencies.
 
 ### Cloudflare Workers Builds
@@ -109,6 +110,6 @@ Check that a previous `docs.telemetry.dev` URL redirects to its matching page an
 ### Manual deployment and rollback
 
 For an authorized manual release, run the install, build, and dry-run commands above, authenticate with `pnpm exec wrangler login`, verify the account with `pnpm exec wrangler whoami`, then run `pnpm run deploy`.
-The deploy scripts publish the existing `dist/`; they do not rebuild it.
+The deploy scripts publish the existing `.blume/cloudflare/`. They do not rebuild it.
 
 Inspect releases with `pnpm exec wrangler deployments list`. If a release must be reverted, select a known-good version in the Worker's **Deployments** dashboard or run `pnpm exec wrangler rollback <version-id>` after confirming the target. Rollback changes production immediately; correct the source before the next automatic build.
