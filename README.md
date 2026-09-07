@@ -10,7 +10,7 @@
 
 Observability for AI applications and agents. Trace model calls, inspect tool use, measure cost and latency, and find errors without changing providers.
 
-[Start tracing](https://telemetry.dev) · [Read the docs](https://telemetry.dev/docs)
+[Start tracing](https://telemetry.dev) · [Read the docs](https://docs.telemetry.dev)
 
 </div>
 
@@ -43,22 +43,19 @@ const telemetry = init({
 
 The SDK sends traces through OTLP, the OpenTelemetry Protocol. You can also use the Python SDK or an OpenTelemetry exporter.
 
-[Open the quickstart](https://telemetry.dev/docs/quickstart)
+[Open the quickstart](https://docs.telemetry.dev/quickstart)
 
 ## Works with your AI stack
 
 telemetry.dev has integrations for OpenAI, Anthropic, Google Gen AI, Amazon Bedrock, OpenRouter, LiteLLM, the Vercel AI SDK, TanStack AI, MCP, Eve, opencode, Oh My Pi, Pi, Cursor, and OpenClaw.
 
-[See all integrations](https://telemetry.dev/docs/integrations)
+[See all integrations](https://docs.telemetry.dev/integrations)
 
 ## About this repository
 
 This public repository contains the documentation for telemetry.dev. The product source is currently maintained in a private repository.
 
-The site uses MDX and Blume, with static assets on Cloudflare Workers at [telemetry.dev/docs](https://telemetry.dev/docs).
-Blume's `deployment.base` keeps page links and assets under `/docs`.
-The static asset routes are in `wrangler.jsonc`.
-A Cloudflare Redirect Rule sends `docs.telemetry.dev` URLs to the matching pages under `/docs` and preserves query strings.
+The site is built from MDX with Blume and hosted as static assets on Cloudflare Workers at [docs.telemetry.dev](https://docs.telemetry.dev). The worker and custom domain are configured in `wrangler.jsonc`.
 
 ## Build and deploy
 
@@ -68,15 +65,10 @@ Install dependencies from the committed lockfile, then build and validate the Wo
 ```sh
 pnpm install --frozen-lockfile
 pnpm run build
-pnpm test
 pnpm run deploy:check
 ```
 
-The build keeps the Blume preview in `dist/` and copies the site to `.blume/cloudflare/docs/`.
-Cloudflare serves `.blume/cloudflare/`, so page and asset URLs start with `/docs/`.
-`pnpm run preview` serves the built site locally.
-`pnpm exec wrangler dev --local` serves the Cloudflare layout locally.
-The pnpm configuration uses hoisted dependencies so Blume's generated build can load Astro's dependencies.
+The build produces `dist/`, including the static pages and `404.html`. `pnpm run preview` serves the built site locally.
 
 ### Cloudflare Workers Builds
 
@@ -102,14 +94,11 @@ The deploy commands use the lockfile-pinned Wrangler dependency tree.
 Enable non-production branch builds only if branch previews are wanted; their command uploads a version without promoting it to production.
 Wrangler custom-build configuration does not replace the Workers Builds build command.
 
-After a production build, examine its commit and deployment status in Cloudflare.
-Check `/docs`, `/docs/quickstart`, and a nonexistent path under `/docs` on `https://telemetry.dev`.
-The missing path must return HTTP 404.
-Check that a previous `docs.telemetry.dev` URL redirects to its matching page and keeps its query string.
+After a production build, check its commit and deployment status in Cloudflare, then check `/`, `/quickstart`, and a nonexistent path on `https://docs.telemetry.dev` (the missing path must return HTTP 404).
 
 ### Manual deployment and rollback
 
 For an authorized manual release, run the install, build, and dry-run commands above, authenticate with `pnpm exec wrangler login`, verify the account with `pnpm exec wrangler whoami`, then run `pnpm run deploy`.
-The deploy scripts publish the existing `.blume/cloudflare/`. They do not rebuild it.
+The deploy scripts publish the existing `dist/`; they do not rebuild it.
 
 Inspect releases with `pnpm exec wrangler deployments list`. If a release must be reverted, select a known-good version in the Worker's **Deployments** dashboard or run `pnpm exec wrangler rollback <version-id>` after confirming the target. Rollback changes production immediately; correct the source before the next automatic build.
