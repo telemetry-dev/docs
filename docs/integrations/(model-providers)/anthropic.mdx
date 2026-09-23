@@ -112,9 +112,9 @@ finally:
 
 | Function | Purpose |
 | --- | --- |
-| `wrapAnthropic(client)` | Instruments `messages.create()` for one client. |
-| `instrumentAnthropic()` | Instruments `Messages.prototype.create` for all clients. |
-| `uninstrumentAnthropic()` | Restores the original prototype method. |
+| `wrapAnthropic(client)` | Instruments `messages.create()` and `beta.messages.create()` for one client. |
+| `instrumentAnthropic()` | Instruments the stable and beta `Messages.prototype.create` for all clients. |
+| `uninstrumentAnthropic()` | Restores the original prototype methods. |
 
 These functions have no options object. Call `instrumentAnthropic()` after `init()` and before you make an Anthropic client.
 
@@ -122,11 +122,17 @@ These functions have no options object. Call `instrumentAnthropic()` after `init
 
 | Function | Purpose |
 | --- | --- |
-| `wrap_anthropic(client)` | Instruments `messages.create()` and `messages.stream()` for one client. |
-| `instrument_anthropic()` | Instruments synchronous and asynchronous Messages classes. |
+| `wrap_anthropic(client)` | Instruments `create()`, `stream()`, and `parse()` on `messages` and `beta.messages` for one client. |
+| `instrument_anthropic()` | Instruments the synchronous and asynchronous stable and beta Messages classes. |
 | `uninstrument_anthropic()` | Restores the original class methods. |
 
 These functions have no options object.
+
+## Beta Messages and the tool runner (unreleased)
+
+The integration also records `beta.messages` calls, so beta features such as context management and fast mode produce the same generation spans as `messages`. `messages.parse()` and `beta.messages.parse()` record one span for each request.
+
+The SDK tool runner (`beta.messages.toolRunner()` in TypeScript, `beta.messages.tool_runner()` in Python) sends one request for each model turn. Each turn records its own generation span. To group the turns, run the tool runner inside an `agent` span.
 
 ## Streaming
 
@@ -144,13 +150,13 @@ The span starts when the `messages.stream()` context manager starts. Stream even
 
 The stream state combines usage from `message_start` and `message_delta`. It also combines text, tool-input JSON, and thinking blocks.
 
-Requests with an `X-Stainless-Raw-Response` header do not get instrumentation. The integration does not instrument `beta.messages`, `parse()`, or `count_tokens()`.
+Requests with an `X-Stainless-Raw-Response` header do not get instrumentation. The integration does not instrument `count_tokens()`.
 
 ## Response helpers
 
 Traced promises keep `asResponse()` and `withResponse()`. These methods record the `request-id` header and the HTTP status.
 
-The integration does not separately instrument the `withRawResponse` resource namespace. It also does not instrument `beta.messages` or `messages.countTokens()`.
+The integration does not separately instrument the `withRawResponse` resource namespace. It also does not instrument `messages.countTokens()` or `beta.messages.countTokens()`.
 
 ## Provider detection
 
