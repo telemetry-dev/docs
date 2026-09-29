@@ -13,7 +13,7 @@ The integration records:
 - Converse messages, system instructions, inference parameters, guardrail data, native model input, and agent input
 - Model output, agent output, citations, return-control data, response IDs, AWS status, retries, and errors
 - Token usage from responses, native model bodies, AWS headers, and agent trace trees
-- Embedding calls, guardrail calls, knowledge-base calls, flow calls, and time to first chunk
+- Embedding calls, guardrail calls, knowledge-base calls, rerank calls, flow calls, and time to first chunk
 - Bedrock calls with provider `amazon-bedrock`.
 
 Inline media bytes are not part of normalized span input. Non-JSON `InvokeModel` bodies are not part of span input or output.
@@ -58,7 +58,7 @@ npm i @aws-sdk/client-bedrock-agent-runtime
 | Requirement | Version |
 | --- | --- |
 | Python | `>=3.10` |
-| `telemetry-dev` | `>=0.2.0` |
+| `telemetry-dev` | `>=0.2.6` |
 | `boto3` | `>=1.36` |
 
 ## Quickstart
@@ -209,7 +209,7 @@ Python uses one API for the Runtime and Agent Runtime clients. `boto3` has no as
 | Client | Instrumented operations |
 | --- | --- |
 | Bedrock Runtime | `ConverseCommand`, `ConverseStreamCommand`, `InvokeModelCommand`, `InvokeModelWithResponseStreamCommand`, `ApplyGuardrailCommand` |
-| Bedrock Agent Runtime | `InvokeAgentCommand`, `InvokeInlineAgentCommand`, `RetrieveCommand`, `RetrieveAndGenerateCommand`, `RetrieveAndGenerateStreamCommand`, `InvokeFlowCommand` |
+| Bedrock Agent Runtime | `InvokeAgentCommand`, `InvokeInlineAgentCommand`, `RerankCommand`, `RetrieveCommand`, `RetrieveAndGenerateCommand`, `RetrieveAndGenerateStreamCommand`, `InvokeFlowCommand` |
 
 Unknown commands pass to the AWS client without instrumentation. The integration does not change request objects, which keeps AWS SigV4 signatures valid.
 
@@ -218,7 +218,11 @@ Unknown commands pass to the AWS client without instrumentation. The integration
 | Service | Instrumented operations |
 | --- | --- |
 | `bedrock-runtime` | `converse`, `converse_stream`, `invoke_model`, `invoke_model_with_response_stream`, `apply_guardrail` |
-| `bedrock-agent-runtime` | `invoke_agent`, `invoke_inline_agent`, `retrieve`, `retrieve_and_generate`, `retrieve_and_generate_stream`, `invoke_flow` |
+| `bedrock-agent-runtime` | `invoke_agent`, `invoke_inline_agent`, `rerank`, `retrieve`, `retrieve_and_generate`, `retrieve_and_generate_stream`, `invoke_flow` |
+
+### Rerank
+
+In both languages, a rerank call makes a `rerank {model}` span with operation `rerank`. The model name is the last segment of the reranking model ARN. The span records the queries, inline sources, model request fields, ranked results and scores, result counts, pagination metadata, and request ID.
 
 ## Streaming
 

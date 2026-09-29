@@ -4,13 +4,13 @@ description: Learn how telemetry.dev calculates model cost from token usage and 
 lastModified: 2026-08-03
 ---
 
-telemetry.dev calculates span cost at ingest. The server uses normalized token usage and a vendored pricing snapshot from [models.dev](https://models.dev).
+telemetry.dev calculates span cost at ingest. The server uses normalized token usage and a vendored pricing snapshot compiled from [models.dev](https://models.dev) and supplementary catalogs.
 
 A client cost value has priority over the server calculation.
 
 ## Client cost override
 
-The first-party TypeScript and Python SDKs map `costUsd` to `gen_ai.usage.cost`. If this value is present and valid, the ingest API stores it without a server calculation.
+The first-party SDKs map `costUsd` in TypeScript and `cost_usd` in Python to `gen_ai.usage.cost`. If this value is present and valid, the ingest API stores it without a server calculation.
 
 The ingest API checks client cost attributes in this order:
 
@@ -54,6 +54,35 @@ If output usage is absent, normalization can use reasoning output as the output 
 
 The server formats the result with at most eight decimal places. The stored cost has eight decimal places of precision.
 
+## Modality pricing
+
+Some providers price image and audio tokens differently from text tokens. When a span carries the [modality usage attributes](https://telemetry.dev/docs/reference/span-attributes#modality-token-usage), the server splits each aggregate count into a text remainder and the reported image and audio parts, and prices each part with the matching rate from the snapshot:
+
+| Part | Price field | Fallback |
+| --- | --- | --- |
+| Image input, noncached | `imageInput` | `input` |
+| Audio input, noncached | `audioInput` | `input` |
+| Image cache read | `imageCachedInput` | `cachedInput`, then `input` |
+| Audio cache read | `audioCachedInput` | `cachedInput`, then `input` |
+| Image output | `imageOutput` | `output` |
+| Audio output | `audioOutput` | `output` |
+| Text and any remainder | `input`, `cachedInput`, `output` | — |
+
+A modality's noncached input is its input count minus its cache-read count. If the span reports a positive aggregate cache-read count but no cache-read count for a modality, that modality's noncached input stays at the base input rate. Any cache creation keeps all noncached modality input at the base rate, because the server cannot separate cache overlap per modality without charging twice. Reported image and audio cache reads still use their cache-read rates, and cache creation still uses `cacheWrite`.
+
+When a span has no aggregate input, cache-read, or output count, the server uses the sum of the modality counts for that kind.
+
+Cost is null when the modality detail contradicts the aggregate counts:
+
+- Image plus audio input allocated to modality-specific noncached pricing exceeds the noncached input total. Modalities that fall back to base pricing under the rules above are excluded from this check.
+- Modality cache reads above the cache-read total, or above their own modality's input
+- Image plus audio output above the output total
+- Cache reads plus cache creation above the input total, when the server derived the input or cache-read total from modality counts
+
+Send consistent aggregate and modality counts, or send a client cost.
+
+Snapshot entries without image or audio rates price every modality at the text rate. These are token-cost estimates. They do not include per-image generation fees, service-tier modifiers, or other charges that a provider bills outside of token counts.
+
 ## Usage attributes
 
 The primary first-party usage attributes are:
@@ -66,14 +95,26 @@ The primary first-party usage attributes are:
 | Cache read | `gen_ai.usage.cache_read.input_tokens` |
 | Cache creation | `gen_ai.usage.cache_creation.input_tokens` |
 | Reasoning output | `gen_ai.usage.reasoning.output_tokens` |
+| Modality detail | `gen_ai.usage.{text,image,audio}.{input_tokens,output_tokens,cache_read.input_tokens}` |
 
 The ingest API also normalizes compatibility attributes. See [Span attributes](/reference/span-attributes) for the complete priority order.
 
 ## Pricing snapshot
 
-The ingest service vendors `https://models.dev/api.json` into its deployment image. The build process refreshes the snapshot for a build, test, development run, or deployment.
+The ingest service vendors a pricing snapshot into its deployment image. The build process compiles it from four catalogs and refreshes it for a build, test, development run, or deployment:
 
-If the refresh is not successful, an existing snapshot stays in use. The ingest API does not request models.dev for each span.
+| Source | Role |
+| --- | --- |
+| [models.dev](https://models.dev/api.json) | Primary prices for direct and hosted providers |
+| [LiteLLM](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) | Fills provider and model entries that models.dev lacks, and image or audio rates that a models.dev entry lacks |
+| [Vercel AI Gateway](https://ai-gateway.vercel.sh/v1/models) | Prices for Vercel gateway routes only |
+| [OpenRouter](https://openrouter.ai/api/v1/models) | Prices for OpenRouter routes only |
+
+Gateway catalogs price only their own routes. A gateway route that is absent from its catalog is not priced from another provider's entry for the same model.
+
+If the refresh is not successful, an existing snapshot stays in use. The ingest API does not request any catalog for each span.
+
+For models with context-tier pricing, the total reported input count, including cache reads and cache creation, selects the rates for the whole request. The server does not charge only the tokens above the threshold at the higher rate. A tiered model with no input count has null cost, because the server cannot select a tier.
 
 The snapshot file is generated and is not in the source repository. As a result, the repository does not prove a fixed model count.
 
@@ -89,22 +130,28 @@ The server lowercases the provider and applies these provider mappings:
 
 | Received provider | Lookup provider |
 | --- | --- |
-| `gcp.vertex_ai` | `google-vertex` |
-| `google-vertex` | `google` |
-| `vertex` | `google` |
+| `gcp.vertex_ai`, `vertex`, `vertex_ai` | `google-vertex` |
 | `gcp` | `google` |
-| `azure` | `openai` |
-| A provider with `.` | The segment before the first `.` |
+| `aws`, `bedrock`, `bedrock_converse` | `amazon-bedrock` |
+| `azure.ai.inference` | `azure_ai` |
+| `gateway`, `vercel_ai_gateway`, `vercel ai gateway` | `vercel` |
+| `fireworks_ai` | `fireworks-ai` |
+| `ibm.watsonx.ai` | `watsonx` |
+| `mistral_ai` | `mistral` |
+| `together_ai` | `togetherai` |
+| `x_ai` | `xai` |
+| Any other provider with `.` | The segment before the first `.`, then the same mappings |
 
-The lookup tries these model forms in order:
+The lookup builds these model forms:
 
-1. `provider:model`
-2. `provider/model`
-3. The model without a provider
-4. The same forms after removal of a version or date suffix
-5. An Anthropic form that changes `claude-N-M-` to `claude-N.M-`
+1. The model as received
+2. The model without a version or date suffix
+3. An Anthropic form that changes `claude-N-M-` to `claude-N.M-`
+4. That Anthropic form without a version or date suffix
 
-The suffix matcher removes `-YYYY-MM-DD`, `-YYYYMMDD`, `-vN`, `-latest`, or `-NNN`.
+It first tries `provider:model` for each form. If none matches, it tries each form without a provider. The `vercel` and `openrouter` providers skip the second pass, because gateway catalogs price only their own routes.
+
+The suffix matcher removes a `-` or `@` followed by `YYYY-MM-DD`, `YYYYMMDD`, `vN`, `latest`, or three digits.
 
 ## Unknown models and absent usage
 

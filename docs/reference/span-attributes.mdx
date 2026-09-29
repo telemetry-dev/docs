@@ -75,6 +75,20 @@ The ingest API uses the first matching key for each token kind.
 
 A nonnegative numeric string is valid for token usage. The string must contain decimal digits only. See [Cost](/reference/cost) for cost precedence and model pricing.
 
+#### Modality token usage
+
+Providers that bill text, image, and audio tokens at different rates report usage per modality. The ingest API recognizes one attribute per modality and kind:
+
+| Modality | Input | Output | Cache read |
+| --- | --- | --- | --- |
+| Text | `gen_ai.usage.text.input_tokens` | `gen_ai.usage.text.output_tokens` | `gen_ai.usage.text.cache_read.input_tokens` |
+| Image | `gen_ai.usage.image.input_tokens` | `gen_ai.usage.image.output_tokens` | `gen_ai.usage.image.cache_read.input_tokens` |
+| Audio | `gen_ai.usage.audio.input_tokens` | `gen_ai.usage.audio.output_tokens` | `gen_ai.usage.audio.cache_read.input_tokens` |
+
+Modality counts are parts of the aggregate counts, not additions to them. Send `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens` as the totals, and keep each modality sum at or below its aggregate. When an aggregate is absent, the ingest API derives it from the modality counts that are present.
+
+The first-party SDKs and provider integrations set these attributes when the provider reports modality detail. See [Cost](https://telemetry.dev/docs/reference/cost#modality-pricing) for how modality counts change the calculation.
+
 ### Streaming latency
 
 | Attribute | Unit at ingest |

@@ -232,6 +232,16 @@ Tool spans use `gen_ai.tool.call.arguments` and `gen_ai.tool.call.result`. Other
 
 `TokenUsage` accepts `inputTokens`, `outputTokens`, `totalTokens`, `cacheReadInputTokens`, `cacheCreationInputTokens`, and `reasoningOutputTokens`.
 
+It also accepts per-modality counts for providers that price text, image, and audio tokens differently. Each maps to `gen_ai.usage.{modality}.{kind}`:
+
+| Modality | Input | Output | Cache read |
+| --- | --- | --- | --- |
+| Text | `textInputTokens` | `textOutputTokens` | `textCacheReadInputTokens` |
+| Image | `imageInputTokens` | `imageOutputTokens` | `imageCacheReadInputTokens` |
+| Audio | `audioInputTokens` | `audioOutputTokens` | `audioCacheReadInputTokens` |
+
+Modality counts are parts of `inputTokens` and `outputTokens`, not additions to them. Send the aggregates as well, and keep each modality sum at or below its aggregate. See [Cost](https://telemetry.dev/docs/reference/cost#modality-pricing) for how the server prices them.
+
 `metadata` drops `userId`, `sessionId`, `user_id`, and `session_id`. Use `propagateAttributes()` for user and session correlation.
 
 `StartSpanOptions` adds `parent`, `startTime`, `captureInput`, and `captureOutput`. Its `type` default is `"span"`.
