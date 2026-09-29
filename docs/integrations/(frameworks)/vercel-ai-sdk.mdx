@@ -65,7 +65,7 @@ import { telemetryDev } from "@telemetry-dev/ai-sdk";
 registerTelemetry(telemetryDev());
 ```
 
-The integration keeps state by the AI SDK `callId`. Overlapping calls from one integration instance get separate traces.
+The integration keeps state by the AI SDK `callId`. Overlapping calls from one integration instance get separate spans and never share state.
 
 AI SDK 7 also calls the integration context wrappers `executeLanguageModelCall` and `executeTool`. These wrappers keep provider requests, tool calls, and nested AI SDK calls in the correct span context.
 
@@ -82,12 +82,50 @@ AI SDK 7 also calls the integration context wrappers `executeLanguageModelCall` 
 Provider-executed tools do not produce an `execute_tool` span. The AI SDK only calls tool hooks for local tools that have an `execute` function.
 
 :::note
-Each AI SDK operation makes one trace. A shared `sessionId` sets `gen_ai.conversation.id` and correlates calls, but it never combines calls into one trace.
+A call that starts inside an active span, such as an HTTP request span, joins that span's trace. A call with no active parent starts its own trace, unless it has a `sessionId`: then its root span goes under a session parent that is never exported, so calls with the same API key and `sessionId` share one trace and appear as siblings in start order. The `sessionId` is also set as `gen_ai.conversation.id` on every span.
 :::
 
 AI SDK 7 records input and output content by default. Set the AI SDK `recordInputs` or `recordOutputs` telemetry option to `false` to omit payloads. IDs, models, and usage remain.
 
 For streams, drain the stream or await `result.response`. The AI SDK calls the terminal telemetry hook only after the stream settles.
+
+## Media wrappers
+
+The AI SDK telemetry hooks do not cover image, speech, transcription, or video calls. Wrap the functions from your installed `ai` package instead:
+
+```ts
+import {
+  experimental_generateSpeech,
+  experimental_transcribe,
+  generateImage,
+} from "ai";
+import {
+  wrapGenerateImage,
+  wrapGenerateSpeech,
+  wrapTranscribe,
+} from "@telemetry-dev/ai-sdk";
+
+const options = { apiKey: process.env.TELEMETRY_DEV_API_KEY };
+
+const tracedGenerateImage = wrapGenerateImage(generateImage, options);
+const tracedGenerateSpeech = wrapGenerateSpeech(
+  experimental_generateSpeech,
+  options,
+);
+const tracedTranscribe = wrapTranscribe(experimental_transcribe, options);
+```
+
+`wrapGenerateVideo` wraps `experimental_generateVideo` in the same way. With AI SDK 6, import the wrappers from `@telemetry-dev/ai-sdk/v6`.
+
+Each call makes a `generate_content` span with output type `image`, `speech`, `text`, or `video`. The span records the model and provider, image token usage when the AI SDK reports it, the image or video count, the transcription duration, and the speech input character count. Binary inputs and outputs are never captured.
+
+The wrappers do not inherit options from `telemetryDev()`. Pass the same options as the second argument, or set the [environment variables](#options).
+
+## Batch wrappers
+
+`wrapStartBatch`, `wrapGetBatchStatus`, `wrapCancelBatch`, and `wrapGetBatchResults` wrap the experimental AI SDK batch functions in the same way. They require `ai >= 7.0.55 < 8` and are exported only from `@telemetry-dev/ai-sdk`.
+
+Each network call gets its own span, with operation `batch.submit`, `batch.status`, `batch.cancel`, or `batch.results`. No span stays open for the life of the batch job. A results span stays open while you consume the returned stream or async iterable, so it can report the item count. If you never consume or cancel the results stream, its span does not finish.
 
 ## AI SDK 6
 

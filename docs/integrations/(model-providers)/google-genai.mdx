@@ -13,10 +13,12 @@ The integration records:
 - Contents, system instructions, model, sampling parameters, tools, tool configuration, safety configuration, and response format
 - Response IDs, model versions, candidate content, finish reasons, safety data, errors, and time to first chunk
 - Input, output, total, cache-read, reasoning, and tool-use prompt tokens
+- Text, image, and audio token counts from Gemini modality details, as `gen_ai.usage.{text,image,audio}.{input_tokens,output_tokens,cache_read.input_tokens}`
 - Embedding counts, dimensions, input-token counts, and billable characters
+- Image generation, image edit, image upscale, and video generation calls
 - Gemini Developer API calls with provider `gcp.gemini`, and Vertex AI calls with provider `gcp.vertex_ai`.
 
-Embedding vectors are not part of the span output.
+Embedding vectors are not part of the span output. Image and video bytes are never captured.
 
 ## Install
 
@@ -45,7 +47,7 @@ pip install telemetry-dev-google-genai
 | Requirement | Version |
 | --- | --- |
 | Python | `>=3.10` |
-| `telemetry-dev` | `>=0.2.0` |
+| `telemetry-dev` | `>=0.2.6` |
 | `google-genai` | `>=2,<3` |
 
 ## Quickstart
@@ -107,7 +109,7 @@ finally:
 
 | Function | Purpose |
 | --- | --- |
-| `wrapGoogleGenAI(client)` | Instruments one client's `models` object. |
+| `wrapGoogleGenAI(client)` | Instruments one client's `models` object and its video operation polls. |
 
 The TypeScript package has no global instrumentation and no options object. The Google SDK defines model methods as instance fields, not prototype methods.
 
@@ -119,7 +121,7 @@ The TypeScript package has no global instrumentation and no options object. The 
 | `instrument_google_genai()` | Instruments the synchronous and asynchronous model classes. |
 | `uninstrument_google_genai()` | Restores the original class methods. |
 
-These functions have no options object. The integration instruments `generate_content`, `generate_content_stream`, and `embed_content`.
+These functions have no options object. The integration instruments `generate_content`, `generate_content_stream`, `embed_content`, `generate_images`, `edit_image`, `upscale_image`, and `generate_videos`, and it instruments `operations.get` for video polls.
 
 It also instruments private generation methods to collect token usage from automatic function calls. Chat `send_message()` calls use the instrumented model methods.
 
@@ -130,8 +132,28 @@ It also instruments private generation methods to collect token usage from autom
 | `models.generateContent()` | `chat {model}` generation |
 | `models.generateContentStream()` | `chat {model}` generation |
 | `models.embedContent()` | `embeddings {model}` embedding |
+| `models.generateImages()`, `editImage()`, `upscaleImage()` | `generate_content {model}` generation |
+| `models.generateVideos()` | `generate_content {model}` generation |
 
 A chat from `client.chats.create()` uses these model methods. As a result, `sendMessage()` and `sendMessageStream()` also have instrumentation.
+
+The integration does not instrument `countTokens`, `computeTokens`, `live`, `caches`, `files`, `tunings`, or `batches`.
+
+## Images and video
+
+Image and video calls use operation `generate_content` and set `gen_ai.output.type` to `image` or `video`. The spans keep the model, the text prompt, non-binary configuration and input metadata such as URIs and MIME types, the output count, and operation IDs and storage URIs when the response has them. Image, video, and reference-image bytes are never captured.
+
+A `generateVideos()` call returns a long-running operation. The two languages record it differently.
+
+### TypeScript
+
+The submission is one span that ends when the call returns. Each `client.operations.get()` or `getVideosOperation()` call starts a separate `generate_content video operation` span when you pass the operation object that the same wrapped client returned. A rebuilt operation object with the same name has no poll instrumentation. The last poll records the final output metadata when it is available. No span stays open across the polling loop.
+
+### Python
+
+If `generate_videos()` returns an unfinished operation, its span stays open. The span completes when `operations.get()` on the same wrapped client sees the operation reach a terminal state.
+
+A poll from another client or process cannot complete the span. The span ends with an error if the operation tracker evicts the operation. Closing the client also ends pending spans for that transport: use `client.close()` for synchronous operations and `await client.aio.aclose()` for asynchronous operations. Closing one transport does not finish the other transport's pending spans. `uninstrument_google_genai()` closes the tracker for `instrument_google_genai()` only; it does not close trackers created by `wrap_google_genai()`.
 
 ## Automatic function calls
 

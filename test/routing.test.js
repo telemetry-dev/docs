@@ -33,3 +33,22 @@ test("docs pages and their assets load under the mount path", async () => {
   const missing = await server.fetch("/docs/this-page-does-not-exist");
   assert.equal(missing.status, 404);
 });
+
+test("modality cross-references in Markdown resolve inside the docs site", async () => {
+  for (const [page, label, destination] of [
+    ["reference/cost", "modality usage attributes", "reference/span-attributes#modality-token-usage"],
+    ["reference/span-attributes", "Cost", "reference/cost#modality-pricing"],
+    ["sdk/typescript", "Cost", "reference/cost#modality-pricing"],
+    ["sdk/python", "Cost", "reference/cost#modality-pricing"],
+  ]) {
+    const response = await server.fetch(`/docs/${page}.md`);
+    assert.equal(response.status, 200);
+    const markdown = await response.text();
+    const link = `[${label}](https://telemetry.dev/docs/${destination})`;
+    assert.ok(markdown.includes(link), `${page}.md must contain ${link}`);
+    const target = new URL(`https://telemetry.dev/docs/${destination}`);
+    const linkedResponse = await server.fetch(`${target.pathname}/`);
+    assert.equal(linkedResponse.status, 200);
+    assert.ok((await linkedResponse.text()).includes(`id="${target.hash.slice(1)}"`));
+  }
+});
