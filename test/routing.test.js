@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
 import { createTestHarness } from "wrangler";
 import { pageCardHref, pageCardMarkdown } from "../page-card-markdown.js";
@@ -275,5 +276,35 @@ test("modality cross-references in Markdown resolve inside the docs site", async
     const linkedResponse = await server.fetch(`${target.pathname}/`);
     assert.equal(linkedResponse.status, 200);
     assert.ok((await linkedResponse.text()).includes(`id="${target.hash.slice(1)}"`));
+  }
+});
+
+test("every image on a built page loads under the mount path", async () => {
+  const root = ".blume/cloudflare";
+  const pages = readdirSync(`${root}/docs`, { recursive: true }).filter(
+    (file) => file.endsWith(".html") || file.endsWith(".md"),
+  );
+  assert.ok(pages.length > 0);
+  const sources = new Map();
+
+  for (const page of pages) {
+    const body = readFileSync(`${root}/docs/${page}`, "utf8");
+    const pattern = page.endsWith(".html") ? /<img\b[^>]*\ssrc="([^"]+)"/g : /!\[[^\]]*\]\(([^)\s]+)/g;
+
+    for (const [, src] of body.matchAll(pattern)) {
+      if (!src.startsWith("data:") && !/^(?:https?:)?\/\//.test(src)) sources.set(src, page);
+    }
+  }
+
+  assert.ok(
+    [...sources.keys()].some((src) => src.includes("dashboard-trace")),
+    "the how-it-works screenshot must be among the checked images",
+  );
+
+  for (const [src, page] of sources) {
+    assert.ok(src.startsWith("/docs/"), `${page} references ${src} outside the docs path`);
+    const response = await server.fetch(src);
+    assert.equal(response.status, 200, `${page} references ${src}`);
+    assert.match(response.headers.get("Content-Type"), /^image\//, `${page} references ${src}`);
   }
 });
