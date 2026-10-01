@@ -1,0 +1,55 @@
+---
+title: CrewAI
+description: Trace CrewAI agent and model spans with OpenLIT and standard OTLP/HTTP.
+lastModified: 2026-09-30
+---
+
+## About the CrewAI integration
+
+OpenLIT auto-instruments CrewAI with OpenTelemetry. Point its OTLP/HTTP exporter at telemetry.dev to trace CrewAI runs without changing your agents or tasks. telemetry.dev normalizes the emitted GenAI attributes into model, provider, token, latency, and cost fields.
+
+## Key features
+
+- **Automatic CrewAI instrumentation:** Initialize OpenLIT once before creating your crew.
+- **Agent and model spans in one trace:** Follow a run across CrewAI execution and its LLM calls.
+- **Cost on LLM spans:** When OpenLIT attaches `gen_ai.usage.cost` to an LLM span, telemetry.dev uses that value directly; spans without it get cost computed server-side from emitted token counts and model pricing. Crew orchestration spans without token usage carry no cost.
+- **Group by model, provider, and environment:** Compare latency and spend across the dimensions your app emits. One caveat: OpenLIT also copies the crew's aggregate token usage onto the Crew span while child LLM spans emit the same usage, and telemetry.dev sums usage and cost across every span in a trace — so trace-level token and spend totals can count Crew runs twice. Per-span LLM data is unaffected.
+- **Standard OTLP, no lock-in:** Export portable OpenTelemetry data over OTLP/HTTP.
+
+## Get started
+
+1. Install OpenLIT alongside CrewAI:
+
+   ```sh
+   pip install crewai openlit
+   ```
+
+2. Configure the OTLP/HTTP exporter:
+
+   ```sh
+   export TELEMETRY_DEV_API_KEY="td_live_..."
+   export OTEL_EXPORTER_OTLP_ENDPOINT="https://ingest.telemetry.dev"
+   export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer%20$TELEMETRY_DEV_API_KEY"
+   export OTEL_SERVICE_NAME="your-crewai-service"
+   export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
+   ```
+
+3. Initialize OpenLIT before creating your crew:
+
+   ```python
+   import openlit
+
+   openlit.init()
+   ```
+
+   By default (`capture_message_content=True`, `max_content_length=None`), OpenLIT exports agent backstories, task descriptions, tool arguments and results, and full model request and response content with no length cap. To reduce captured content:
+
+   ```python
+   openlit.init(capture_message_content=False)
+   # or cap captured content length instead:
+   openlit.init(max_content_length=2000)
+   ```
+
+   Both opt-outs are partial: `capture_message_content=False` suppresses backstories, task and model messages, tool payloads, and summaries, but agent roles, goals, and tool definitions or descriptions can still be exported. `max_content_length` truncates only selected content attributes rather than bounding every attribute.
+
+4. Run your crew. CrewAI traces appear in telemetry.dev with model, token, latency, error, and cost data on the LLM spans that emit them.

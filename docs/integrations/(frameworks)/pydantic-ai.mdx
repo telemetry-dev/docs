@@ -1,0 +1,81 @@
+---
+title: Pydantic AI
+description: Send Pydantic AI agent and model spans through native OpenTelemetry instrumentation.
+lastModified: 2026-09-30
+---
+
+## About the Pydantic AI integration
+
+Pydantic AI is OpenTelemetry-native. `Agent.instrument_all()` or `logfire.instrument_pydantic_ai()` emits GenAI semantic-convention spans that telemetry.dev ingests natively. Pydantic AI emits `gen_ai.usage.*` attributes on model spans, and telemetry.dev normalizes them into model, provider, token, latency, and cost fields.
+
+## Key features
+
+- **Agent runs and model calls in one trace:** Follow each run across model requests, tools, and responses.
+- **Native Pydantic AI usage attributes:** Ingest `gen_ai.usage.*` from model spans without custom mapping.
+- **Server-side cost from real token usage:** Cost is computed from emitted token counts and current model pricing.
+- **Standard OTLP/HTTP:** Keep Pydantic AI's portable OpenTelemetry instrumentation without a proprietary tracing SDK.
+- **Works with or without Logfire:** Enable spans with `Agent.instrument_all()` directly or `logfire.instrument_pydantic_ai()` in an existing Logfire setup.
+
+## Get started
+
+1. Install Pydantic AI and the OpenTelemetry OTLP/HTTP exporter:
+
+   ```sh
+   pip install pydantic-ai opentelemetry-sdk opentelemetry-exporter-otlp-proto-http
+   ```
+
+2. Create a telemetry.dev project API key and configure the exporter:
+
+   ```sh
+   export TELEMETRY_DEV_API_KEY="td_live_..."
+   export OPENAI_API_KEY="your-openai-api-key"
+   export OTEL_EXPORTER_OTLP_ENDPOINT="https://ingest.telemetry.dev"
+   export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer%20$TELEMETRY_DEV_API_KEY"
+   export OTEL_SERVICE_NAME="your-service-name"
+   export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
+   ```
+
+   The example sends one request to OpenAI, so provider charges apply.
+
+3. Configure raw OpenTelemetry and instrument every Pydantic AI agent:
+
+   ```python
+   from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+   from opentelemetry.sdk.trace import TracerProvider
+   from opentelemetry.sdk.trace.export import BatchSpanProcessor
+   from opentelemetry.trace import set_tracer_provider
+   from pydantic_ai import Agent
+
+   provider = TracerProvider()
+   provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+   set_tracer_provider(provider)
+
+   Agent.instrument_all()
+
+   agent = Agent("openai:gpt-5.2")
+   result = agent.run_sync("What is the capital of France?")
+   print(result.output)
+   ```
+
+The OTLP exporter reads the endpoint and authorization header from the environment and sends traces to `https://ingest.telemetry.dev/v1/traces`.
+
+### What gets captured
+
+By default, `Agent.instrument_all()` exports full content: prompts, responses, message history, tool arguments and results, final outputs, model request parameters, and any binary content in messages. To reduce captured content, disable message content and model request parameters:
+
+```python
+from pydantic_ai import Agent, InstrumentationSettings
+
+Agent.instrument_all(
+    InstrumentationSettings(
+        include_content=False,
+        include_model_request_parameters=False,
+    )
+)
+```
+
+This is a lower-content configuration, not metadata-only: `include_content=False` omits prompts, responses, tool payloads, structured-output validation details, and `ModelRetry` feedback while preserving message structure. `include_model_request_parameters=False` omits the full `model_request_parameters` attribute. Even with both settings off, tool definitions (`gen_ai.tool.definitions`), agent descriptions, run metadata, standard `gen_ai.request.*` settings, and exception types can still be exported. `InstrumentationSettings(include_binary_content=False)` keeps text content and drops inline binary data from standard messages and containers, but binary content nested inside an application-defined Pydantic model or dataclass is still recorded in full.
+
+### Already exporting OTLP/HTTP?
+
+If your app already configures an OTLP/HTTP exporter and tracer provider, keep that code and only set the environment variables from step 2. Call `Agent.instrument_all()` at startup, or keep `logfire.instrument_pydantic_ai()` if Logfire already provides your instrumentation. Pydantic AI spans will flow through your existing exporter to telemetry.dev.

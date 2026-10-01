@@ -1,0 +1,36 @@
+:root[data-theme="dark"] [data-integration-mark-tone="monochrome"] img {
+  filter: invert(1);
+}
+
+[data-integration-title-mark] + article > h1:first-child {
+  padding-inline-start: 3rem;
+}
+
+[data-integration-mark] a[data-blume-card] img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+[data-integration-mark="eve"] a[data-blume-card] img,
+[data-integration-title-mark][data-integration-mark="eve"] img {
+  width: 28px;
+  height: 28px;
+}
+
+@media print {
+  [data-integration-title-mark] {
+    margin-inline: 0;
+    max-width: none;
+  }
+}
+
+@media (max-width: 24rem) {
+  [data-integration-title-mark] {
+    display: none;
+  }
+
+  [data-integration-title-mark] + article > h1:first-child {
+    padding-inline-start: 0;
+  }
+}

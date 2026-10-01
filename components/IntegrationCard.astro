@@ -1,0 +1,34 @@
+---
+import Card from "blume/components/content/Card.astro";
+import { monochromeIntegrationMarks } from "./integrationMarks";
+
+interface Props {
+  title: string;
+  href: string;
+  mark: string;
+}
+
+const { href, mark, title } = Astro.props;
+const marks = import.meta.glob<string>("../public/integrations/*.svg", {
+  eager: true,
+  import: "default",
+  query: "?raw",
+});
+const svg = marks[`../public/integrations/${mark}.svg`];
+
+if (svg === undefined) {
+  throw new Error(`Unknown integration mark: ${mark}`);
+}
+
+const icon = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+---
+
+<div
+  class="contents"
+  data-integration-mark={mark}
+  data-integration-mark-tone={monochromeIntegrationMarks.has(mark) ? "monochrome" : undefined}
+>
+  <Card href={href} icon={icon} title={title}>
+    <slot />
+  </Card>
+</div>

@@ -1,0 +1,57 @@
+---
+title: Claude Code
+description: Export Claude Code token usage, cost, sessions, and tool activity through built-in OpenTelemetry.
+lastModified: 2026-09-30
+---
+
+## About the Claude Code integration
+
+Claude Code ships with OpenTelemetry instrumentation built in. Set a few environment variables and it exports metrics — token usage, cost, session counts, lines of code, commits — plus structured log events for API requests, tool executions, and permission decisions straight to `https://ingest.telemetry.dev` over OTLP/HTTP. No SDK, no collector, no code changes.
+
+## Key features
+
+- **Zero-code setup:** Telemetry is enabled entirely through environment variables; nothing to install or wrap.
+- **Token and cost metrics:** `claude_code.token.usage` and `claude_code.cost.usage` arrive as time series for dashboard inspection and analysis.
+- **Session and productivity metrics:** Session counts, active time, lines of code changed, and commits created surface aggregate adoption and productivity trends.
+- **Structured events:** Recent API request, tool result, and permission decision records can be inspected individually in the Logs view.
+- **Privacy by default:** Prompt, assistant-response, and tool-detail content is redacted by default, with separate controls for each category.
+
+## Get started
+
+1. Create a telemetry.dev project API key.
+2. Set the telemetry environment variables in your shell before launching Claude Code:
+
+   ```sh
+   export TELEMETRY_DEV_API_KEY="td_live_..."
+   export CLAUDE_CODE_ENABLE_TELEMETRY=1
+   export OTEL_METRICS_EXPORTER=otlp
+   export OTEL_LOGS_EXPORTER=otlp
+   export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+   export OTEL_EXPORTER_OTLP_ENDPOINT="https://ingest.telemetry.dev"
+   export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer%20$TELEMETRY_DEV_API_KEY"
+   export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
+   ```
+
+   For a managed team setup, use literal values in `managed-settings.json`; Claude Code does not expand references between entries in the `env` object:
+
+   ```json
+   {
+     "env": {
+       "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+       "OTEL_METRICS_EXPORTER": "otlp",
+       "OTEL_LOGS_EXPORTER": "otlp",
+       "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+       "OTEL_EXPORTER_OTLP_ENDPOINT": "https://ingest.telemetry.dev",
+       "OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer%20td_live_...",
+       "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment.name=production"
+     }
+   }
+   ```
+
+3. Run `claude`. Metrics flush every 60 seconds and events every 5 seconds; telemetry.dev shows aggregate metric charts and recent log events that you can inspect individually.
+
+Environment variables must be set before Claude Code starts — exporting them in an already-running session has no effect. For faster feedback while testing, set `OTEL_METRIC_EXPORT_INTERVAL=10000`.
+
+## Good to know
+
+`OTEL_LOG_USER_PROMPTS=1` includes prompt content and also enables assistant-response content unless you explicitly set `OTEL_LOG_ASSISTANT_RESPONSES=0`. Tool parameters and input arguments have a separate opt-in, `OTEL_LOG_TOOL_DETAILS=1`. With these content flags disabled, Claude Code still exports operational metadata including prompt lengths, tool names and outcomes, permission decisions, and session and user identity attributes. Apply filtering or redaction in your telemetry pipeline if those fields are sensitive in your environment.

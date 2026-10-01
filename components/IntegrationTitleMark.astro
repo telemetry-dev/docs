@@ -1,0 +1,47 @@
+---
+import { monochromeIntegrationMarks } from "./integrationMarks";
+
+interface Props {
+  route: string;
+}
+
+const { route } = Astro.props;
+const logos: Record<string, string> = {
+  "/integrations/anthropic": "anthropic",
+  "/integrations/bedrock": "aws-bedrock",
+  "/integrations/claude-code": "claude-code",
+  "/integrations/crewai": "crewai",
+  "/integrations/cursor": "cursor",
+  "/integrations/eve": "eve",
+  "/integrations/google-genai": "google-genai",
+  "/integrations/hermes-agent": "hermes-agent",
+  "/integrations/langchain-langgraph": "langchain",
+  "/integrations/litellm": "litellm",
+  "/integrations/mcp": "model-context-protocol",
+  "/integrations/omp": "oh-my-pi",
+  "/integrations/openai": "openai",
+  "/integrations/openclaw": "openclaw",
+  "/integrations/opencode": "opencode",
+  "/integrations/openrouter": "openrouter",
+  "/integrations/pi": "pi",
+  "/integrations/pydantic-ai": "pydantic-ai",
+  "/integrations/tanstack-ai": "tanstack-ai",
+  "/integrations/vercel-ai-sdk": "vercel-ai-sdk",
+  "/sdk/opentelemetry": "opentelemetry-sdk",
+  "/sdk/python": "python-sdk",
+  "/sdk/typescript": "typescript-sdk",
+};
+const logo = logos[route];
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+---
+
+{logo && (
+  <div
+    class="relative mx-auto max-w-content"
+    data-integration-mark={logo}
+    data-integration-mark-tone={monochromeIntegrationMarks.has(logo) ? "monochrome" : undefined}
+    data-integration-title-mark
+  >
+    <img alt="" aria-hidden="true" class="absolute top-1 start-0 size-9 object-contain" src={`${base}/integrations/${logo}.svg`} />
+  </div>
+)}
