@@ -1,0 +1,108 @@
+---
+title: LangChain and LangGraph
+description: Trace LangChain and LangGraph chains, model calls, and tool steps over OpenTelemetry.
+lastModified: 2026-09-30
+---
+
+## About the LangChain integration
+
+Instrument LangChain with any OpenTelemetry instrumentation — for example OpenLLMetry — and point the OTLP exporter at our endpoint. Chains, model calls, and tool steps arrive as spans. telemetry.dev detects LangChain and normalizes its span shapes, including `traceloop.*` attributes, into one model of spans, tokens, and cost.
+
+## Key features
+
+- **Works with your existing OTel setup:** Keep the instrumentation you already use and send standard OTLP/HTTP.
+- **Chains, tools, and model calls in one trace:** Follow a run from retrieval to tool use to model response.
+- **Server-side cost from real token usage:** Cost is computed from emitted token counts and current model pricing.
+- **Group by model, provider, environment, and user:** Break spend and latency down by the dimensions your app emits.
+- **Standard OTLP, no lock-in:** Your traces stay portable because the transport is OpenTelemetry.
+
+## Get started
+
+### Python with OpenLLMetry
+
+This example uses [OpenLLMetry](https://www.traceloop.com/docs/openllmetry/getting-started-python) and LangChain's [ChatOpenAI integration](https://docs.langchain.com/oss/python/integrations/chat/openai). It sends one real OpenAI request. OpenAI charges apply.
+
+Use Python 3.10 or later. Install the packages in a virtual environment:
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install traceloop-sdk langchain langchain-openai
+```
+
+Get a project API key from telemetry.dev. Set the keys and the OpenLLMetry exporter configuration:
+
+```sh
+export TELEMETRY_DEV_API_KEY="your-project-api-key"
+export OPENAI_API_KEY="your-openai-api-key"
+export TRACELOOP_BASE_URL="https://ingest.telemetry.dev"
+export TRACELOOP_HEADERS="Authorization=Bearer%20$TELEMETRY_DEV_API_KEY"
+```
+
+Keep these keys out of version control. A Traceloop Cloud account is not necessary. OpenLLMetry sends traces to `https://ingest.telemetry.dev/v1/traces`.
+
+Save this code as `first_trace.py`. Initialize OpenLLMetry before you construct the chain:
+
+```python
+from traceloop.sdk import Traceloop
+from traceloop.sdk.instruments import Instruments
+
+Traceloop.init(
+    app_name="langchain-first-trace",
+    resource_attributes={"deployment.environment.name": "development"},
+    instruments={Instruments.LANGCHAIN},
+    disable_batch=True,
+    telemetry_enabled=False,
+)
+
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+
+prompt = ChatPromptTemplate.from_messages([("human", "{question}")])
+chain = prompt | ChatOpenAI(model="gpt-4o-mini", max_tokens=100)
+response = chain.invoke(
+    {"question": "What is OTLP?"},
+    config={"run_name": "first-chain"},
+)
+print(response.content)
+```
+
+Run the file:
+
+```sh
+python first_trace.py
+```
+
+Open your telemetry.dev project and select the `development` environment. Find the trace from `langchain-first-trace` and open its chain and model spans. A successful model call records token usage and latency. The server computes cost from the reported tokens and model pricing.
+
+`disable_batch=True` sends each span when the span ends, so this short script does not wait for a batch interval. For other exporter options, read the [OpenLLMetry configuration guide](https://www.traceloop.com/docs/openllmetry/configuration).
+
+### What gets captured
+
+By default, OpenLLMetry records prompts, completions, and embeddings in span attributes. `telemetry_enabled=False` only turns off OpenLLMetry's anonymous SDK usage telemetry; it does not stop content capture. To stop recording prompts, completions, and embeddings, set this variable before you start the app:
+
+```sh
+export TRACELOOP_TRACE_CONTENT=false
+```
+
+This is not a general redaction control. Other span attributes, such as chain and tool names, model parameters, and any metadata your app attaches, are still exported. To re-enable content capture for selected calls, read the [OpenLLMetry privacy guide](https://www.traceloop.com/docs/openllmetry/privacy/traces).
+
+### Existing OpenTelemetry setup
+
+These variables configure an exporter. They do not install or initialize LangChain instrumentation. For a new Python app, use the complete setup above.
+
+For an app that already emits LangChain spans, configure its OTLP/HTTP exporter:
+
+```sh
+export OTEL_EXPORTER_OTLP_ENDPOINT="https://ingest.telemetry.dev"
+export OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf"
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer%20$TELEMETRY_DEV_API_KEY"
+export OTEL_SERVICE_NAME="your-service-name"
+export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
+```
+
+Set `TELEMETRY_DEV_API_KEY` to your project API key before you run these commands. The exporter sends traces to `https://ingest.telemetry.dev/v1/traces`.
+
+### Prefer tracing the model calls directly?
+
+Because LangChain calls the provider SDKs underneath, our provider wrappers work inside chains too: instrument the `openai`, `anthropic`, or `google-genai` client with `telemetry-dev-openai`, `telemetry-dev-anthropic`, or `telemetry-dev-google-genai` and every model call your chain makes is traced with tokens and cost — no OpenLLMetry required.

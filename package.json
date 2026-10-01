@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "blume dev",
     "build": "blume build && rm -rf .blume/cloudflare && mkdir -p .blume/cloudflare && cp -R dist .blume/cloudflare/docs && mv .blume/cloudflare/docs/_headers .blume/cloudflare/_headers",
-    "test": "node --test",
+    "test": "pnpm build && node --test",
     "preview": "blume preview",
     "deploy": "wrangler deploy",
     "deploy:preview": "wrangler versions upload",

@@ -1,31 +1,36 @@
 ---
-title: Introduction
-description: Record AI application telemetry with OpenTelemetry SDKs and standard OTLP.
+title: telemetry.dev documentation
+description: Send your first AI trace, then choose the integration that matches your stack.
 sidebar: { label: "Introduction", order: 0 }
-lastModified: 2026-08-03
+lastModified: 2026-09-30
 ---
 
-telemetry.dev is an OpenTelemetry-native observability platform for AI and LLM applications. Examine model calls, tool steps, and agent runs in one trace.
+telemetry.dev is OpenTelemetry-native observability for AI applications. Start with one trace, then connect the provider, framework, coding agent, or SDK you already use.
+
+## Start here
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" href="/quickstart" icon="rocket">Send a real trace and find it in your project in about five minutes.</Card>
+  <Card title="Choose your integration" href="/integrations" icon="plug">Find the supported setup path for your existing stack.</Card>
+</CardGroup>
+
+## Choose your integration
+
+<CardGroup cols={2}>
+  <Card title="TypeScript" href="/sdk/typescript" icon="/integrations/typescript-sdk.svg">Instrument functions, model calls, tools, and agents on Node, Vercel Edge, or Cloudflare Workers with `nodejs_compat`.</Card>
+  <Card title="Python" href="/sdk/python" icon="/integrations/python-sdk.svg">Instrument synchronous and asynchronous Python applications.</Card>
+  <Card title="Provider or framework" href="/integrations" icon="plug">Use a first-party wrapper or framework-specific OpenTelemetry guide.</Card>
+  <Card title="Existing OpenTelemetry" href="/sdk/opentelemetry" icon="/integrations/opentelemetry-sdk.svg">Keep your instrumentation and point OTLP/HTTP at telemetry.dev.</Card>
+</CardGroup>
 
 ## What you get
 
-The platform gives you:
-
 - Token usage, cost, latency, and errors for each trace and span.
-- Standard OTLP/HTTP ingest for the first-party SDKs and your OpenTelemetry stack.
+- Standard OTLP/HTTP ingest for first-party SDKs and your OpenTelemetry stack.
 - Environment-level controls for input and output capture.
 - SDK masking and server-side redaction before storage.
 
-The wire format is OpenTelemetry. You can keep your instrumentation and use standard OTLP instead of a proprietary trace protocol.
-
-## First trace
-
-<CardGroup cols={2}>
-  <Card title="Quickstart" href="/quickstart" icon="rocket">Send a trace in five minutes.</Card>
-  <Card title="TypeScript SDK" href="/sdk/typescript" icon="activity">Record functions, model calls, tools, and agents.</Card>
-  <Card title="Python SDK" href="/sdk/python" icon="activity">Record sync and async Python code.</Card>
-  <Card title="Integrations" href="/integrations" icon="plug">Connect model providers and agent frameworks.</Card>
-</CardGroup>
+The wire format is OpenTelemetry. You can keep your instrumentation and use standard OTLP/HTTP instead of a proprietary trace protocol.
 
 ## Platform
 

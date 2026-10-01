@@ -1,12 +1,14 @@
 ---
 title: TypeScript SDK
 description: Add spans, logs, metrics, and trace context to TypeScript applications.
-lastModified: 2026-09-05
+lastModified: 2026-10-01
 ---
 
 `@telemetry-dev/sdk` is the full TypeScript SDK. It uses an isolated OpenTelemetry provider by default and sends OTLP data to telemetry.dev.
 
 Use Node.js 20.19.0 or later. The package is ESM-only.
+
+The SDK propagates context automatically when the runtime exposes `AsyncLocalStorage` globally or through `process.getBuiltinModule`, or when the host has registered a global OpenTelemetry context manager. Next.js's Vercel Edge sandbox exposes `AsyncLocalStorage` globally. Cloudflare Workers enable the required Node.js compatibility by default for compatibility dates of 2026-08-04 or later; earlier dates require the `nodejs_compat` flag. In other edge environments, including Vercel Edge Functions that expose `AsyncLocalStorage` only through a module import, pass `parent` explicitly when creating SDK spans.
 
 ## Install
 

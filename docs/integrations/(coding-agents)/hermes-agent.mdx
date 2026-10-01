@@ -1,0 +1,71 @@
+---
+title: Hermes Agent
+description: Export Hermes Agent LLM calls, tool executions, sub-agents, and token metrics through the hermes-otel plugin.
+lastModified: 2026-10-01
+---
+
+## About the Hermes Agent integration
+
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) is an open-source agent that runs as a CLI and as a gateway behind Telegram, Discord, Slack, WhatsApp, and Teams. The community [hermes-otel](https://github.com/briancaffey/hermes-otel) plugin subscribes to Hermes lifecycle hooks and turns every session, LLM call, API request, tool execution, and sub-agent delegation into OpenTelemetry spans using the `gen_ai.*` semantic conventions — exported as OTLP/HTTP protobuf straight to `https://ingest.telemetry.dev`. Configuration only, no code changes.
+
+## Key features
+
+- **Full agent-loop tracing:** Each turn gets a root span with nested `llm.*`, `api.*`, and `tool.*` children, plus sub-agent spans.
+- **`gen_ai.*` native:** Token usage, model, provider, and operation name arrive as OpenTelemetry semantic-convention attributes; `session.id` and `gen_ai.conversation.id` correlate turns from the same session.
+- **GenAI metrics:** `gen_ai.client.token.usage` and operation-duration histograms land as time series for dashboard inspection and analysis.
+- **Bounded turn-end export:** The plugin ends each turn's spans, queues a coalesced background flush, and waits up to `force_flush_wait_ms` (1,500 ms by default). Graceful process shutdown performs the full synchronous flush.
+- **Privacy controls:** Content capture defaults to `full`. Set `content_capture: "off"` to omit normal prompt, response, tool-I/O, approval, and sub-agent content attributes; diagnostic error text may still export.
+
+## Get started
+
+1. Create a telemetry.dev project API key.
+2. Install and enable the plugin from its repository subdirectory, pinned to the reviewed commit:
+
+   ```sh
+   hermes -p default plugins install briancaffey/hermes-otel/hermes_otel \
+     --ref 18313bde815d4dc6ab238e982c6aa86a63a512f8 \
+     --enable
+   ```
+
+   Hermes 0.21.4 or later is required. Upgrade Hermes before installing this plugin, run the command interactively, and approve dependency preparation if prompted. Hermes 0.21.4 prepares the declared Python dependencies without a prompt; later releases may ask for consent. Do not add `--no-deps`. If preparation was skipped or declined, run `hermes -p default plugins enable hermes_otel` and approve it. Review upstream changes before replacing the pinned commit.
+
+3. Export the project API key in the environment Hermes runs in:
+
+   ```sh
+   export TELEMETRY_DEV_API_KEY="td_live_..."
+   ```
+
+4. Declare telemetry.dev for the default profile in `~/.hermes/hermes_otel.yaml`:
+
+   ```yaml
+   content_capture: "off"
+
+   backends:
+     - type: otlp
+       name: telemetry-dev
+       endpoint: https://ingest.telemetry.dev/v1/traces
+       headers:
+         Authorization: Bearer ${TELEMETRY_DEV_API_KEY}
+   ```
+
+   Plugin installation and configuration are profile-local. For every named profile that should export telemetry, repeat the install command with `-p <profile>` and save the same configuration here:
+
+   ```text
+   ~/.hermes/profiles/<profile>/hermes_otel.yaml
+   ```
+
+5. Restart any running Hermes gateway for the configured profile. Then run `hermes -p default` for the setup above, or send a message through the restarted gateway. Startup logs:
+
+   ```text
+   [hermes-otel] ✓ telemetry-dev at https://ingest.telemetry.dev/v1/traces
+   ```
+
+   Each turn appears as its own root trace with token usage and tool activity; shared session and conversation IDs correlate the turns.
+
+## Good to know
+
+Content capture defaults to `full`; the example above chooses `off`. Use `preview` for clipped previews instead. The legacy `capture_previews: false` setting is only a deprecated compatibility spelling for `content_capture: "off"`, and an explicit `content_capture` value wins.
+
+Even with content capture off, tool names, inferred commands and targets, token counts, model and provider names, timings, outcomes, and all metrics still export. `hermes.tool.command` and `hermes.tool.target` can contain sensitive shell commands, file paths, or URLs. Diagnostic strings are truncated to 500 characters but are not secret-redacted: tool errors may appear in `error.message` and span status descriptions, provider or API errors in `exception.message` and status descriptions, and failed sub-agent summaries in status descriptions. Do not treat `off` as a guarantee that errors contain no sensitive data.
+
+Log export is a separate opt-in: `capture_logs: true` ships log bodies that `content_capture` does not suppress. The plugin attaches to the root logger by default, so scope it with `log_attach_logger` or leave logs off if that is a concern. Within each configured profile, the same config covers CLI and gateway sessions, including cron jobs and sub-agent (`delegate_task`) runs.

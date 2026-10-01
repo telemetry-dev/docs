@@ -1,4 +1,8 @@
 import { defineConfig } from "blume";
+import type { ComponentMarkdown } from "blume";
+import { DOCS_BASE_PATH, pageCardMarkdown as serializePageCard } from "./page-card-markdown.js";
+
+const pageCardMarkdown: ComponentMarkdown = serializePageCard;
 
 export default defineConfig({
   title: "telemetry.dev",
@@ -20,6 +24,11 @@ export default defineConfig({
   },
   ai: {
     llmsTxt: true,
+    markdownComponents: {
+      CardGroup: ({ children }) => children,
+      Card: pageCardMarkdown,
+      IntegrationCard: pageCardMarkdown,
+    },
   },
   seo: {
     og: { enabled: true },
@@ -30,6 +39,6 @@ export default defineConfig({
   deployment: {
     output: "static",
     site: "https://telemetry.dev",
-    base: "/docs",
+    base: DOCS_BASE_PATH,
   },
 });
