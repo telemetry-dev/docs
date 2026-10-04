@@ -76,19 +76,23 @@ test("page card Markdown follows the component and site base-path contracts", ()
   );
 });
 
-test("HTML redirects stay inside the docs path", async () => {
+test("docs pages serve at their canonical URL and slash URLs redirect there", async () => {
   for (const path of ["/docs", "/docs/sdk/python"]) {
-    const response = await server.fetch(`${path}?source=bookmark`, { redirect: "manual" });
+    const page = await server.fetch(path, { redirect: "manual" });
+    assert.equal(page.status, 200);
+    assert.ok((await page.text()).includes(`<link rel="canonical" href="https://telemetry.dev${path}">`));
+    const response = await server.fetch(`${path}/?source=bookmark`, { redirect: "manual" });
     assert.equal(response.status, 307);
     const target = new URL(response.headers.get("Location"), "https://telemetry.dev");
-    assert.equal(target.pathname, `${path}/`);
+    assert.equal(target.pathname, path);
     assert.equal(target.search, "?source=bookmark");
   }
 });
 
 test("docs pages and their assets load under the mount path", async () => {
-  const response = await server.fetch("/docs/");
+  const response = await server.fetch("/docs");
   assert.equal(response.status, 200);
+  assert.match(response.headers.get("Link") ?? "", /<\/docs\/llms\.txt>; rel="describedby"/);
   const html = await response.text();
   assert.match(html, /href="https:\/\/telemetry\.dev\/docs"/);
   const style = html.match(/<link rel="stylesheet" href="([^"]+)"/);
@@ -142,7 +146,7 @@ test("published integration mark URLs remain compatible", async () => {
 });
 
 test("the integration catalog and guide-title markup reference available branded marks", async () => {
-  const catalog = await server.fetch("/docs/integrations/");
+  const catalog = await server.fetch("/docs/integrations");
   assert.equal(catalog.status, 200);
   const catalogHtml = await catalog.text();
 
@@ -194,7 +198,7 @@ test("the integration catalog and guide-title markup reference available branded
       `${route} must inline ${mark}`,
     );
 
-    const guide = await server.fetch(`${route}/`);
+    const guide = await server.fetch(route);
     assert.equal(guide.status, 200, `${route} must exist`);
     const guideHtml = await guide.text();
     const titleMarkStarts = [
@@ -273,7 +277,7 @@ test("modality cross-references in Markdown resolve inside the docs site", async
     const link = `[${label}](https://telemetry.dev/docs/${destination})`;
     assert.ok(markdown.includes(link), `${page}.md must contain ${link}`);
     const target = new URL(`https://telemetry.dev/docs/${destination}`);
-    const linkedResponse = await server.fetch(`${target.pathname}/`);
+    const linkedResponse = await server.fetch(target.pathname);
     assert.equal(linkedResponse.status, 200);
     assert.ok((await linkedResponse.text()).includes(`id="${target.hash.slice(1)}"`));
   }
