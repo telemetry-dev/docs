@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "blume dev",
-    "build": "blume build && rm -rf .blume/cloudflare && mkdir -p .blume/cloudflare && cp -R dist .blume/cloudflare/docs && mv .blume/cloudflare/docs/_headers .blume/cloudflare/_headers",
+    "build": "blume build && rm -rf .blume/cloudflare && mkdir -p .blume/cloudflare && cp -R dist .blume/cloudflare/docs && mv .blume/cloudflare/docs/_headers .blume/cloudflare/_headers && sed -i.bak 's|^/docs/$|/docs|' .blume/cloudflare/_headers && rm .blume/cloudflare/_headers.bak",
     "test": "pnpm build && node --test",
     "preview": "blume preview",
     "deploy": "wrangler deploy",

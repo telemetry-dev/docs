@@ -2,6 +2,9 @@
 title: Cost calculation
 description: Learn how telemetry.dev calculates model cost from token usage and model prices.
 lastModified: 2026-08-03
+seo:
+  title: "LLM Cost Calculation from Token Usage"
+  description: "telemetry.dev calculates LLM cost at ingest from token usage and model prices. A valid cost value from your SDK overrides the server calculation."
 ---
 
 telemetry.dev calculates span cost at ingest. The server uses normalized token usage and a vendored pricing snapshot compiled from [models.dev](https://models.dev) and supplementary catalogs.
