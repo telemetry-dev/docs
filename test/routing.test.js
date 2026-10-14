@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
 import { createTestHarness } from "wrangler";
+import { modelSlug } from "../model-pages.js";
 import { pageCardHref, pageCardMarkdown } from "../page-card-markdown.js";
 
 const server = createTestHarness({ workers: [{ configPath: "./wrangler.jsonc" }] });
@@ -125,6 +126,18 @@ test("docs pages and their assets load under the mount path", async () => {
   assert.match(cardAsset.headers.get("Content-Type"), /image\/svg\+xml/);
   const missing = await server.fetch("/docs/this-page-does-not-exist");
   assert.equal(missing.status, 404);
+});
+
+test("model pricing pages serve at flat URLs and appear in the sitemap", async () => {
+  const { models } = JSON.parse(readFileSync(new URL("../data/model-prices.json", import.meta.url), "utf8"));
+  const sitemap = await (await server.fetch("/docs/sitemap.xml")).text();
+
+  for (const path of ["/docs/models", `/docs/models/${models[0].maker}`, `/docs/models/${modelSlug(models[0])}`]) {
+    const page = await server.fetch(path, { redirect: "manual" });
+    assert.equal(page.status, 200, path);
+    assert.ok((await page.text()).includes(`<link rel="canonical" href="https://telemetry.dev${path}">`), path);
+    assert.ok(sitemap.includes(`<loc>https://telemetry.dev${path}</loc>`), path);
+  }
 });
 
 test("published integration mark URLs remain compatible", async () => {

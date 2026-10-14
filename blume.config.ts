@@ -1,5 +1,6 @@
 import { defineConfig } from "blume";
 import type { ComponentMarkdown } from "blume";
+import { modelPagesSource } from "./model-pages.js";
 import { DOCS_BASE_PATH, pageCardMarkdown as serializePageCard } from "./page-card-markdown.js";
 
 const pageCardMarkdown: ComponentMarkdown = serializePageCard;
@@ -16,6 +17,19 @@ export default defineConfig({
     owner: "telemetry-dev",
     repo: "docs",
   },
+  content: {
+    sources: [
+      { type: "filesystem", root: "docs" },
+      { type: "custom", source: modelPagesSource },
+    ],
+  },
+  // The model pricing tab keeps its hundreds of pages out of the docs sidebar.
+  navigation: {
+    tabs: [
+      { label: "Documentation", path: "/" },
+      { label: "Model pricing", path: "/models" },
+    ],
+  },
   lastModified: true,
   theme: {
     accent: { light: "#18181b", dark: "#fafafa" },
@@ -27,6 +41,8 @@ export default defineConfig({
     markdownComponents: {
       CardGroup: ({ children }) => children,
       Card: pageCardMarkdown,
+      // The calculator needs a browser. The price table above it carries the same data.
+      CostCalculator: () => "",
       IntegrationCard: pageCardMarkdown,
     },
   },

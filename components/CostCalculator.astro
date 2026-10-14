@@ -1,0 +1,112 @@
+---
+import { formatUsd } from "../format-usd.js";
+
+interface Props {
+  /** USD per 1M input tokens. */
+  input: number;
+  /** USD per 1M output tokens. */
+  output: number;
+}
+
+const { input, output } = Astro.props;
+const inputTokens = 2000;
+const outputTokens = 500;
+const requestsPerDay = 1000;
+const perRequest = (inputTokens * input + outputTokens * output) / 1_000_000;
+---
+
+<div class="cost-calculator not-prose" data-cost-calculator data-input-price={input} data-output-price={output}>
+  <label>
+    <span>Input tokens per request</span>
+    <input type="number" name="inputTokens" min="0" step="1" value={inputTokens} />
+  </label>
+  <label>
+    <span>Output tokens per request</span>
+    <input type="number" name="outputTokens" min="0" step="1" value={outputTokens} />
+  </label>
+  <label>
+    <span>Requests per day</span>
+    <input type="number" name="requestsPerDay" min="0" step="1" value={requestsPerDay} />
+  </label>
+  <dl aria-live="polite">
+    <div><dt>Per request</dt><dd data-cost="request">{formatUsd(perRequest)}</dd></div>
+    <div><dt>Per day</dt><dd data-cost="day">{formatUsd(perRequest * requestsPerDay)}</dd></div>
+    <div><dt>Per 30 days</dt><dd data-cost="month">{formatUsd(perRequest * requestsPerDay * 30)}</dd></div>
+  </dl>
+</div>
+
+<script>
+  import { formatUsd } from "../format-usd.js";
+
+  for (const calculator of document.querySelectorAll<HTMLElement>("[data-cost-calculator]")) {
+    const inputPrice = Number(calculator.dataset.inputPrice);
+    const outputPrice = Number(calculator.dataset.outputPrice);
+    const count = (name: string) =>
+      Math.max(0, Number(calculator.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.value) || 0);
+
+    calculator.addEventListener("input", () => {
+      const perRequest = (count("inputTokens") * inputPrice + count("outputTokens") * outputPrice) / 1_000_000;
+      const perDay = perRequest * count("requestsPerDay");
+
+      for (const [cost, value] of [
+        ["request", perRequest],
+        ["day", perDay],
+        ["month", perDay * 30],
+      ] as const) {
+        const field = calculator.querySelector(`[data-cost="${cost}"]`);
+        if (field) field.textContent = formatUsd(value);
+      }
+    });
+  }
+</script>
+
+<style>
+  .cost-calculator {
+    display: grid;
+    gap: 0.75rem;
+    margin-block: 1.5rem;
+    padding: 1rem;
+    border: 1px solid var(--blume-border);
+    border-radius: var(--blume-radius);
+    font-size: 0.875rem;
+  }
+
+  label {
+    display: grid;
+    grid-template-columns: 1fr 9rem;
+    align-items: center;
+    gap: 1rem;
+    color: var(--blume-muted-foreground);
+  }
+
+  input {
+    padding: 0.375rem 0.5rem;
+    border: 1px solid var(--blume-border);
+    border-radius: calc(var(--blume-radius) / 2);
+    background: var(--blume-background);
+    color: var(--blume-foreground);
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+  }
+
+  dl {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin: 0;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--blume-border);
+  }
+
+  dt {
+    color: var(--blume-muted-foreground);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--blume-foreground);
+    font-size: 1rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+</style>
