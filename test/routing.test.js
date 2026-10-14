@@ -12,6 +12,7 @@ const integrationMarks = {
   "/docs/integrations/anthropic": "/docs/integrations/anthropic.svg",
   "/docs/integrations/bedrock": "/docs/integrations/aws-bedrock.svg",
   "/docs/integrations/claude-code": "/docs/integrations/claude-code.svg",
+  "/docs/integrations/claude-platform": "/docs/integrations/anthropic.svg",
   "/docs/integrations/crewai": "/docs/integrations/crewai.svg",
   "/docs/integrations/cursor": "/docs/integrations/cursor.svg",
   "/docs/integrations/eve": "/docs/integrations/eve.svg",
