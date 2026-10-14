@@ -7,14 +7,14 @@ seo:
   description: "Add telemetry.dev as an OpenTelemetry destination in the Claude Console. Trace Messages API requests, Managed Agents sessions, model requests, tools, and token usage without code changes."
 ---
 
-The Claude Platform can send OpenTelemetry traces of your Messages API requests and Managed Agents sessions to telemetry.dev. You add telemetry.dev as a destination in the Claude Console, and every request, model request, tool use, and agent turn arrives as a trace. No code changes are needed. This export is in beta at Anthropic.
+The Claude Platform can send OpenTelemetry traces of your Messages API requests and Managed Agents sessions to telemetry.dev. You add telemetry.dev as a destination in the Claude Console. Each request then arrives as a trace, with a span for each model request, tool use, and agent turn. No code changes are needed. Anthropic offers this export as a beta.
 
 ## What it captures
 
 - One span for each Messages API request, with a span for each model request, server tool, MCP tool, and compaction inside it
 - Managed Agents sessions: each turn, model request, tool use, and outcome evaluation
-- Model, response ID, stop reason, errors, and timing
-- Input, output, cache-read, cache-write, and thinking token usage
+- Model, response ID, errors, and timing, with Anthropic's stop reason as a span attribute
+- Input, output, cache-read, and cache-write token usage, and thinking tokens when Anthropic reports them
 - Prompts and responses, when the destination's content mode is **Full content**
 
 ## Get started
@@ -37,13 +37,14 @@ The Claude Platform can send OpenTelemetry traces of your Messages API requests 
 
 ## Token usage
 
-Anthropic reports a request's usage on more than one span: on the request span and again on each model request inside it. telemetry.dev counts each request once, following [Anthropic's counting rule](https://platform.claude.com/docs/en/manage-claude/opentelemetry#count-tokens). Model request spans inside a Messages API request show no usage of their own, because the request span already carries it.
+Anthropic reports a request's usage on more than one span: on the API span for the request and again on each model request inside it. telemetry.dev counts each request once, following [Anthropic's counting rule](https://platform.claude.com/docs/en/manage-claude/opentelemetry#count-tokens). Model request spans inside a Messages API request show no usage of their own.
 
-You can also export the Claude SDK's own spans to telemetry.dev with an OpenTelemetry exporter in your application. The SDK sends the trace context with each request, so the Console's span for that request becomes a child of the SDK span. When both arrive, telemetry.dev counts the Console's span, and the SDK span still appears in the trace. This needs the W3C trace context propagator registered in your application; see Anthropic's [trace context setup](https://platform.claude.com/docs/en/manage-claude/opentelemetry/api#connect-api-spans-to-your-own-traces). Without that link, both spans count. Claude Platform on AWS doesn't link them yet, so there, send the SDK spans and the Console destination to separate projects, or use one of the two.
+If you also export the Claude SDK's own spans to telemetry.dev, the SDK span and the API span for a request carry the same usage. telemetry.dev counts the API span when it's a child of the SDK span, and the SDK span still appears in the trace. That link needs the W3C trace context propagator registered in your application; see Anthropic's [trace context setup](https://platform.claude.com/docs/en/manage-claude/opentelemetry/api#connect-api-spans-to-your-own-traces). Without the link, both spans count.
 
 ## Good to know
 
 - If your application already traces Anthropic calls with the [telemetry.dev Anthropic integration](/integrations/anthropic), those calls arrive twice and their usage counts twice. Send the Console destination to a separate project, or use one of the two.
+- Claude Platform on AWS doesn't link SDK spans to API spans yet, so send them to separate projects or use one of the two.
 - With **Full content**, prompts and responses go through your project's [capture and redaction settings](/platform/privacy) like any other telemetry.
 - With **Full content**, set **Maximum content size in MB** under **Advanced settings** to 0.75 or lower. telemetry.dev rejects requests larger than 4 MiB, and Anthropic doesn't retry a rejected delivery.
-- Anthropic delivers spans on a best-effort basis, so a span can occasionally be missing. telemetry.dev merges spans that arrive more than once.
+- Anthropic delivers spans on a best-effort basis, so a span can occasionally be missing. telemetry.dev keeps one copy of a span that arrives more than once.
