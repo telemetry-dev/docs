@@ -1,10 +1,10 @@
 ---
 title: Claude Code
-description: Export Claude Code token usage, cost, sessions, tool activity, and traces through built-in OpenTelemetry.
+description: Monitor Claude Code token usage, cost, sessions, tool activity, and traces for one developer or a full team through built-in OpenTelemetry.
 lastModified: 2026-10-15
 seo:
-  title: "Claude Code Telemetry with OpenTelemetry"
-  description: "Activate the built-in OpenTelemetry export of Claude Code with environment variables. Monitor token usage, cost, sessions, tool activity, and traces."
+  title: "Claude Code Monitoring & Telemetry with OpenTelemetry"
+  description: "Monitor Claude Code for one developer or a team with built-in OpenTelemetry. Track token usage, cost, sessions, tool activity, and traces."
 ---
 
 ## About the Claude Code integration
@@ -36,21 +36,7 @@ Claude Code ships with OpenTelemetry instrumentation built in. Set a few environ
    export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
    ```
 
-   For a managed team setup, use literal values in `managed-settings.json`; Claude Code does not expand references between entries in the `env` object:
-
-   ```json
-   {
-     "env": {
-       "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
-       "OTEL_METRICS_EXPORTER": "otlp",
-       "OTEL_LOGS_EXPORTER": "otlp",
-       "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
-       "OTEL_EXPORTER_OTLP_ENDPOINT": "https://ingest.telemetry.dev",
-       "OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer%20td_live_...",
-       "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment.name=production"
-     }
-   }
-   ```
+   To turn on telemetry for every developer on a team, refer to [Roll out to a team](#roll-out-to-a-team).
 
 3. Run `claude`. Metrics flush every 60 seconds and events every 5 seconds; telemetry.dev shows aggregate metric charts and recent log events that you can inspect individually.
 
@@ -72,6 +58,138 @@ Each prompt arrives as a trace that starts with a `claude_code.interaction` span
 telemetry.dev reads the input, output, and prompt-cache tokens on each `claude_code.llm_request` span, along with its time to first token, and calculates the request's cost from the model's standard prices. A request in fast mode, where the span's `speed` attribute is `fast`, costs more than telemetry.dev shows. The trace's usage and cost totals come from these spans. The `claude_code.token.usage` and `claude_code.cost.usage` metrics stay separate charts, so turning on traces doesn't count a request twice.
 
 If your organization also sends [Claude Platform traces](/integrations/claude-platform) to the same telemetry.dev project, each model request also has an API span from Anthropic, under its `claude_code.llm_request` span. telemetry.dev then counts the request's usage once, on the API span. Claude Code adds that link only when it calls the Anthropic API directly. If you go through a proxy set in `ANTHROPIC_BASE_URL`, set `CLAUDE_CODE_PROPAGATE_TRACEPARENT=1` to keep the link; without it, the request counts twice.
+
+## What you can track
+
+Claude Code exports eight metrics and a set of events. telemetry.dev shows each metric series as a chart on the project **Overview** page and each event as a record on the **Logs** page.
+
+| Metric | Unit | Question that it answers |
+| --- | --- | --- |
+| `claude_code.session.count` | Count | How many sessions do developers start? |
+| `claude_code.active_time.total` | Seconds | How much time do developers use Claude Code, without idle time? |
+| `claude_code.token.usage` | Tokens | How many input, output, cache-read, and cache-write tokens does each model use? |
+| `claude_code.cost.usage` | USD | How much does Claude Code cost, for each model? Claude Code calculates this value. |
+| `claude_code.lines_of_code.count` | Count | How many lines of code does Claude Code add and remove? |
+| `claude_code.commit.count` | Count | How many git commits does Claude Code make? |
+| `claude_code.pull_request.count` | Count | How many pull requests does Claude Code open? |
+| `claude_code.code_edit_tool.decision` | Count | How frequently do developers accept or reject the changes of the Edit, Write, and NotebookEdit tools? |
+
+| Event | Claude Code sends it when | Question that it answers |
+| --- | --- | --- |
+| `claude_code.user_prompt` | A developer submits a prompt | How many prompts does each session send, and how long are they? |
+| `claude_code.api_request` | A model request completes | Which model answered, how long did it take, and how many tokens did it use? |
+| `claude_code.api_error` | A model request returns an error after its last retry | Which requests do not complete, and with which status code? |
+| `claude_code.api_retries_exhausted` | A request stops after more than one attempt | How long do developers wait on retries? |
+| `claude_code.api_refusal` | The model refuses a request | How frequently does the model refuse? |
+| `claude_code.assistant_response` | A model response contains text | What text did the model return? The text is redacted by default. |
+| `claude_code.tool_decision` | A tool permission is accepted or rejected | Which tools do developers permit, and does each decision come from a setting, a hook, or the developer? |
+| `claude_code.tool_result` | A tool call completes | Which tools run, how long do they take, and do they complete correctly? |
+| `claude_code.subagent_completed` | A subagent returns its result | Which subagent types run, and for how long? |
+| `claude_code.skill_activated` | A skill starts | Which skills do developers use? |
+| `claude_code.compaction` | A context compaction completes | How frequently do sessions fill the context window? |
+| `claude_code.mcp_server_connection` | An MCP server connects, disconnects, or cannot connect | Which MCP servers do not connect? |
+| `claude_code.permission_mode_changed` | The permission mode changes | When do developers change the permission mode? |
+
+Claude Code also sends inventory and maintenance events: `managed_settings_resolved`, `plugin_loaded`, `plugin_installed`, `hook_registered`, `hook_execution_start`, `hook_execution_complete`, `hook_plugin_metrics`, `at_mention`, `auth`, `internal_error`, `feedback_survey`, and `retention_sweep`. Each name starts with `claude_code.`. For the attributes of each event, refer to the [Claude Code monitoring reference](https://code.claude.com/docs/en/monitoring-usage).
+
+## Roll out to a team
+
+A managed settings file turns on telemetry for every developer on a machine. Claude Code applies managed settings above the settings of each developer.
+
+1. Write a `managed-settings.json` file. Use literal values, because Claude Code does not expand references between entries in the `env` object:
+
+   ```json
+   {
+     "env": {
+       "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+       "OTEL_METRICS_EXPORTER": "otlp",
+       "OTEL_LOGS_EXPORTER": "otlp",
+       "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+       "OTEL_EXPORTER_OTLP_ENDPOINT": "https://ingest.telemetry.dev",
+       "OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer%20td_live_...",
+       "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment.name=production,team.id=platform"
+     }
+   }
+   ```
+
+2. Put the file in the system directory of each operating system:
+
+   | Operating system | Path |
+   | --- | --- |
+   | macOS | `/Library/Application Support/ClaudeCode/managed-settings.json` |
+   | Linux and WSL | `/etc/claude-code/managed-settings.json` |
+   | Windows | `C:\Program Files\ClaudeCode\managed-settings.json` |
+
+3. On one machine, run `/status` in Claude Code. Make sure that the `Setting sources` line shows `Enterprise managed settings (file)`.
+
+You can also send the same `env` keys through an MDM profile or through server-managed settings in the Claude admin console. Refer to the [Claude Code managed settings guide](https://code.claude.com/docs/en/managed-settings) for each delivery method.
+
+When managed settings set `OTEL_EXPORTER_OTLP_ENDPOINT` or `OTEL_EXPORTER_OTLP_HEADERS`, Claude Code removes the conflicting endpoint and credential variables that a developer sets. As a result, a developer cannot send this telemetry to a different collector. The exporter variables, such as `OTEL_METRICS_EXPORTER`, follow the usual precedence, so keep them in the managed file. Otherwise, a developer can turn off a signal.
+
+Claude Code ignores these OpenTelemetry variables in the `.claude/settings.json` and `.claude/settings.local.json` files of a repository. A repository cannot turn on telemetry or change its destination.
+
+Use `OTEL_RESOURCE_ATTRIBUTES` to tell teams apart, for example with `team.id=platform`. A value must not contain a space. If a value contains a space, Claude Code drops all the keys and shows no error.
+
+### Attributes on each record
+
+Each metric data point and event carries these attributes when they are available:
+
+| Attribute | Value |
+| --- | --- |
+| `user.email` | The email address of the Claude account that the developer signs in with |
+| `user.account_uuid`, `user.account_id` | The Claude account |
+| `organization.id` | The Claude organization |
+| `user.id` | An anonymous identifier for each installation of Claude Code |
+| `session.id` | The Claude Code session |
+| `terminal.type` | The terminal, for example `iTerm.app` or `vscode` |
+| Keys from `OTEL_RESOURCE_ATTRIBUTES` | The keys that you set, for example `team.id` |
+
+Events also carry `prompt.id`, which connects all the events of one prompt. Metrics do not carry `prompt.id`. To read the attributes of an event, open the event on the **Logs** page and look at the **Data** panel.
+
+## Estimate ingestion units
+
+telemetry.dev counts one ingestion unit for each span, log record, and metric data point. Each event is one log record. We measured the records that Claude Code 2.1.294 and 2.1.301 send:
+
+| Activity | Events | Spans, with traces on |
+| --- | --- | --- |
+| Session start | 1 or 2, plus 1 for each plugin, hook, and MCP server | 0 |
+| Prompt | 1 | 1 |
+| Model request | 1, or 2 when the response contains text | 1 |
+| Tool call | 2 | 3 |
+
+The first prompt of an interactive session also makes one short model request for the session title. A slash command, such as `/exit`, also counts as a prompt.
+
+Claude Code exports metrics every 60 seconds with delta temporality. An export contains only the series that changed. A minute with model requests sends 5 or more data points: four token types and one cost value for each model, plus active time and code edit counts. A minute without activity sends no data points.
+
+### Example for one developer
+
+This example workload is an assumption. Your numbers can be different. The developer works 21 days a month. Each day, the developer starts 4 sessions and sends 25 prompts. Each prompt makes 8 model requests and 10 tool calls. Claude Code calls a model during 120 minutes of the day.
+
+| Source | Units a day |
+| --- | ---: |
+| Session starts: 4 × (15 events + 1 data point) | 64 |
+| Prompts: 25 × 1 event | 25 |
+| Model requests: 200 × 2 events | 400 |
+| Tool calls: 250 × 2 events | 500 |
+| Metrics: 120 minutes × 8 data points | 960 |
+| **Total for metrics and events** | **1,949** |
+| Traces: 25 + 200 + (250 × 3) spans | 975 |
+| **Total with traces** | **2,924** |
+
+For 21 days, this developer uses approximately 41,000 units a month for metrics and events, or 61,000 units with traces.
+
+### Plan for a team
+
+| Developers | Metrics and events | With traces | Plan that fits |
+| ---: | ---: | ---: | --- |
+| 1 | 41,000 | 61,000 | Pro. Free includes 30,000 units. |
+| 5 | 205,000 | 307,000 | Pro, with 500,000 units |
+| 20 | 819,000 | 1,228,000 | Team, with 2,000,000 units |
+| 50 | 2,046,000 | 3,070,000 | Team. Ingestion continues above 2,000,000 units, with no automatic overage charges. |
+
+A developer who only sends telemetry does not use a seat. Seats are for the members who open telemetry.dev. For the price and limits of each plan, refer to [telemetry.dev/pricing](https://telemetry.dev/pricing).
+
+To use fewer units, keep traces off, or set `OTEL_METRIC_EXPORT_INTERVAL` to a longer interval, for example `300000` for 5 minutes. Each export sends one data point for each changed series, so fewer exports send fewer data points. To see the real count, open **Organization settings → Usage**.
 
 ## Good to know
 
