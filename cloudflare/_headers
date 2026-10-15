@@ -1,0 +1,9 @@
+# The Markdown copy of each page names its HTML page as canonical. Thus,
+# search engines index one URL for each page.
+/docs/*.md
+  Link: <https://telemetry.dev/docs/:splat>; rel="canonical"
+/docs/*.mdx
+  Link: <https://telemetry.dev/docs/:splat>; rel="canonical"
+/docs/index.md*
+  ! Link
+  Link: <https://telemetry.dev/docs>; rel="canonical"

@@ -77,16 +77,30 @@ test("page card Markdown follows the component and site base-path contracts", ()
   );
 });
 
-test("docs pages serve at their canonical URL and slash URLs redirect there", async () => {
-  for (const path of ["/docs", "/docs/sdk/python"]) {
+test("docs pages serve at their canonical URL and slash URLs redirect there permanently", async () => {
+  for (const path of ["/docs", "/docs/sdk/python", "/docs/integrations/openai"]) {
     const page = await server.fetch(path, { redirect: "manual" });
     assert.equal(page.status, 200);
     assert.ok((await page.text()).includes(`<link rel="canonical" href="https://telemetry.dev${path}">`));
     const response = await server.fetch(`${path}/?source=bookmark`, { redirect: "manual" });
-    assert.equal(response.status, 307);
+    assert.equal(response.status, 308);
     const target = new URL(response.headers.get("Location"), "https://telemetry.dev");
     assert.equal(target.pathname, path);
     assert.equal(target.search, "?source=bookmark");
+  }
+});
+
+test("Markdown copies name their HTML page as canonical", async () => {
+  for (const [path, canonical] of [
+    ["/docs/index.md", "https://telemetry.dev/docs"],
+    ["/docs/index.mdx", "https://telemetry.dev/docs"],
+    ["/docs/integrations.md", "https://telemetry.dev/docs/integrations"],
+    ["/docs/sdk/python.md", "https://telemetry.dev/docs/sdk/python"],
+    ["/docs/sdk/python.mdx", "https://telemetry.dev/docs/sdk/python"],
+  ]) {
+    const response = await server.fetch(path);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("Link"), `<${canonical}>; rel="canonical"`);
   }
 });
 
