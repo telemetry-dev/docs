@@ -1,0 +1,4 @@
+# The drop-trailing-slash option of Cloudflare sends a temporary 307 redirect.
+# These rules send slash URLs to the canonical page with a permanent redirect.
+/docs/ /docs 308
+/docs/*/ /docs/:splat 308
