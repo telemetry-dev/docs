@@ -1,20 +1,21 @@
 ---
 title: Claude Code
-description: Export Claude Code token usage, cost, sessions, and tool activity through built-in OpenTelemetry.
-lastModified: 2026-09-30
+description: Export Claude Code token usage, cost, sessions, tool activity, and traces through built-in OpenTelemetry.
+lastModified: 2026-10-15
 seo:
   title: "Claude Code Telemetry with OpenTelemetry"
-  description: "Activate the built-in OpenTelemetry export of Claude Code with environment variables. Monitor token usage, cost, sessions, tool activity, and API events."
+  description: "Activate the built-in OpenTelemetry export of Claude Code with environment variables. Monitor token usage, cost, sessions, tool activity, API events, and traces."
 ---
 
 ## About the Claude Code integration
 
-Claude Code ships with OpenTelemetry instrumentation built in. Set a few environment variables and it exports metrics — token usage, cost, session counts, lines of code, commits — plus structured log events for API requests, tool executions, and permission decisions straight to `https://ingest.telemetry.dev` over OTLP/HTTP. No SDK, no collector, no code changes.
+Claude Code ships with OpenTelemetry instrumentation built in. Set a few environment variables and it exports metrics — token usage, cost, session counts, lines of code, commits — plus structured log events for API requests, tool executions, and permission decisions straight to `https://ingest.telemetry.dev` over OTLP/HTTP. No SDK, no collector, no code changes. With the tracing beta turned on, it also sends a trace for each prompt, with token usage and cost on every model request.
 
 ## Key features
 
 - **Zero-code setup:** Telemetry is enabled entirely through environment variables; nothing to install or wrap.
 - **Token and cost metrics:** `claude_code.token.usage` and `claude_code.cost.usage` arrive as time series for dashboard inspection and analysis.
+- **Traces (beta):** Each prompt arrives as a trace with a span for every model request and tool call, and telemetry.dev adds up the trace's token usage and cost.
 - **Session and productivity metrics:** Session counts, active time, lines of code changed, and commits created surface aggregate adoption and productivity trends.
 - **Structured events:** Recent API request, tool result, and permission decision records can be inspected individually in the Logs view.
 - **Privacy by default:** Prompt, assistant-response, and tool-detail content is redacted by default, with separate controls for each category.
@@ -55,6 +56,25 @@ Claude Code ships with OpenTelemetry instrumentation built in. Set a few environ
 
 Environment variables must be set before Claude Code starts — exporting them in an already-running session has no effect. For faster feedback while testing, set `OTEL_METRIC_EXPORT_INTERVAL=10000`.
 
+## Add traces (beta)
+
+Claude Code's tracing is a beta and is off by default. To turn it on, set two more variables along with the ones above:
+
+```sh
+export CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1
+export OTEL_TRACES_EXPORTER=otlp
+```
+
+In `managed-settings.json`, add `"CLAUDE_CODE_ENHANCED_TELEMETRY_BETA": "1"` and `"OTEL_TRACES_EXPORTER": "otlp"` to the `env` object. Traces use the same endpoint and headers as metrics and logs.
+
+Each prompt arrives as a trace that starts with a `claude_code.interaction` span. Under it, each model request has a `claude_code.llm_request` span and each tool call has a `claude_code.tool` span. A subagent's spans sit under the tool call that started it.
+
+telemetry.dev reads the input, output, and prompt-cache tokens on each `claude_code.llm_request` span, along with its time to first token, and calculates the request's cost from the model's standard prices. A request in fast mode, where the span's `speed` attribute is `fast`, costs more than telemetry.dev shows. The trace's usage and cost totals come from these spans. The `claude_code.token.usage` and `claude_code.cost.usage` metrics stay separate charts, so turning on traces doesn't count a request twice.
+
+If your organization also sends [Claude Platform traces](/integrations/claude-platform) to the same telemetry.dev project, each model request also has an API span from Anthropic, under its `claude_code.llm_request` span. telemetry.dev then counts the request's usage once, on the API span. Claude Code adds that link only when it calls the Anthropic API directly. If you go through a proxy set in `ANTHROPIC_BASE_URL`, set `CLAUDE_CODE_PROPAGATE_TRACEPARENT=1` to keep the link; without it, the request counts twice.
+
 ## Good to know
 
 `OTEL_LOG_USER_PROMPTS=1` includes prompt content and also enables assistant-response content unless you explicitly set `OTEL_LOG_ASSISTANT_RESPONSES=0`. Tool parameters and input arguments have a separate opt-in, `OTEL_LOG_TOOL_DETAILS=1`. With these content flags disabled, Claude Code still exports operational metadata including prompt lengths, tool names and outcomes, permission decisions, and session and user identity attributes. Apply filtering or redaction in your telemetry pipeline if those fields are sensitive in your environment.
+
+With tracing on, the same flags apply to spans. `OTEL_LOG_USER_PROMPTS=1` puts the prompt text on the `claude_code.interaction` span, and `OTEL_LOG_TOOL_DETAILS=1` adds file paths and Bash commands to tool spans. A third flag, `OTEL_LOG_TOOL_CONTENT=1`, adds file contents and command output to tool spans.
