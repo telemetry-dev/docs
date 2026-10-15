@@ -250,9 +250,9 @@ In the `content` mode, telemetry.dev shows these items:
 
 telemetry.dev calculates the cost of a `chat` span from its model and token usage:
 
-- Compaction tokens (`anthropic.usage.compaction.input_tokens` and `anthropic.usage.compaction.output_tokens`) are added to the input and output tokens.
+- Compaction tokens (`anthropic.usage.compaction.input_tokens` and `anthropic.usage.compaction.output_tokens`) are added to the input and output tokens. telemetry.dev prices them as a separate request, thus they do not change the context tier of the request.
 - One-hour cache writes (`anthropic.usage.cache_creation.ephemeral_1h_input_tokens`) get the one-hour cache-write rate. The other cache writes get the usual cache-write rate.
-- If the pricing catalog has no one-hour rate for a Claude model, the one-hour rate is two times the base input rate.
+- If the pricing catalog has no one-hour rate for a model, the one-hour cache writes get the usual cache-write rate.
 
 `anthropic.message.count_tokens.input_tokens` is a token count, not token usage. telemetry.dev does not add it to the totals.
 
