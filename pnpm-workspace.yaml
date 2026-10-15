@@ -2,3 +2,5 @@ nodeLinker: hoisted
 allowBuilds:
   esbuild: true
   workerd: true
+patchedDependencies:
+  blume: patches/blume.patch
