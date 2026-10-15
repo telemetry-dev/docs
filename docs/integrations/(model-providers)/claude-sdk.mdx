@@ -1,0 +1,265 @@
+---
+title: Claude SDK OpenTelemetry
+description: Send the native OpenTelemetry spans of the Claude SDK to telemetry.dev from TypeScript or Python.
+lastModified: 2026-10-14
+seo:
+  title: "Claude SDK OpenTelemetry Tracing"
+  description: "Send the native OpenTelemetry spans of the Claude SDK to telemetry.dev. Trace Messages API requests, tool runner tools, token usage, cache writes, and cost."
+---
+
+The Claude SDK emits an OpenTelemetry span for each request that it sends and each tool that its tool runner runs. The SDK uses the tracer provider that your application registers. When this provider sends spans to telemetry.dev, the SDK spans go to your project.
+
+:::note[Beta]
+Claude OpenTelemetry is a beta feature. A new Claude SDK version can change span names, attributes, options, and environment variables.
+:::
+
+Native spans start in `@anthropic-ai/sdk` 0.134.0 and in the Python `anthropic` package 1.14.0. Pin the Claude SDK version to control when you get changes.
+
+Make a project at telemetry.dev. Then copy an API key from the project setup page. Keys look like `td_live_...`.
+
+## Install
+
+<CodeGroup>
+
+```sh TypeScript
+npm install @anthropic-ai/sdk@latest @telemetry-dev/otel @opentelemetry/api @opentelemetry/resources @opentelemetry/sdk-trace-node
+```
+
+```sh Python
+pip install --upgrade anthropic telemetry-dev
+```
+
+</CodeGroup>
+
+The `telemetry-dev` Python package includes the OpenTelemetry SDK. `@telemetry-dev/otel` requires Node.js 20.19.0 or later.
+
+```bash .env
+TELEMETRY_DEV_API_KEY=td_live_...
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+## Register the tracer provider
+
+Add the telemetry.dev span processor to a tracer provider. Then register the provider as the global provider. Do these steps before the first Claude call that you want to trace.
+
+<CodeGroup>
+
+```ts TypeScript
+import Anthropic from "@anthropic-ai/sdk";
+import { resourceFromAttributes } from "@opentelemetry/resources";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { TelemetrySpanProcessor } from "@telemetry-dev/otel";
+
+const provider = new NodeTracerProvider({
+  resource: resourceFromAttributes({
+    "service.name": "claude-app",
+    "deployment.environment.name": "production",
+  }),
+  spanProcessors: [new TelemetrySpanProcessor()], // reads TELEMETRY_DEV_API_KEY
+});
+// register() also installs the context manager and the W3C propagators.
+provider.register();
+
+const client = new Anthropic();
+
+try {
+  const message = await client.messages.create({
+    model: "claude-opus-5-5",
+    max_tokens: 1024,
+    messages: [{ role: "user", content: "Hello, Claude" }],
+  });
+  console.log(message.content);
+} finally {
+  await provider.shutdown();
+}
+```
+
+```python Python
+from anthropic import Anthropic
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from telemetry_dev.otel import TelemetrySpanProcessor
+
+provider = TracerProvider(
+    resource=Resource.create(
+        {"service.name": "claude-app", "deployment.environment.name": "production"}
+    )
+)
+provider.add_span_processor(TelemetrySpanProcessor())  # reads TELEMETRY_DEV_API_KEY
+trace.set_tracer_provider(provider)
+
+client = Anthropic()
+
+try:
+    message = client.messages.create(
+        model="claude-opus-5-5",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": "Hello, Claude"}],
+    )
+    print(message.content)
+finally:
+    provider.shutdown()
+```
+
+</CodeGroup>
+
+The trace explorer shows one `anthropic.messages.create` span with the `claude` framework.
+
+`TelemetrySpanProcessor` exports every span of the provider. Without an API key, the processor is a silent no-op. Refer to [OpenTelemetry](/sdk/opentelemetry) for the processor options.
+
+With an environment-scoped API key, set `deployment.environment.name` to the key environment, or do not set it. If the resource has no environment, telemetry.dev uses the key environment. With an unscoped key, it uses `default`.
+
+`TelemetrySpanProcessor` also sends token and duration metrics. These metrics have their own resource, which does not use the resource of the tracer provider. To set the metrics environment and service name, set `TELEMETRY_DEV_ENVIRONMENT` and `OTEL_SERVICE_NAME`. You can also use the `environment` and `serviceName` options (`environment` and `service_name` in Python). If you do not set an environment, the metrics use `production`. If the key environment is different, telemetry.dev rejects the metrics.
+
+A short script must shut down the provider before it stops. A long-running service can use its usual provider lifecycle.
+
+:::note[The telemetry.dev SDK provider]
+`init()` from `@telemetry-dev/sdk` and `telemetry_dev.init()` make an isolated tracer provider by default. The Claude SDK does not send spans to that provider.
+:::
+
+### Use an OTLP exporter
+
+A telemetry.dev package is not necessary. You can add a standard OTLP/HTTP exporter to the tracer provider instead of `TelemetrySpanProcessor`:
+
+| Setting | Value |
+| --- | --- |
+| Traces endpoint | `https://ingest.telemetry.dev/v1/traces` |
+| Request header | `Authorization: Bearer td_live_...` |
+| Encoding | OTLP protobuf or OTLP JSON |
+
+Refer to [OpenTelemetry](/sdk/opentelemetry) for a full exporter example.
+
+## Capture prompts and responses
+
+The default content mode is `metadata_only`. In this mode, the spans have no prompts, responses, system instructions, tool arguments, or tool results.
+
+To send this content, set the content mode to `content`:
+
+```sh
+export ANTHROPIC_OPEN_TELEMETRY_TRACES_CONTENT_MODE=content
+```
+
+You can also set the content mode in the client options:
+
+<CodeGroup>
+
+```ts TypeScript
+const client = new Anthropic({
+  openTelemetry: { traces: { contentMode: "content" } },
+});
+```
+
+```python Python
+client = Anthropic(open_telemetry={"traces": {"content_mode": "content"}})
+```
+
+</CodeGroup>
+
+The client option replaces all `ANTHROPIC_OPEN_TELEMETRY*` environment variables. A nested key that you do not set uses its default value.
+
+:::warning[Content leaves your application]
+Do not use the `content` mode for data that must stay in your application. In this mode, the SDK puts prompts, responses, and tool data in each exported span.
+:::
+
+telemetry.dev stores the content only when the capture setting of the environment is on. Read [Privacy and retention](/platform/privacy) for the capture controls.
+
+The SDK limits the content of each span to 0.75 MB by default. To change the limit, set `ANTHROPIC_OPEN_TELEMETRY_TRACES_MAX_CONTENT_BYTES`. When the SDK shortens content, it sets `anthropic.content.truncated` on the span. The span detail then shows a "Truncated at source" badge.
+
+## Group calls into a conversation
+
+A conversation ID links the calls of one conversation. The SDK writes the ID to `gen_ai.conversation.id`, and telemetry.dev uses it as the session of the trace.
+
+<CodeGroup>
+
+```ts TypeScript
+const message = await client.messages.create(
+  {
+    model: "claude-opus-5-5",
+    max_tokens: 1024,
+    messages: [{ role: "user", content: "Hello, Claude" }],
+  },
+  { openTelemetry: { conversationId: "conv_42" } },
+);
+```
+
+```python Python
+# with_options() replaces the full option, thus start from client.open_telemetry.
+message = client.with_options(
+    open_telemetry={**client.open_telemetry, "conversation_id": "conv_42"}
+).messages.create(
+    model="claude-opus-5-5",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello, Claude"}],
+)
+```
+
+</CodeGroup>
+
+The SDK exports the conversation ID in the two content modes. Do not put personal data or secrets in the ID.
+
+For Managed Agents calls, the spans also have `anthropic.session.id`. telemetry.dev uses this value before the conversation ID as the session of the trace.
+
+## Trace context
+
+Call the SDK inside one of your own spans. The SDK span then becomes a child of your span.
+
+The SDK uses the propagator of your application to send `traceparent` to the Claude API. If the propagator also writes baggage, the SDK sends the baggage too. To send the trace context without baggage, register only the W3C trace context propagator.
+
+To stop these headers, set `ANTHROPIC_OPEN_TELEMETRY_PROPAGATION=false`. You can also set `propagation: false` in the client options. The SDK continues to emit spans.
+
+:::warning[Undici instrumentation]
+In TypeScript, set `propagation: false` if you use `@opentelemetry/instrumentation-undici`. Otherwise, each request gets a second `traceparent` header and the trace context becomes invalid.
+:::
+
+`@opentelemetry/auto-instrumentations-node` includes `@opentelemetry/instrumentation-undici`.
+
+## Do not combine with the Anthropic wrapper
+
+Do not use the [Anthropic wrapper](/integrations/anthropic) together with native Claude SDK spans. If you use the two, each request has two spans and telemetry.dev counts its tokens and cost two times.
+
+To keep the wrapper, turn off the native spans:
+
+```sh
+export ANTHROPIC_OPEN_TELEMETRY=false
+```
+
+The Claude SDK reads this variable when you make a client, and only for a client that has no `openTelemetry` option (`open_telemetry` in Python). For a client with this option, or for one client, set `openTelemetry: false` (TypeScript) or `open_telemetry=False` (Python). The same rule applies to other libraries that trace the Claude SDK.
+
+## What telemetry.dev shows
+
+telemetry.dev identifies Claude SDK spans from the `com.anthropic.sdk` instrumentation scope. These spans have the `claude` framework.
+
+| Span | Operation | Data |
+| --- | --- | --- |
+| `anthropic.messages.create` | `chat` | Model, response ID, stop reason, token usage, cost, and time to first chunk for streams |
+| `anthropic.messages.tool_runner` | `invoke_agent` | The model requests and tool calls of one tool runner run, as child spans |
+| `anthropic.tool_use <tool>`, `anthropic.mcp_tool_use <tool>`, `anthropic.custom_tool_use <tool>` | `execute_tool` | Tool name, tool call ID, arguments, and tool result |
+| Other request spans, for example `anthropic.messages.count_tokens` | None | HTTP request data, with no token usage |
+
+The provider is `anthropic`. For Amazon Bedrock and Google Vertex AI clients, the provider is `aws.bedrock` or `gcp.vertex_ai`.
+
+In the `content` mode, telemetry.dev shows these items:
+
+- The input messages, the output messages, and the system instructions
+- Reasoning parts as reasoning, not as reply text
+- Tool results from `anthropic.tool_result.content` as the tool output
+- A short label, for example `[image]`, for content blocks that the SDK does not export.
+
+### Tokens and cost
+
+telemetry.dev calculates the cost of a `chat` span from its model and token usage:
+
+- Compaction tokens (`anthropic.usage.compaction.input_tokens` and `anthropic.usage.compaction.output_tokens`) are added to the input and output tokens. telemetry.dev prices them as a separate request, thus they do not change the context tier of the request.
+- One-hour cache writes (`anthropic.usage.cache_creation.ephemeral_1h_input_tokens`) get the one-hour cache-write rate. The other cache writes get the usual cache-write rate.
+- If the pricing catalog has no one-hour rate for a model, the one-hour cache writes get the usual cache-write rate.
+
+`anthropic.message.count_tokens.input_tokens` is a token count, not token usage. telemetry.dev does not add it to the totals.
+
+### Use with Claude API spans
+
+The Claude API can also send spans to telemetry.dev. Read [Claude Platform](/integrations/claude-platform) for the setup.
+
+With the two sources, each Messages request has an SDK `anthropic.messages.create` span and an API `anthropic.messages.create` span. The API span is a child of the SDK span. telemetry.dev counts the tokens and cost of the request one time, from the API span. The SDK span stays in the trace with no tokens and no cost. The session transcript shows one reply for the request.
+
+Open the [trace explorer](/platform/traces) to examine the spans.

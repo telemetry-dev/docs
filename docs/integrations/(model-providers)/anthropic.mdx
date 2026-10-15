@@ -1,13 +1,15 @@
 ---
 title: Anthropic
 description: Trace Anthropic Messages API calls, token usage, tools, thinking, and streams from TypeScript or Python.
-lastModified: 2026-08-03
+lastModified: 2026-10-14
 seo:
   title: "Anthropic Messages API Tracing"
   description: "Trace Anthropic Messages API calls from TypeScript or Python. Record messages, tool use, thinking, streams, and input, output, cache, and thinking token usage."
 ---
 
 The integration records Anthropic Messages API calls. Make a project at telemetry.dev. Copy an API key from the project setup page. Keys use the `td_live_...` format.
+
+To use the native OpenTelemetry spans of the Claude SDK instead of this wrapper, read [Claude SDK](/integrations/claude-sdk). Do not use the wrapper and the native spans together.
 
 ## What it captures
 
