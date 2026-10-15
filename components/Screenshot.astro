@@ -1,0 +1,27 @@
+---
+// Markdown images always load lazily and ship one full-size file. This component
+// gives a screenshot a srcset, and `priority` loads it early at the top of a page.
+// The image keeps its full width so `sizes` stays at the viewport width: Blume's
+// lightbox enlarges an image only up to its natural width.
+import type { ImageMetadata } from "astro";
+import { Image } from "astro:assets";
+
+interface Props {
+  src: string;
+  alt: string;
+  priority?: boolean;
+}
+
+const { alt, priority, src } = Astro.props;
+const images = import.meta.glob<ImageMetadata>("../public/*.{png,jpg,jpeg,webp}", {
+  eager: true,
+  import: "default",
+});
+const image = images[`../public/${src}`];
+
+if (image === undefined) {
+  throw new Error(`Unknown screenshot: ${src}`);
+}
+---
+
+<Image src={image} alt={alt} layout="constrained" priority={priority} />

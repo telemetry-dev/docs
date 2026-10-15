@@ -1,0 +1,15 @@
+diff --git a/src/components/layout/Fonts.astro b/src/components/layout/Fonts.astro
+index a02a467dabf713e3934d9b11e3e9f9dc5c48a2fc..8d012f61dd2e644be878e83c737c5baefff6383c 100644
+--- a/src/components/layout/Fonts.astro
++++ b/src/components/layout/Fonts.astro
+@@ -9,6 +9,9 @@ interface Props {
+ }
+ 
+ const { cssVars } = Astro.props;
++// Preload only the regular face of each family. Other weights and italics
++// still load when a page uses them, but they do not compete with the first paint.
++const preload = [{ style: "normal", weight: 400 }];
+ ---
+ 
+-{cssVars.map((cssVar) => <Font cssVariable={cssVar} preload />)}
++{cssVars.map((cssVar) => <Font cssVariable={cssVar} preload={preload} />)}
