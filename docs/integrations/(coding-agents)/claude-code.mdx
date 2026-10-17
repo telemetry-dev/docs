@@ -1,7 +1,7 @@
 ---
 title: Claude Code
 description: Monitor Claude Code token usage, cost, sessions, tool activity, and traces for one developer or a full team through built-in OpenTelemetry.
-lastModified: 2026-10-15
+lastModified: 2026-10-17
 seo:
   title: "Claude Code Monitoring & Telemetry with OpenTelemetry"
   description: "Monitor Claude Code for one developer or a team with built-in OpenTelemetry. Track token usage, cost, sessions, tool activity, and traces."
@@ -32,9 +32,11 @@ Claude Code ships with OpenTelemetry instrumentation built in. Set a few environ
    export OTEL_LOGS_EXPORTER=otlp
    export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
    export OTEL_EXPORTER_OTLP_ENDPOINT="https://ingest.telemetry.dev"
-   export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer%20$TELEMETRY_DEV_API_KEY"
+   export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer $TELEMETRY_DEV_API_KEY"
    export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
    ```
+
+   Use a literal space between `Bearer` and the API key, not `%20`. Claude Code sends `Bearer%20` unchanged, so telemetry.dev rejects the export with `401 Unauthorized`.
 
    To turn on telemetry for every developer on a team, refer to [Roll out to a team](#roll-out-to-a-team).
 
@@ -106,7 +108,7 @@ A managed settings file turns on telemetry for every developer on a machine. Cla
        "OTEL_LOGS_EXPORTER": "otlp",
        "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://ingest.telemetry.dev",
-       "OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer%20td_live_...",
+       "OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer td_live_...",
        "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment.name=production,team.id=platform"
      }
    }
