@@ -1,7 +1,7 @@
 ---
 title: Claude Platform
 description: Send OpenTelemetry traces of Messages API requests and Managed Agents sessions from the Claude Console to telemetry.dev.
-lastModified: 2026-10-15
+lastModified: 2026-10-18
 seo:
   title: "Claude Platform OpenTelemetry Traces"
   description: "Add telemetry.dev as an OpenTelemetry destination in the Claude Console. Trace Messages API requests and Managed Agents sessions with no code changes."
@@ -45,12 +45,10 @@ To send workspaces to different environments, add one destination for each envir
 
 Anthropic reports a request's usage on more than one span: on the API span for the request and again on each model request inside it. telemetry.dev counts each request once, following [Anthropic's counting rule](https://platform.claude.com/docs/en/manage-claude/opentelemetry#count-tokens). Model request spans inside a Messages API request show no usage of their own.
 
-If you also export the [Claude SDK](/integrations/claude-sdk)'s own spans to telemetry.dev, the SDK span and the API span for a request carry the same usage. telemetry.dev counts the API span when it's a child of the SDK span, and the SDK span still appears in the trace. That link needs the W3C trace context propagator registered in your application; see Anthropic's [trace context setup](https://platform.claude.com/docs/en/manage-claude/opentelemetry/api#connect-api-spans-to-your-own-traces). Without the link, both spans count. [Claude Code](/integrations/claude-code#add-traces-beta) links its model request spans to API spans the same way.
+If the same project also gets spans from the [Claude SDK](/integrations/claude-sdk), the [telemetry.dev Anthropic integration](/integrations/anthropic), or [Claude Code](/integrations/claude-code#add-traces-beta), the client span and the API span for a request carry the same usage. telemetry.dev matches them by the request ID or the response ID and counts the API span, and the client span still appears in the trace with no usage. The API span doesn't have to be a child of the client span. To show it under the client span, register the W3C trace context propagator in your application; see Anthropic's [trace context setup](https://platform.claude.com/docs/en/manage-claude/opentelemetry/api#connect-api-spans-to-your-own-traces). A destination with an environment-scoped key takes over only the client spans of that environment.
 
 ## Good to know
 
-- If your application already traces Anthropic calls with the [telemetry.dev Anthropic integration](/integrations/anthropic), those calls arrive twice and their usage counts twice. Send the Console destination to a separate project, or use one of the two.
-- Claude Platform on AWS doesn't link SDK spans to API spans yet, so send them to separate projects or use one of the two.
 - With **Full content**, prompts and responses go through your project's [capture and redaction settings](/platform/privacy) like any other telemetry.
 - With **Full content**, set **Maximum content size in MB** under **Advanced settings** to 0.75 or lower. telemetry.dev rejects requests larger than 4 MiB, and Anthropic doesn't retry a rejected delivery.
 - Anthropic delivers spans on a best-effort basis, so a span can occasionally be missing. telemetry.dev keeps one copy of a span that arrives more than once.

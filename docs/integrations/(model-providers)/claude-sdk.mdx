@@ -1,7 +1,7 @@
 ---
 title: Claude SDK OpenTelemetry
 description: Send the native OpenTelemetry spans of the Claude SDK to telemetry.dev from TypeScript or Python.
-lastModified: 2026-10-14
+lastModified: 2026-10-18
 seo:
   title: "Claude SDK OpenTelemetry Tracing"
   description: "Send the native OpenTelemetry spans of the Claude SDK to telemetry.dev. Trace Messages API requests, tool runner tools, token usage, cache writes, and cost."
@@ -260,6 +260,8 @@ telemetry.dev calculates the cost of a `chat` span from its model and token usag
 
 The Claude API can also send spans to telemetry.dev. Read [Claude Platform](/integrations/claude-platform) for the setup.
 
-With the two sources, each Messages request has an SDK `anthropic.messages.create` span and an API `anthropic.messages.create` span. The API span is a child of the SDK span. telemetry.dev counts the tokens and cost of the request one time, from the API span. The SDK span stays in the trace with no tokens and no cost. The session transcript shows one reply for the request.
+With the two sources, each Messages request has an SDK `anthropic.messages.create` span and an API `anthropic.messages.create` span. When both go to the same project, telemetry.dev counts the tokens and cost of the request one time, from the API span. The SDK span stays in the trace with no tokens and no cost, and the session transcript shows one reply for the request.
+
+telemetry.dev matches the two spans by the request ID or the response ID, so the API span does not have to be a child of the SDK span. If the SDK sends the [trace context](#trace-context) to the API, the API span also shows under the SDK span in the trace. If the Console destination uses a key that is scoped to one environment, its API spans take over only the SDK spans of that environment.
 
 Open the [trace explorer](/platform/traces) to examine the spans.
