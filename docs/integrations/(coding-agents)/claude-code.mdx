@@ -1,7 +1,7 @@
 ---
 title: Claude Code
 description: Monitor Claude Code token usage, cost, sessions, tool activity, and traces for one developer or a full team through built-in OpenTelemetry.
-lastModified: 2026-10-17
+lastModified: 2026-10-18
 seo:
   title: "Claude Code Monitoring & Telemetry with OpenTelemetry"
   description: "Monitor Claude Code for one developer or a team with built-in OpenTelemetry. Track token usage, cost, sessions, tool activity, and traces."
@@ -59,7 +59,7 @@ Each prompt arrives as a trace that starts with a `claude_code.interaction` span
 
 telemetry.dev reads the input, output, and prompt-cache tokens on each `claude_code.llm_request` span, along with its time to first token, and calculates the request's cost from the model's standard prices. A request in fast mode, where the span's `speed` attribute is `fast`, costs more than telemetry.dev shows. The trace's usage and cost totals come from these spans. The `claude_code.token.usage` and `claude_code.cost.usage` metrics stay separate charts, so turning on traces doesn't count a request twice.
 
-If your organization also sends [Claude Platform traces](/integrations/claude-platform) to the same telemetry.dev project, each model request also has an API span from Anthropic, under its `claude_code.llm_request` span. telemetry.dev then counts the request's usage once, on the API span. Claude Code adds that link only when it calls the Anthropic API directly. If you go through a proxy set in `ANTHROPIC_BASE_URL`, set `CLAUDE_CODE_PROPAGATE_TRACEPARENT=1` to keep the link; without it, the request counts twice.
+If your organization also sends [Claude Platform traces](/integrations/claude-platform) to the same telemetry.dev project, each model request also has an API span from Anthropic. telemetry.dev counts the request's usage once, on the API span. It matches the API span to the `claude_code.llm_request` span when the API span is its child, or by the request ID in any trace. Claude Code sends the trace context that makes the API span a child only when it calls the Anthropic API directly. If you go through a proxy set in `ANTHROPIC_BASE_URL`, set `CLAUDE_CODE_PROPAGATE_TRACEPARENT=1` to keep that link.
 
 ## What you can track
 
