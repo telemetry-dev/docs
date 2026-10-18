@@ -1,28 +1,24 @@
 ---
 title: OpenAI
-description: Trace OpenAI chat, Responses API, embedding, and stream calls from TypeScript or Python.
-lastModified: 2026-08-03
+description: Trace OpenAI chat, Responses API, embedding, media, batch, and stream calls from TypeScript or Python.
+lastModified: 2026-10-18
 seo:
   title: "OpenAI API Tracing and Token Usage"
   description: "Trace OpenAI chat completions, Responses API, embedding, and stream calls from TypeScript or Python, with token usage, errors, and time to first chunk."
 ---
 
-The integration records OpenAI calls without changes to the OpenAI calls. Make a project at telemetry.dev. Copy an API key from the project setup page. Keys use the `td_live_...` format.
+Wrap your OpenAI client, and each call you make with it becomes a span in telemetry.dev. Your calls and their return values don't change.
 
-## What it captures
-
-The integration records:
+## What you get
 
 - Chat messages, Responses API input, system instructions, model parameters, and embedding input
 - Response IDs, response models, finish reasons, output messages, errors, and time to first chunk
-- Input, output, total, cache-read, and reasoning token usage when OpenAI supplies these values
-- Text, image, and audio token counts from OpenAI usage details, as `gen_ai.usage.{text,image,audio}.{input_tokens,output_tokens,cache_read.input_tokens}`
-- Tool-call deltas and arguments from chat streams
-- Image, speech, transcription, and translation calls, and batch create, retrieve, and cancel calls
-- Video create and retrieve calls and Realtime WebSocket responses in TypeScript only
-- The provider from the client: `azure.ai.openai` for Azure OpenAI, a matching provider for known OpenAI-compatible hosts, and `openai` for other calls.
+- Input, output, total, cache-read, and reasoning token counts when OpenAI returns them, plus text, image, and audio token counts as `gen_ai.usage.{text,image,audio}.{input_tokens,output_tokens,cache_read.input_tokens}`
+- Tool-call arguments rebuilt from chat stream deltas
+- Image, speech, transcription, translation, and batch calls
+- Realtime WebSocket responses, in TypeScript only
 
-Embedding vectors are not part of the span output. Image, audio, and video bytes are never captured, including binary fields nested in Responses API input and output.
+The integration never records embedding vectors or image, audio, and video bytes, including binary fields nested in Responses API input and output.
 
 ## Install
 
@@ -38,23 +34,23 @@ pip install telemetry-dev-openai
 
 </CodeGroup>
 
-**TypeScript**
+The Python package also installs `telemetry-dev` and `openai`.
 
-| Requirement | Version |
+| Language | Requirements |
 | --- | --- |
-| `@telemetry-dev/sdk` peer | `^0.1.0` |
-| `openai` peer | `>=6 <8` |
-| Node.js from `@telemetry-dev/sdk` | `>=20.19.0` |
+| TypeScript | Node.js `>=20.19.0`, `@telemetry-dev/sdk` `^0.1.8`, `openai` `>=6 <8` |
+| Python | Python `>=3.10`, `telemetry-dev` `>=0.2.9`, `openai` `>=2,<4` |
 
-**Python**
+## Trace a call
 
-| Requirement | Version |
-| --- | --- |
-| Python | `>=3.10` |
-| `telemetry-dev` | `>=0.2.6` |
-| `openai` | `>=2,<3` |
+Set your telemetry.dev project API key and your OpenAI key. Copy the telemetry.dev key from the project setup page; it starts with `td_live_`.
 
-## Quickstart
+```sh
+export TELEMETRY_DEV_API_KEY=td_live_...
+export OPENAI_API_KEY=sk-...
+```
+
+Call `init()`, wrap the client, and use it as usual:
 
 <CodeGroup>
 
@@ -83,8 +79,6 @@ try {
 ```
 
 ```python Python
-import os
-
 import telemetry_dev
 from openai import OpenAI
 from telemetry_dev_openai import wrap_openai
@@ -94,7 +88,7 @@ client = wrap_openai(OpenAI())
 
 try:
     completion = client.chat.completions.create(
-        model=os.getenv("MODEL", "gpt-4o-mini"),
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are a helpful bot"},
             {"role": "user", "content": "Tell me a joke about OpenTelemetry"},
@@ -109,105 +103,113 @@ finally:
 
 </CodeGroup>
 
-### Global instrumentation
+Run the script, then open the [trace explorer](/platform/traces). The trace has one `chat gpt-4o-mini` generation span with the messages, the reply, and token usage.
 
-Use global instrumentation when client wrappers are not practical:
+Without an API key, `init()` turns telemetry off and the wrapped client works as before.
 
-```ts
+## Instrument all clients
+
+To trace every client without wrapping each one, call the global function once at startup:
+
+<CodeGroup>
+
+```ts TypeScript
 import OpenAI from "openai";
 import { flush, init, shutdown } from "@telemetry-dev/sdk";
-import {
-  instrumentOpenAI,
-  uninstrumentOpenAI,
-} from "@telemetry-dev/openai";
+import { instrumentOpenAI } from "@telemetry-dev/openai";
 
 init({ serviceName: "openai-app" });
 instrumentOpenAI();
-const client = new OpenAI();
 
-try {
-  await client.embeddings.create({
-    model: "text-embedding-3-small",
-    input: "OpenTelemetry",
-  });
-} finally {
-  uninstrumentOpenAI();
-  await flush();
-  await shutdown();
-}
+const client = new OpenAI();
+await client.embeddings.create({
+  model: "text-embedding-3-small",
+  input: "OpenTelemetry",
+});
+
+await flush();
+await shutdown();
 ```
+
+```python Python
+import telemetry_dev
+from openai import OpenAI
+from telemetry_dev_openai import instrument_openai
+
+telemetry_dev.init(service_name="openai-app")
+instrument_openai()
+
+client = OpenAI()
+client.embeddings.create(model="text-embedding-3-small", input="OpenTelemetry")
+
+telemetry_dev.flush()
+telemetry_dev.shutdown()
+```
+
+</CodeGroup>
+
+In TypeScript, global instrumentation patches the ES module build of `openai`. A client created with `require("openai")` comes from the CommonJS build and isn't covered, so wrap it with `wrapOpenAI()`.
 
 ## API
 
-### TypeScript
-
-| Function | Purpose |
-| --- | --- |
-| `wrapOpenAI(client, options?)` | Instruments one client. More calls for the same client have no effect. |
-| `instrumentOpenAI(options?)` | Instruments clients with the OpenAI resource prototypes. |
-| `uninstrumentOpenAI()` | Restores the resource prototypes. Client wrappers stay active. |
-| `wrapOpenAIRealtime(connection, options?)` | Instruments one Realtime WebSocket connection. Refer to [Realtime](#realtime). |
-
-### Python
-
-| Function | Purpose |
-| --- | --- |
-| `wrap_openai(client, *, inject_stream_usage=False)` | Instruments one synchronous or asynchronous client. |
-| `instrument_openai(*, inject_stream_usage=False)` | Instruments the OpenAI resource classes. |
-| `uninstrument_openai()` | Restores the resource methods. |
-
-## Options
-
-**TypeScript**
-
-<TypeTable type={{ injectStreamUsage: { type: "boolean", description: "Add stream_options.include_usage when the caller does not set it. Hide the final usage-only chunk.", default: "false" } }} />
-
-`injectStreamUsage` is opt-in. Azure OpenAI requests with `data_sources` reject `stream_options`.
-
-**Python**
-
-<TypeTable type={{ inject_stream_usage: { type: "bool", description: "Add stream_options.include_usage and hide the final usage-only chunk.", default: "False" } }} />
-
-The integration instruments chat `create` and `parse`, Responses `create`, `retrieve`, and `parse`, embeddings `create`, images, audio, and batches. It instruments synchronous and asynchronous resources.
-
-## Calls
-
-| OpenAI call | Span |
-| --- | --- |
-| `chat.completions.create()` | `chat {model}` generation |
-| `responses.create()` | `chat {model}` generation |
-| Streamed `responses.retrieve()` | `chat unknown` generation |
-| `embeddings.create()` | `embeddings {model}` embedding |
-
-The integration keeps `asResponse()` and `withResponse()` on traced promises. These methods add the request ID and HTTP status to the span.
-
-## Media and batches
-
-Image, audio, and video calls produce generation spans with operation `generate_content`. The span names differ by language:
-
-| OpenAI call | TypeScript span | Python span |
+| TypeScript | Python | What it does |
 | --- | --- | --- |
-| `images.generate()`, `images.edit()`, image variations | `image {model}` | `generate_content {model}` |
-| `audio.speech.create()` | `speech {model}` | `generate_content {model}` |
-| `audio.transcriptions.create()` | `transcription {model}` | `generate_content {model}` |
-| `audio.translations.create()` | `translation {model}` | `generate_content {model}` |
-| `videos.create()` | `video {model}` | No span |
-| `videos.retrieve()` | `video unknown` | No span |
-| `batches.create()`, `retrieve()`, and `cancel()` | `openai.batch.{action}` | `openai.batch.{action}` |
+| `wrapOpenAI(client, options?)` | `wrap_openai(client, *, inject_stream_usage=False)` | Instruments one client and returns it. Wrapping the same client again has no effect. Python accepts synchronous and asynchronous clients. |
+| `instrumentOpenAI(options?)` | `instrument_openai(*, inject_stream_usage=False)` | Instruments every client through the OpenAI resource classes. |
+| `uninstrumentOpenAI()` | `uninstrument_openai()` | Removes global instrumentation. Clients you wrapped yourself stay instrumented. |
+| `wrapOpenAIRealtime(connection, options?)` | None | Instruments one Realtime WebSocket connection. See [Realtime](#realtime). |
 
-Image spans keep the prompt and token usage. In TypeScript, non-streamed image spans also keep the image count and revised prompts. Speech spans keep the text input but not the returned audio. Transcription and translation spans keep the returned text and token usage.
+### Options
 
-Batch spans use the custom operations `openai.batch.create`, `openai.batch.retrieve`, and `openai.batch.cancel`, because OpenTelemetry defines no standard batch operation. Each span records the batch ID and status. Batch list pagination has no instrumentation in Python.
+<TypeTable type={{ injectStreamUsage: { type: "boolean", description: "TypeScript name. Add stream_options.include_usage to streamed chat requests that don't set it, and hide the extra usage-only chunk from your code.", default: "false" }, inject_stream_usage: { type: "bool", description: "Python name for the same option.", default: "False" } }} />
 
-TypeScript traces video calls when the installed OpenAI SDK has `client.videos`. The Python integration does not instrument `client.videos`, so video calls from Python produce no spans.
+Stream usage injection is off by default because some endpoints reject `stream_options`. Azure OpenAI requests with `data_sources` return a 400 error when it is present.
+
+## Traced calls
+
+The integration traces synchronous and asynchronous calls.
+
+| OpenAI call | Span name | Span type |
+| --- | --- | --- |
+| `chat.completions.create()` and `parse()` | `chat {model}` | generation |
+| `responses.create()` and `parse()` | `chat {model}` | generation |
+| `responses.retrieve()` with `stream: true`, and `responses.stream({ response_id })` | `chat unknown` | generation |
+| `embeddings.create()` | `embeddings {model}` | embedding |
+| `images.generate()`, `edit()`, and `createVariation()` (`create_variation()` in Python) | `image {model}` | generation |
+| `audio.speech.create()` | `speech {model}` | generation |
+| `audio.transcriptions.create()` | `transcription {model}` | generation |
+| `audio.translations.create()` | `translation {model}` | generation |
+| `batches.create()`, `retrieve()`, and `cancel()` | `openai.batch.{create,retrieve,cancel}` | span |
+
+`chat.completions.stream()` and `responses.stream()` for a new response go through `create()`, so they are traced too. A `responses.retrieve()` call without streaming has no span. A retrieved stream starts as `chat unknown` because the model name arrives with the first event.
+
+Image, speech, transcription, and translation spans use the operation `generate_content`. Image spans keep the prompt and token usage. In TypeScript, non-streamed image spans also keep the image count and the revised prompts. Speech spans keep the input text but not the returned audio. Transcription and translation spans keep the returned text and token usage.
+
+Batch spans use the operations `openai.batch.create`, `openai.batch.retrieve`, and `openai.batch.cancel`, because OpenTelemetry defines no standard batch operation. Each records the batch ID and status. Python doesn't trace batch list pagination.
+
+OpenAI shut down its Videos API on September 24, 2026. Python doesn't trace `client.videos`. TypeScript still traces `videos.create()` (`video {model}`) and `videos.retrieve()` (`video unknown`) when the installed SDK has `client.videos`, for compatible endpoints.
+
+In TypeScript, traced calls keep `asResponse()` and `withResponse()`. Calling either one also records the HTTP status code and the request ID on the span.
+
+## Streaming
+
+A stream span stays open until your code reads the stream to the end, closes it, or the stream fails. A stream you never read never finishes its span. Errors during iteration are recorded on the span and still reach your code.
+
+The integration sends requests unchanged. To record token usage for streamed chat, set `stream_options: { include_usage: true }` yourself or turn on `injectStreamUsage`. Responses API streams report usage without this.
+
+Chat streams combine content, refusal text, and tool-call argument deltas. Responses streams end on a `response.completed`, `response.incomplete`, `response.failed`, or `error` event.
+
+In Python, wrap or instrument the client before you first access `with_raw_response` or `with_streaming_response`. The OpenAI SDK binds those methods on first access, so later instrumentation doesn't reach them.
+
+A speech span for a streamed or downloaded response covers the request, not your later reads of the bytes. A transcription stream span stays open until you finish reading the stream.
 
 ## Realtime
 
-The TypeScript integration traces Realtime WebSocket connections through an explicit wrapper. `instrumentOpenAI()` does not cover them.
+In TypeScript, wrap each Realtime WebSocket connection with `wrapOpenAIRealtime()`. `instrumentOpenAI()` doesn't cover Realtime, and Python has no Realtime support.
 
-Install the OpenAI Realtime client's optional `ws` dependency and its TypeScript types:
+The OpenAI Realtime WebSocket client needs the `ws` package:
 
-```bash
+```sh
 npm i ws
 npm i -D @types/ws
 ```
@@ -222,57 +224,33 @@ const realtime = wrapOpenAIRealtime(
 );
 ```
 
-Each `response.create` event starts one generation span. The span finishes on `response.done`, a transport error, or an early close, and it records output timing and modality usage.
+Each `response.create` event starts one generation span. The span ends on `response.done`, a transport error, or the connection closing, and it records output timing and token usage by modality.
 
-To match responses that complete out of order, the wrapper adds a private correlation field to `response.metadata` and keeps the caller's fields. OpenAI allows at most 16 metadata fields. When the caller already sends 16, the request goes out unchanged and the span fails immediately, because the wrapper cannot match its events.
+To match responses that finish out of order, the wrapper adds a private correlation field to `response.metadata` and keeps your fields. OpenAI allows at most 16 metadata fields. If you already send 16, the request goes out unchanged and its span fails at once, because the wrapper can't match its events.
 
-<TypeTable type={{ traceTimeoutMs: { type: "number", description: "Fail an unfinished span after this many milliseconds. Must be a positive finite number.", default: "300000" }, maxInFlight: { type: "number", description: "Maximum open spans for one connection. Past this limit, the oldest span fails and is removed. Must be a positive integer.", default: "100" } }} />
+<TypeTable type={{ traceTimeoutMs: { type: "number", description: "Fail a span that hasn't finished after this many milliseconds. Must be a positive finite number.", default: "300000" }, maxInFlight: { type: "number", description: "Maximum open spans per connection. Past the limit, the oldest span fails and is removed. Must be a positive integer.", default: "100" } }} />
 
-The Python integration does not wrap Realtime connections.
+## Provider names
 
-## Streaming
+The span's `gen_ai.provider.name` comes from the client:
 
-### TypeScript
-
-Chat streams combine content, refusal, and tool-call argument deltas. Responses streams close on completed, incomplete, failed, or error events.
-
-`responses.stream({ response_id })` has instrumentation. Its span starts as `chat unknown` because the first response event supplies the model. A non-streamed `responses.retrieve()` call has no span.
-
-The integration records an iteration error and returns the error to the caller. Consume or close each stream to finish its span.
-
-### Python
-
-`chat.completions.stream()` and `responses.stream()` use the instrumented methods. The integration does not instrument the stream helpers directly.
-
-`responses.stream(response_id=...)` has instrumentation. A `retrieve()` call without `stream=True` has no span.
-
-The default request does not change. Set `stream_options={"include_usage": True}` or use `inject_stream_usage=True` to record streamed chat usage.
-
-Instrument the client before access to `with_raw_response` or `with_streaming_response`. The OpenAI SDK stores bound methods at the first access to each namespace.
-
-Speech spans with a streamed or downloaded response cover the request, not the later byte reads. A transcription stream span stays open until you consume the stream.
-
-## Provider detection
-
-`AzureOpenAI` and `AsyncAzureOpenAI` calls use provider `azure.ai.openai`.
-
-A client with an OpenAI-compatible base URL on one of these domains, or a subdomain of one, uses the matching provider:
-
-| Base URL domain | Provider |
+| Client | Provider |
 | --- | --- |
-| `openrouter.ai` | `openrouter` |
-| `groq.com` | `groq` |
-| `x.ai` | `x_ai` |
-| `deepseek.com` | `deepseek` |
-| `together.xyz` | `together_ai` |
-| `fireworks.ai` | `fireworks_ai` |
+| `AzureOpenAI` (and `AsyncAzureOpenAI` in Python) | `azure.ai.openai` |
+| Base URL on `openrouter.ai` or a subdomain | `openrouter` |
+| Base URL on `groq.com` or a subdomain | `groq` |
+| Base URL on `x.ai` or a subdomain | `x_ai` |
+| Base URL on `deepseek.com` or a subdomain | `deepseek` |
+| Base URL on `together.xyz` or a subdomain | `together_ai` |
+| Base URL on `fireworks.ai` or a subdomain | `fireworks_ai` |
+| Any other client | `openai` |
 
-Other clients use `openai`.
+## Captured content
 
-## Flush
+Prompts and responses follow the core SDK's `captureInput`, `captureOutput`, and `mask` settings (`capture_input`, `capture_output`, and `mask` in Python). With output capture off, response IDs, models, finish reasons, usage, timing, and errors are still recorded.
 
-**TypeScript:** For a short script, call `await flush()` and `await shutdown()` before exit. In serverless code, call `await flush()` before return. You can also pass the work to `waitUntil`.
+The capture settings don't cover stop sequences, metadata and attributes you pass yourself, or exception messages and stack traces. Redact those separately if they can hold sensitive data. See [privacy](/platform/privacy) for server-side redaction.
 
-**Python:** For a short script, call `telemetry_dev.flush()` and `telemetry_dev.shutdown()` before exit. In serverless code, call `flush()` before the runtime freezes.
+## Send telemetry before exit
 
-Open the [trace explorer](/platform/traces) to examine the spans. Refer to the [quickstart](/quickstart) for API-key setup.
+In a short script, call `flush()` and then `shutdown()` before the process exits, as in the example above. In serverless code, call `flush()` before the handler returns. In TypeScript you can pass a `waitUntil` function to `init()` instead. See the [TypeScript SDK](/sdk/typescript) and [Python SDK](/sdk/python) guides for details.

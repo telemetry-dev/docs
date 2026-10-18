@@ -1,70 +1,84 @@
 ---
 title: Plans and billing
-description: Compare plan limits, monitor ingestion units, and manage a Polar subscription.
-lastModified: 2026-08-03
+description: Compare plan limits, track ingestion units, and change or manage a subscription.
+lastModified: 2026-10-18
 ---
 
-Each organization has one plan. The plan sets project, seat, retention, and monthly ingestion-unit limits.
+Each organization has one plan. The plan sets how many projects and seats the organization can have, how long projects can keep telemetry, and how many ingestion units it includes each month.
 
-## Plans
+## Compare plans
 
-| Plan | Price | Projects | Seats | Retention | Ingestion units per month |
+| Plan | Price | Ingestion units per month | Maximum retention | Projects | Seats |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Free | $0 | 1 | 2 | 7 days | 10,000 |
-| Pro | $25 per month | 5 | 5 | 30 days | 250,000 |
-| Team | $100 per month | Unlimited | Unlimited | 90 days | 1,000,000 |
+| Free | $0 | 30,000 | 14 days | 1 | 2 |
+| Pro | $25 per month | 500,000 | 30 days | 5 | 5 |
+| Team | $50 per month | 2,000,000 | 90 days | Unlimited | Unlimited |
 
-For the latest purchase terms, read [telemetry.dev/pricing](https://telemetry.dev/pricing).
+For current purchase terms, read [telemetry.dev/pricing](https://telemetry.dev/pricing).
 
-## Ingestion units
+## How ingestion units are counted
 
-One ingestion unit is one span, one log record, or one metric data point.
+One ingestion unit is one span, one log record, or one metric data point. A trace with 12 spans uses 12 units.
 
-The limit belongs to the organization, not to one project. Usage resets at the first day of each UTC month.
+The monthly allowance belongs to the organization and covers all of its projects. Usage resets at the start of each calendar month in UTC.
 
-### Hard quota behavior
+### What happens at the Free limit
 
-The Free plan has a 1.2 hard-quota factor. Its 10,000-unit plan limit becomes a hard stop at 12,000 units.
+The Free plan stops accepting telemetry at 120% of its allowance: 36,000 units in a month. A request that would take the month's total past 36,000 is rejected as a whole. The ingest service returns `429 quota_exceeded` with a `Retry-After` header that gives the seconds until the next month starts in UTC.
 
-After the hard stop, the ingest service rejects more data with `429 quota_exceeded`. The response has a `Retry-After` value for the next UTC month boundary.
+Paid Pro and Team subscriptions count usage but do not reject telemetry above the monthly allowance. A Pro or Team plan from a gift works differently; read [Use a gift plan](#use-a-gift-plan).
 
-At this time, paid plans record usage but do not reject ingestion at the listed monthly limit.
+To get a warning before the limit, turn on the **Quota runway** alert in the **Alerts** tab of the organization settings.
 
-## Monitor usage
+## Check usage
 
-Open **Organization settings → Usage** to read:
+Open the organization switcher, select **Organization settings**, and then select the **Usage** tab. It shows:
 
-- Ingestion units used and the plan limit
-- Spans in the current month
-- Projects used and the plan limit
-- Seats used and the plan limit
-- The next reset time
+- **Ingestion units** used this month and the plan allowance
+- Spans, logs, and metric points this period
+- **Projects** used and the plan limit
+- **Seats** used and the plan limit, counting members and unexpired pending invitations
+- The date the usage resets
 
-The seat count includes members and active pending invitations.
+For one project, select **Settings** in the project sidebar and then the **Usage** tab. It shows the project's ingestion units this month against the organization's allowance, and the traces, spans, logs, and metric points that the project currently stores.
 
-Open **Project settings → Usage** for one project's ingestion units and span count. This tab also shows retained traces, spans, logs, and metric points. The monthly plan limit still applies across the full organization.
+## Change your plan
 
-## Change a plan
-
-An organization owner or admin can change the plan.
+An organization owner or admin can upgrade the plan.
 
 <Steps>
   <Step title="Open billing">
-    Open **Organization settings → Billing**.
+    Open **Organization settings**, then the **Billing** tab.
   </Step>
-  <Step title="Select a plan">
-    Select the Pro or Team plan.
+  <Step title="Choose a plan">
+    Select **Upgrade to Pro** or **Upgrade to Team**. The tab shows only plans above the plan you pay for. During a gift, the button for the gifted plan reads **Subscribe to** instead.
   </Step>
-  <Step title="Complete checkout">
-    Complete the Polar checkout.
+  <Step title="Pay">
+    Complete the checkout. telemetry.dev uses Polar for payments.
   </Step>
   <Step title="Return to telemetry.dev">
-    After checkout, telemetry.dev refreshes the organization plan.
+    After checkout, telemetry.dev shows "Checkout complete". The plan changes when telemetry.dev receives the payment confirmation from Polar, so it can take a short time to appear.
   </Step>
 </Steps>
 
+On a deployment without billing set up, the tab says that plans can't be changed there.
+
 ## Manage a subscription
 
-Select **Manage billing** to open the Polar customer portal. The admin whose Polar customer owns the subscription gets this action.
+Select **Manage billing** on the **Billing** tab to open the Polar customer portal, where you manage the subscription.
 
-A different admin sees that another organization admin manages billing. That admin cannot open the subscription portal for the purchaser.
+Only the admin who paid for the subscription sees **Manage billing**. Other owners and admins see "Billing is managed by another admin of this organization."
+
+Deleting the organization also cancels its subscription. The cancellation can take a few minutes.
+
+## Use a gift plan
+
+A gift link gives an organization the Pro or Team plan for a set time, without a card. An owner or admin with a verified email address opens the link and selects the organization. Only an organization without a paid plan or another active gift can claim one.
+
+During the gift, the **Billing** tab shows the gifted plan, its end date, and how much of the gift's ingestion budget is used.
+
+- The gift has a lifetime ingestion budget, shared by the whole organization. It does not reset each month.
+- If the organization does not pay for a plan, ingestion stops when the budget runs out or when the month's usage would pass the gifted plan's monthly allowance. The ingest service returns `429 quota_exceeded`. The gift itself continues until its end date.
+- If the organization also pays for a plan, ingestion continues without using the gift budget.
+
+When the gift ends, the organization returns to the Free plan, unless it has a subscription. To keep the plan, subscribe before the end date.

@@ -7,51 +7,91 @@ seo:
   description: "Add telemetry.dev as an OpenTelemetry destination in the Claude Console. Trace Messages API requests and Managed Agents sessions with no code changes."
 ---
 
-The Claude Platform can send OpenTelemetry traces of your Messages API requests and Managed Agents sessions to telemetry.dev. You add telemetry.dev as a destination in the Claude Console. Each request then arrives as a trace, with a span for each model request, tool use, and agent turn. No code changes are needed. Anthropic offers this export as a beta.
+Add telemetry.dev as an OpenTelemetry destination in the Claude Console, and the Claude API sends a trace of each Messages API request and Managed Agents session to your project. You don't change any code. Anthropic offers this export as a beta, on Claude Platform and on Claude Platform on AWS.
 
-## What it captures
+## What you get
 
-- One span for each Messages API request, with a span for each model request, server tool, MCP tool, and compaction inside it
-- Managed Agents sessions: each turn, model request, tool use, and outcome evaluation
+- A span for each Messages API request, with a span inside it for each model request, server tool use, MCP tool use, and compaction
+- For Managed Agents sessions, a span for each Sessions API request, agent turn, model request, tool use, and outcome evaluation
 - Model, response ID, errors, and timing, with Anthropic's stop reason as the finish reason
-- Input, output, cache-read, and cache-write token usage, and thinking tokens when Anthropic reports them. One-hour cache writes get the one-hour cache-write rate.
-- Prompts, responses, tool results, and outcome evaluation explanations, when the destination's content mode is **Full content**
+- Input, output, cache-read, and cache-write token counts, and thinking tokens when Anthropic reports them. One-hour cache writes are priced at the one-hour cache-write rate.
+- Prompts, responses, tool results, and outcome evaluation explanations, if you set the destination's content mode to **Full content**
 
-## Get started
+## Set up
 
-1. Create a telemetry.dev project API key. Keys use the `td_live_...` format.
-2. In the Claude Console, open the organization's [OpenTelemetry settings](https://platform.claude.com/settings/telemetry-destinations) and click **Add destination**. You need the admin role.
-3. Fill in the destination:
+You need the admin role in the Claude Console organization.
 
-   | Field | Value |
-   | --- | --- |
-   | Provider | Custom |
-   | OTLP endpoint URL | `https://ingest.telemetry.dev` |
-   | Request headers | `authorization`: `Bearer td_live_...` |
-   | Content mode | **Metadata only**, or **Full content** to include prompts and responses |
-   | Workspaces | The workspaces to trace |
+<Steps>
+  <Step title="Copy a telemetry.dev API key">
 
-   Don't add `/v1/traces` to the endpoint URL. The Console adds it.
+Open your project in telemetry.dev and copy an API key from the project setup page. Keys start with `td_live_`.
 
-4. Click **Test** in the destination's **More actions** menu, then send a request. The destination shows **Healthy** within about a minute, and the trace appears in your project with the service name `claude-platform`.
+  </Step>
+
+  <Step title="Add the destination">
+
+In the Claude Console, open the organization's [OpenTelemetry settings](https://platform.claude.com/settings/telemetry-destinations) and click **Add destination**. Fill in these fields:
+
+| Field | Value |
+| --- | --- |
+| Provider | **Custom** |
+| OTLP endpoint URL | `https://ingest.telemetry.dev` |
+| Request headers | `authorization` with the value `Bearer td_live_...` |
+| Content mode | **Metadata only**, or **Full content** to include prompts and responses |
+| Workspaces | The workspaces to trace |
+
+Don't add `/v1/traces` to the endpoint URL. The Claude API adds it.
+
+If you choose **Full content**, open **Advanced settings** and set **Maximum content size in MB** to 0.75 or lower. See [Size limit](#size-limit).
+
+Click **Add destination** to save.
+
+  </Step>
+</Steps>
+
+## Check that data arrives
+
+1. In the destination's **More actions** menu, click **Test**. The Console tells you whether the test span was delivered.
+2. Send a Messages API request in a workspace that the destination covers, for example from the Console playground.
+3. Within about a minute, the destination's **Delivery** column shows **Healthy**, and the trace appears in your project with the service name `claude-platform`.
+
+If the column shows **Failing**, hover over it to see the error:
+
+- `401`: the `authorization` header is wrong, or the key is revoked.
+- `403`: the trace is already stored in a different environment.
+- `429`: a Free project has used all of its ingestion quota, or the project sent too many requests.
 
 ## Environment
 
-Claude Platform spans have no deployment environment. telemetry.dev puts them in the environment of the API key. An environment-scoped key puts the spans in its environment, and an unscoped key puts them in the `default` environment.
+Claude Platform spans carry no deployment environment, so telemetry.dev puts them in the environment of the API key. An environment-scoped key puts them in its environment; an unscoped key puts them in `default`.
 
-To send workspaces to different environments, add one destination for each environment. Give each destination a key scoped to its environment.
+To send workspaces to different environments, add one destination for each environment, each with a key scoped to its environment.
 
 ## Token usage
 
-Anthropic reports a request's usage on more than one span: on the API span for the request and again on each model request inside it. telemetry.dev counts each request once, following [Anthropic's counting rule](https://platform.claude.com/docs/en/manage-claude/opentelemetry#count-tokens). Model request spans inside a Messages API request show no usage of their own.
+Anthropic reports a request's usage on more than one span: on the API span for the request, and again on each model request inside it. telemetry.dev counts each request once, following [Anthropic's counting rule](https://platform.claude.com/docs/en/manage-claude/opentelemetry#count-tokens). For a Messages API request, the request's `anthropic.messages.create` span and its compaction spans count, and the model request spans inside it show no usage of their own. For a Managed Agents session, the model request and outcome evaluation spans count.
 
-If the same project also gets spans from the [Claude SDK](/integrations/claude-sdk), the [telemetry.dev Anthropic integration](/integrations/anthropic), or [Claude Code](/integrations/claude-code#add-traces-beta), the client span and the API span for a request carry the same usage. telemetry.dev matches them by the request ID or the response ID and counts the API span, and the client span still appears in the trace with no usage. The API span doesn't have to be a child of the client span. To show it under the client span, register the W3C trace context propagator in your application; see Anthropic's [trace context setup](https://platform.claude.com/docs/en/manage-claude/opentelemetry/api#connect-api-spans-to-your-own-traces). A destination with an environment-scoped key takes over only the client spans of that environment.
+Your application may also send its own span for the same request: a span from the [Claude SDK](/integrations/claude-sdk)'s OpenTelemetry tracing, a `chat` span from the [telemetry.dev Anthropic integration](/integrations/anthropic), or a `claude_code.llm_request` span from [Claude Code](/integrations/claude-code#add-traces-beta). When both reach the same project, the API span counts the request's usage and your application's span counts none. The span still appears in its trace.
+
+telemetry.dev treats the two spans as the same request when either of these is true:
+
+- The API span is a child of your application's span. The Claude SDK's OpenTelemetry tracing sets this link when your application uses the W3C trace context propagator. See Anthropic's guide to [connecting API spans to your own traces](https://platform.claude.com/docs/en/manage-claude/opentelemetry/api#connect-api-spans-to-your-own-traces).
+- Both spans carry the same `anthropic.request.id` or `gen_ai.response.id`. This match works across traces, so it also covers API spans that start their own trace.
+
+To match spans that arrive in different requests to telemetry.dev, ingest keeps hashes of the request and response IDs for at least 7 days. A span that arrives after that can count on its own.
+
+If the destination uses an environment-scoped API key, its API spans take over only spans in that environment. With an unscoped key, they take over spans in any environment of the project.
+
+## Size limit
+
+telemetry.dev rejects an OTLP request larger than 4 MiB as sent, or 16 MiB after gzip decompression, with a `413` response. The Claude API retries a delivery only after a timeout, a connection failure, or a `408`, `429`, or `5xx` response, so it doesn't send the rejected spans again.
+
+With **Full content**, keep **Maximum content size in MB** at 0.75 or lower. That is Anthropic's default content limit for each span. If you leave the field empty, the API sends as much content as it allows, and a large delivery can go over telemetry.dev's limit.
 
 ## Good to know
 
 - With **Full content**, prompts and responses go through your project's [capture and redaction settings](/platform/privacy) like any other telemetry.
-- With **Full content**, set **Maximum content size in MB** under **Advanced settings** to 0.75 or lower. telemetry.dev rejects requests larger than 4 MiB, and Anthropic doesn't retry a rejected delivery.
-- Anthropic delivers spans on a best-effort basis, so a span can occasionally be missing. telemetry.dev keeps one copy of a span that arrives more than once.
-- The traces have the `claude` framework. telemetry.dev uses `anthropic.session.id` as the session, so one Managed Agents session groups all of its traces.
-- When Anthropic shortens content, the span detail shows a "Truncated at source" badge.
-- If the **Delivery** column shows `401`, the request header is incorrect or the key is revoked. A `403` means that the trace is already stored in a different environment. A `429` means that a free project used all of its ingestion quota, or that the project sent too many requests.
+- Anthropic delivers spans on a best-effort basis, so a span can occasionally be missing. A delivery can also repeat a span; telemetry.dev keeps one copy.
+- The traces have the `claude` framework. telemetry.dev uses `anthropic.session.id` as the session, so all traces of one Managed Agents session are grouped together.
+- When Anthropic shortens content, the span detail shows a **Truncated at source** badge.
+- If your organization has a HIPAA, FERPA, or K-12 data-handling restriction with Anthropic, destinations send metadata only, whatever their content mode.

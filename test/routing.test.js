@@ -317,8 +317,8 @@ test("every image on a built page loads under the mount path", async () => {
   }
 
   assert.ok(
-    [...sources.keys()].some((src) => src.includes("dashboard-trace")),
-    "the how-it-works screenshot must be among the checked images",
+    [...sources.keys()].some((src) => src.includes("trace-waterfall")),
+    "the introduction screenshot must be among the checked images",
   );
 
   for (const [src, page] of sources) {

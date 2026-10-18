@@ -1,15 +1,21 @@
 ---
 title: Python SDK
 description: Add spans, logs, metrics, and trace context to Python applications.
-lastModified: 2026-09-05
+lastModified: 2026-10-18
 seo:
   title: "Python SDK for LLM Tracing"
   description: "Install telemetry-dev to add OpenTelemetry traces, logs, metrics, and trace context to Python AI applications. The SDK sends data to telemetry.dev over OTLP."
 ---
 
-`telemetry-dev` is the core Python SDK. It sends traces, logs, and metrics through OTLP/HTTP.
+`telemetry-dev` records spans, logs, and metrics from a Python application and sends them to telemetry.dev over OTLP/HTTP. It runs its own OpenTelemetry tracer provider and registers it globally only if you ask it to.
 
-Use Python 3.10 or later.
+If your application already sets up OpenTelemetry, add the telemetry.dev span processor to your tracer provider instead. See [OpenTelemetry](/sdk/opentelemetry#add-the-span-processor-in-python).
+
+## Requirements
+
+The SDK needs Python 3.10 or later. It installs OpenTelemetry Python 1.39 or later as a dependency.
+
+The SDK tracks the active span with `contextvars`. `asyncio` tasks inherit the context, so their spans nest automatically. A new thread starts with an empty context; to keep nesting there, run the work in a copy of the caller's context, for example with `contextvars.copy_context().run()`.
 
 ## Install
 
@@ -25,7 +31,7 @@ uv add telemetry-dev
 
 </CodeGroup>
 
-Make a project at telemetry.dev. Then copy an API key from the project setup page. Keys look like `td_live_...`.
+Create a project at telemetry.dev and copy an API key from the project setup page. Keys look like `td_live_...`.
 
 ```bash .env
 TELEMETRY_DEV_API_KEY=td_live_...
@@ -33,83 +39,110 @@ OTEL_SERVICE_NAME=my-service
 TELEMETRY_DEV_ENVIRONMENT=production
 ```
 
-## Start the SDK
+The SDK reads these variables from `os.environ`. It does not load `.env` files, so export the variables or load the file the way your app already does, for example with `python-dotenv`.
 
-Call `telemetry_dev.init()` one time when the application starts. This verified example uses decorators, context managers, logs, and propagated attributes:
+## Send your first trace
+
+Call `telemetry_dev.init()` once when the application starts. This example traces a small agent that calls a tool and a model:
 
 ```python app.py lineNumbers
 import telemetry_dev
-from telemetry_dev import log, observe, propagate_attributes, start_span, update_current_span
+from telemetry_dev import log, observe, propagate_attributes, start_span
 
-telemetry_dev.init()  # reads TELEMETRY_DEV_API_KEY
+telemetry_dev.init(on_error=lambda error: print("[telemetry.dev]", error))
 
-@observe  # args -> input, return -> output, errors captured + re-raised
-def plan_route(city: str) -> dict[str, str]:
-    log("planning route", attributes={"city": city})
-    return {"city": city, "route": "scenic"}
+
+def call_model(question: str) -> dict:
+    # Stand-in for a real model call, so the example runs without provider credentials.
+    return {
+        "message": {"role": "assistant", "content": f"Echo: {question}"},
+        "usage": {"input_tokens": 12, "output_tokens": 8},
+    }
+
+
+@observe(type="tool")
+def search_web(query: str) -> dict:
+    return {"hits": [f"result for {query}"]}
+
+
+def answer(question: str) -> str:
+    with start_span("answer", type="agent", agent_name="demo-agent"):
+        search_web(question)
+
+        with start_span(
+            "chat-completion",
+            type="generation",
+            model="example-model",
+            provider="example",
+            input=[{"role": "user", "content": question}],
+        ) as generation:
+            response = call_model(question)
+            generation.update(
+                output=response["message"],
+                usage=response["usage"],
+                finish_reason="stop",
+            )
+
+        log("generation finished", attributes={"prompt_chars": len(question)})
+        return response["message"]["content"]
+
 
 with propagate_attributes(user_id="user_123", session_id="session_456"):
-    with start_span(
-        "chat gpt-4o",
-        type="generation",
-        model="gpt-4o",
-        provider="openai",
-        input=[{"role": "user", "content": "Plan a day trip"}],
-    ):
-        update_current_span(
-            output=[{"role": "assistant", "content": "Here you go..."}],
-            usage={"input_tokens": 11, "output_tokens": 7},
-            finish_reason="stop",
-        )
-    plan_route("Kyoto")
+    print(answer("What is OTLP?"))
 
-telemetry_dev.flush()
-telemetry_dev.shutdown()
+telemetry_dev.shutdown()  # Sends pending data, then stops the SDK.
 ```
 
-`init()` returns a `Client`. The client and module functions have the same `flush()` and `shutdown()` lifecycle operations.
+The run produces one trace. The `answer` agent span is the root. The `search_web` tool span and the `chat-completion` generation span are its children, and the log record is attached to the same trace. Every span and the log carry `user.id` and the session ID.
 
-## `init()` keyword arguments
+`init()` returns a `Client` with an `enabled` attribute and `flush()` and `shutdown()` methods. The module-level functions, such as `start_span()` and `flush()`, always use the most recently initialized client. `get_client()` returns that client, or `None` before `init()`.
 
-An explicit argument has precedence over an environment variable.
+## Configure `init()`
+
+`init()` takes keyword arguments only. An argument that you pass takes precedence over its environment variable. An empty environment variable counts as unset.
 
 | Argument | Type | Environment fallback | Default | Purpose |
 | --- | --- | --- | --- | --- |
-| `api_key` | `str \| None` | `TELEMETRY_DEV_API_KEY` | `None` | Authenticates exports. Without a key, the SDK is a no-op. |
-| `base_url` | `str \| None` | `TELEMETRY_DEV_BASE_URL` | `https://ingest.telemetry.dev` | Sets the ingest base URL. The SDK removes trailing slashes. |
+| `api_key` | `str \| None` | `TELEMETRY_DEV_API_KEY` | `None` | Authenticates exports. Without a key, the SDK does nothing. |
+| `base_url` | `str \| None` | `TELEMETRY_DEV_BASE_URL` | `https://ingest.telemetry.dev` | Sets the ingest URL. Trailing slashes are removed. |
 | `environment` | `str \| None` | `TELEMETRY_DEV_ENVIRONMENT` | `production` | Sets `deployment.environment.name`. |
 | `service_name` | `str \| None` | `OTEL_SERVICE_NAME` | `unknown_service` | Sets `service.name`. |
-| `enabled` | `bool` | None | `True` | Deactivates the client when set to `False`. |
-| `session_mode` (unreleased) | `"explicit"` or `"process"` | None | `"explicit"` | Optionally groups otherwise uncorrelated SDK spans and logs for one client initialization. |
-| `register_global` | `bool` | None | `False` | Registers the client tracer provider as the global provider. |
-| `export_mode` | `"batched" \| "immediate"` | None | `"batched"` | Selects batch export or immediate export for spans and logs. |
-| `log_level` | `"debug" \| "info" \| "warn" \| "error" \| "silent"` | None | `"warn"` | Controls SDK diagnostic output. |
-| `capture_input` | `bool` | None | `True` | Sets the default input capture. |
-| `capture_output` | `bool` | None | `True` | Sets the default output capture. |
-| `mask` | `Callable[[Any, MaskContext], Any] \| None` | None | `None` | Changes captured content before serialization. |
-| `max_attribute_length` | `int` | None | `65536` | Limits each captured content attribute. |
-| `span_filter` | `Callable[[ReadableSpan], bool] \| None` | None | `None` | Selects spans at export time. |
-| `on_error` | `Callable[[BaseException], None] \| None` | None | `None` | Receives internal SDK errors. |
-| `disable_atexit` | `bool` | None | `False` | Prevents registration of the automatic shutdown hook. |
-| `timeout` | `float` | None | `10.0` | Sets the OTLP HTTP timeout in seconds. |
-| `span_exporter` | `SpanExporter \| None` | None | `None` | Supplies a span exporter test seam. |
-| `log_exporter` | `LogRecordExporter \| None` | None | `None` | Supplies a log exporter test seam. |
-| `metric_reader` | `MetricReader \| None` | None | `None` | Supplies a metric reader test seam. |
+| `enabled` | `bool` | None | `True` | Set `False` to turn the SDK off. |
+| `session_mode` | `"explicit" \| "process"` | None | `"explicit"` | `"process"` gives spans and logs that have no session ID one generated ID. See [Process sessions](#process-sessions). |
+| `register_global` | `bool` | None | `False` | Registers the SDK's tracer provider as the global provider. |
+| `export_mode` | `"batched" \| "immediate"` | None | `"batched"` | Exports spans and logs in batches, or one at a time. |
+| `sampler` | OpenTelemetry `Sampler \| None` | `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG` | Parent-based, always on | Sets the trace sampling policy. |
+| `log_level` | `"debug" \| "info" \| "warn" \| "error" \| "silent"` | None | `"warn"` | Sets the level of the `telemetry_dev` logger, which reports the SDK's own diagnostics. |
+| `capture_input` | `bool` | None | `True` | Records span input by default. |
+| `capture_output` | `bool` | None | `True` | Records span output by default. |
+| `mask` | `Callable[[Any, MaskContext], Any] \| None` | None | `None` | Changes captured content before it is recorded. |
+| `max_attribute_length` | `int` | None | `65536` | Caps each captured content attribute, in UTF-16 code units. |
+| `span_filter` | `Callable[[ReadableSpan], bool] \| None` | None | `None` | Chooses which ended spans to export. |
+| `on_error` | `Callable[[BaseException], None] \| None` | None | `None` | Receives the SDK's internal errors. |
+| `disable_atexit` | `bool` | None | `False` | Skips the automatic shutdown at interpreter exit. |
+| `timeout` | `float` | None | `10.0` | Sets the timeout of each OTLP HTTP request, in seconds. |
+| `span_exporter` | `SpanExporter \| None` | None | `None` | Replaces the span exporter, for tests. |
+| `log_exporter` | `LogRecordExporter \| None` | None | `None` | Replaces the log exporter, for tests. |
+| `metric_reader` | `MetricReader \| None` | None | `None` | Replaces the metric reader, for tests. |
 
-One exporter or reader seam activates the client without an API key. Without a key or seam, the SDK does not make network exporters.
+Any of the three test overrides turns the client on without an API key. Without a key, the SDK never creates network exporters.
 
-A second `init()` call shuts down and replaces the first client.
+The batch span processor uses fixed limits: a queue of 2,048 spans, a 1,000 ms delay, batches of 64 spans, and a 30,000 ms export timeout. Unlike the TypeScript SDK, `init()` has no `batch` argument.
 
-## Observe functions
+An invalid `session_mode` or `max_attribute_length` does not raise. `init()` reports the error to `on_error` and returns a disabled client.
 
-Use `@observe` without arguments or with configuration:
+## Trace a function with `@observe`
+
+Use `@observe` with or without arguments:
 
 ```python
 from telemetry_dev import observe
 
+
 @observe
 def load_account(account_id: str):
     return repository.get(account_id)
+
 
 @observe(
     name="run-tool",
@@ -122,23 +155,25 @@ def run_tool(payload):
     return tool.execute(payload)
 ```
 
-The decorator accepts `name`, `type`, `capture_input`, `capture_output`, and `attributes`. It operates with synchronous and asynchronous functions.
+For each call, the decorator does the following:
 
-The decorator records arguments as a parameter-name dictionary. It removes `self` and `cls`. It records the return value as output.
+- Names the span from `name`, or the function's `__qualname__`, such as `AccountStore.load`.
+- Records the arguments as input: a dictionary of parameter names to values, without `self` and `cls`.
+- Makes the span active, so spans started inside the function become its children.
+- Records the return value as output.
+- Records a raised exception on the span, then re-raises it.
 
-The decorator activates the span, so child spans use it as their parent. It records and rethrows exceptions.
+The decorator accepts only `name`, `type`, `capture_input`, `capture_output`, and `attributes`. It works with regular functions, `async` functions, and generator functions. Before `init()`, or when the SDK is off, it calls the function without creating a span.
 
 :::note[Generators]
 
-Generator and asynchronous-generator wrappers use detached spans. Child spans inside the generator body do not become children of the observed span.
-
-The wrappers do not capture yielded values as output.
+For generator and async generator functions, the span stays open until the generator finishes, raises, or is closed. The span is not active inside the generator body, so spans started there do not become its children. Yielded values are not recorded as output.
 
 :::
 
-## Create spans
+## Create spans manually
 
-`start_span()` returns a `SpanHandle`. Use it as a context manager to activate the span:
+`start_span()` returns a `SpanHandle`. Use it as a context manager to make the span active. Spans started inside the `with` block become its children. The span ends when the block exits. If the block raises, the span records the exception and the exception propagates:
 
 ```python
 from telemetry_dev import start_span
@@ -158,7 +193,7 @@ with start_span(
     )
 ```
 
-A bare `start_span()` call returns a detached handle. End that handle explicitly:
+Without `with`, `start_span()` returns a detached handle. It does not make the span active, and you must end it yourself:
 
 ```python
 span = start_span("background-work")
@@ -170,19 +205,23 @@ except Exception as error:
     raise
 ```
 
-`update_current_span(**fields)` changes the active span. It is a no-op when no span is active.
+`update_current_span(**fields)` sets fields on the active span. It does nothing when no recording span is active.
 
-### `SpanHandle`
+### Span handle
 
-A `SpanHandle` has these operations:
+- `update(**fields)` sets fields and returns the same handle.
+- `end(**fields, end_time=None)` sets final fields and ends the span.
+- `record_output_chunk()` records the arrival of a streamed output chunk. See [Measure streaming latency](#measure-streaming-latency).
+- `traceparent()` returns the span's W3C `traceparent` value, or `None`. In the TypeScript SDK, `traceparent` is a property, not a method.
+- `span` gives the raw OpenTelemetry span.
 
-- `update(**fields)` changes fields and returns the same handle.
-- `end(**fields, end_time=None)` applies final fields and ends the span.
-- `traceparent()` returns a W3C traceparent or `None`.
+Before `init()`, or when the SDK is off, `start_span()` returns a handle that does nothing. Its `traceparent()` returns `None`.
 
 ### Span types
 
-| `type` | Operation | Input attribute | Output attribute |
+The `type` argument sets `gen_ai.operation.name` and decides which attributes hold input and output. The default type is `"span"`.
+
+| `type` | `gen_ai.operation.name` | Input attribute | Output attribute |
 | --- | --- | --- | --- |
 | `"span"` | `function` | `gen_ai.input.messages` | `gen_ai.output.messages` |
 | `"generation"` | `chat` | `gen_ai.input.messages` | `gen_ai.output.messages` |
@@ -190,11 +229,11 @@ A `SpanHandle` has these operations:
 | `"agent"` | `invoke_agent` | `gen_ai.input.messages` | `gen_ai.output.messages` |
 | `"embedding"` | `embeddings` | `gen_ai.input.messages` | `gen_ai.output.messages` |
 
-The default type is `"span"`.
+A tool span sets `gen_ai.tool.name` to the span name, and an agent span sets `gen_ai.agent.name` to the span name, unless you pass `tool_name` or `agent_name`. The TypeScript SDK does not set these defaults.
 
 ### Span fields
 
-`start_span()`, `SpanHandle.update()`, and `SpanHandle.end()` accept the same field set:
+`start_span()`, `update()`, `end()`, and `update_current_span()` accept these fields:
 
 | Group | Fields |
 | --- | --- |
@@ -205,21 +244,34 @@ The default type is `"span"`.
 | Stream latency | `time_to_first_chunk_ms` |
 | Tool | `tool_name`, `tool_call_id`, `tool_description` |
 | Agent | `agent_name`, `agent_id` |
-| Other | `name`, `metadata`, `attributes`, `error` |
+| Other | `metadata`, `attributes` |
 
-`start_span()` also accepts `parent`, `start_time`, `capture_input`, and `capture_output`. `parent` accepts a traceparent string, OpenTelemetry `Context`, or `SpanContext`.
+`update()`, `end()`, and `update_current_span()` also accept `name`, which renames the span, and `error`. `start_span()` takes the name as its first argument and does not accept `error`.
 
-`end()` also accepts `end_time`.
+The fields map to the same attributes as in the TypeScript SDK. See [Span fields](/sdk/typescript#span-fields) for the full mapping. A few behaviors to know:
 
-`metadata` uses the `td.metadata.*` prefix. The SDK drops `userId`, `sessionId`, `user_id`, and `session_id` from metadata.
+- `finish_reason` becomes a one-item `gen_ai.response.finish_reasons` array.
+- `time_to_first_chunk_ms` is converted to seconds in `gen_ai.response.time_to_first_chunk`.
+- `cost_usd` overrides the server's cost calculation. Without it, the server estimates cost from token usage when it has pricing for the model. See [Cost](/reference/cost).
+- `metadata` becomes `td.metadata.<key>` on this span. The SDK drops the keys `userId`, `sessionId`, `user_id`, and `session_id`; set the user and session with [`propagate_attributes()`](#add-user-session-and-metadata) instead.
+- `attributes` are applied last and can replace mapped attributes.
+- `error` sets the span status to `ERROR`, sets `error.type` to the exception's class name, and records an `exception` event with the message and stack trace.
 
-`attributes` merge last and can replace mapped attributes. `time_to_first_chunk_ms` becomes seconds in `gen_ai.response.time_to_first_chunk`.
+`start_span()` also accepts these arguments:
 
-An `error` sets OpenTelemetry error status and `error.type`. It also adds an `exception` event with the stack trace.
+| Argument | Type | Default |
+| --- | --- | --- |
+| `type` | `SpanType` | `"span"` |
+| `parent` | `str`, OpenTelemetry `Context`, or `SpanContext` | The current context |
+| `start_time` | `datetime` or `int` nanoseconds since the epoch | Now |
+| `capture_input` | `bool \| None` | The `init()` value |
+| `capture_output` | `bool \| None` | The `init()` value |
 
-### `Usage`
+`end_time` takes the same types as `start_time`. Unlike the TypeScript SDK, `start_span()` has no `kind` or `links` argument, and `parent` does not accept a `SpanHandle`.
 
-The exported `Usage` type and usage dictionaries accept these aggregate keys:
+### Token usage
+
+`usage` takes a dictionary, typed as `Usage`, with these keys:
 
 | Key | Attribute |
 | --- | --- |
@@ -230,7 +282,7 @@ The exported `Usage` type and usage dictionaries accept these aggregate keys:
 | `cache_creation_input_tokens` | `gen_ai.usage.cache_creation.input_tokens` |
 | `reasoning_output_tokens` | `gen_ai.usage.reasoning.output_tokens` |
 
-They also accept per-modality counts for providers that price text, image, and audio tokens differently. Each maps to `gen_ai.usage.{modality}.{kind}`:
+Some providers price text, image, and audio tokens differently. For those, `usage` also accepts per-modality counts. Each maps to `gen_ai.usage.<modality>.<kind>`, for example `image_input_tokens` to `gen_ai.usage.image.input_tokens`:
 
 | Modality | Input | Output | Cache read |
 | --- | --- | --- | --- |
@@ -238,13 +290,13 @@ They also accept per-modality counts for providers that price text, image, and a
 | Image | `image_input_tokens` | `image_output_tokens` | `image_cache_read_input_tokens` |
 | Audio | `audio_input_tokens` | `audio_output_tokens` | `audio_cache_read_input_tokens` |
 
-Modality counts are parts of `input_tokens` and `output_tokens`, not additions to them. Send the aggregates as well, and keep each modality sum at or below its aggregate. See [Cost](https://telemetry.dev/docs/reference/cost#modality-pricing) for how the server prices them.
+Modality counts are parts of `input_tokens` and `output_tokens`, not additions to them. Send the totals too, and keep the sum of each kind's modality counts at or below its total. See [Cost](https://telemetry.dev/docs/reference/cost#modality-pricing) for how the server prices modality counts.
 
-The SDK drops unknown usage keys and writes a debug diagnostic.
+The SDK drops unknown keys and logs a debug message.
 
-## Propagate user, session, and metadata attributes
+## Add user, session, and metadata
 
-`propagate_attributes()` is a context manager. It adds correlation attributes to each span and log in its scope:
+`propagate_attributes()` is a context manager. It adds correlation attributes to every span and log created inside its block:
 
 ```python
 from telemetry_dev import propagate_attributes
@@ -257,27 +309,35 @@ with propagate_attributes(
     handle_request()
 ```
 
-The SDK maps `user_id` to `user.id` and `session_id` to `gen_ai.conversation.id`. It maps metadata to `td.metadata.*`.
+| Argument | Attribute |
+| --- | --- |
+| `user_id` | `user.id` |
+| `session_id` | `gen_ai.conversation.id` |
+| `metadata` | `td.metadata.<key>` |
 
-Nested scopes combine attributes. Inner values replace outer values with the same key. The context uses `contextvars`.
+Blocks can nest. The inner block's values replace outer values that have the same key. `propagate_attributes()` works before `init()`.
 
-`get_traceparent()` returns the W3C traceparent for the current context, or `None`.
+### One trace per session
 
-### Optional process sessions (unreleased)
+A root span with a session ID joins its session's trace. The SDK derives the trace ID from the API key and the session ID, so every root span in the same session lands in one trace, even across separate requests and processes. The derivation is the same as in the TypeScript SDK, so Python and TypeScript services that share a session ID and API key also share the trace. A span with a real parent, such as a child span or a span continued from a `traceparent`, keeps that parent.
 
-Root spans are independent by default. For a single-conversation CLI process, the upcoming `session_mode="process"` option generates a session ID when the SDK initializes:
+Root spans without a session ID each start their own trace.
+
+### Process sessions
+
+A command-line tool that holds one conversation per process may have no session ID to pass. Set `session_mode="process"` to have the SDK generate one:
 
 ```python
-init(session_mode="process")
+telemetry_dev.init(session_mode="process")
 ```
 
-The ID is a fallback for SDK spans and logs without an explicit or propagated session. It does not replace a valid parent trace context. Shutting down or replacing the client ends the generated session; a later initialization creates a new ID. The ID is not persisted across processes.
+The SDK generates a new random session ID each time `init()` turns the client on. It uses that ID only for spans and logs that have no session ID of their own, from `propagate_attributes()` or a `gen_ai.conversation.id` attribute. The ID ends when the client shuts down or a later `init()` replaces it. It is not saved between processes.
 
-Do not use process sessions to group unrelated requests in a long-running server. Supply a session ID per conversation with `propagate_attributes()` instead.
+Do not use process sessions in a long-running server; they would put unrelated requests in one session. Pass a session ID per conversation with `propagate_attributes()` instead.
 
 ## Send logs
 
-`log()` sends an OpenTelemetry log in the active trace context:
+`log()` records an OpenTelemetry log in the current trace context:
 
 ```python
 from telemetry_dev import log
@@ -295,53 +355,89 @@ log(
 | `message` | `str` | Required |
 | `level` | `"debug" \| "info" \| "warn" \| "error"` | `"info"` |
 | `event_name` | `str \| None` | `None` |
-| `attributes` | `dict[str, Any] \| None` | `None` |
+| `attributes` | `Mapping[str, Any] \| None` | `None` |
 
-The alias `"warning"` becomes `"warn"`. An unknown level becomes `"info"`.
+`"warning"` is accepted as another name for `"warn"`. An unknown level becomes `"info"`.
 
-The SDK applies masking and truncation to the log body. Propagated attributes replace caller attributes when the keys are equal.
+The message goes through `mask`, serialization, and truncation, as described in [Control captured content](#control-captured-content). Attributes are not masked. Numbers, booleans, strings, and lists whose items are all numbers, all booleans, or all strings are stored as attribute values, with strings truncated to `max_attribute_length`. Other values are stored as JSON strings. Propagated user, session, and metadata attributes are added to every log and replace caller attributes with the same key.
+
+Unlike the TypeScript SDK, `log()` has no `timestamp` argument.
+
+## Continue a trace across services
+
+`get_traceparent()` returns the W3C `traceparent` value for the current span, or `None` when no span is active. Send it to the downstream service, for example as a `traceparent` header. On the receiving side, pass it as `parent`:
+
+```python
+from telemetry_dev import start_span
+
+with start_span("downstream-work", parent=request.headers.get("traceparent")):
+    do_work()
+```
+
+`parent` accepts a `traceparent` string, an OpenTelemetry `Context`, or an OpenTelemetry `SpanContext`. If the string is not a valid `traceparent`, the SDK uses the current context instead.
 
 ## Control captured content
 
-Input and output capture are active by default. Set `capture_input` or `capture_output` globally, on `@observe`, or on `start_span()`.
+By default the SDK records span input and output. Turn either off for all spans in `init()`, or for one span with the `capture_input` and `capture_output` arguments of `@observe` and `start_span()`.
+
+To redact content instead of dropping it, pass a `mask` function. This example keeps outputs but replaces every model input:
 
 ```python
-from telemetry_dev import init
+import telemetry_dev
+from telemetry_dev import MaskContext
 
 
-def mask(value, _context):
-    return "[redacted]"
+def mask(value, context: MaskContext):
+    if context.key == "gen_ai.input.messages":
+        return "[redacted]"
+    return value
 
 
-init(
-    capture_input=True,
-    capture_output=False,
-    mask=mask,
-    max_attribute_length=16_384,
-)
+telemetry_dev.init(mask=mask, max_attribute_length=16_384)
 ```
 
-The SDK applies the capture sequence to input, output, system instructions, and log bodies:
+The SDK prepares each piece of captured content in three steps:
 
-1. The `mask` function changes the value.
-2. The SDK serializes the value with JSON.
-3. The SDK truncates the string to `max_attribute_length`.
+1. It passes the value to `mask`, if you set one.
+2. It serializes the result as JSON. Strings are kept as they are.
+3. It truncates the string to `max_attribute_length`. A truncated value ends with `...[truncated]`, and the marker counts toward the limit. Length is counted in UTF-16 code units, so both SDKs cut the same text at the same point.
 
-A truncated value ends with `...[truncated]`. The SDK counts UTF-16 code units to match the TypeScript SDK.
+`mask` receives the content below. `context.key` is the attribute that the result will be written to:
 
-If `mask` raises an error, the SDK drops the value and sends the error to `on_error`.
+| Content | `context.key` |
+| --- | --- |
+| Span input | `gen_ai.input.messages`, or `gen_ai.tool.call.arguments` on tool spans |
+| Span output | `gen_ai.output.messages`, or `gen_ai.tool.call.result` on tool spans |
+| `system_instructions` | `gen_ai.system_instructions` |
+| Log message | `log.message` |
 
-Provider stream capture uses `CaptureBudget`. Its defaults are 65,536 bytes, 1,024 items, and a maximum depth of 32.
+If `mask` raises, the SDK drops the value and reports the error to `on_error`. Returning `None` does not drop the value; it is recorded as the JSON string `null`.
 
-The byte and item limits also have hard ceilings of 64 KiB and 1,024 items. The active client supplies `max_attribute_length` to the budget.
+:::warning[What capture controls do not cover]
+
+`capture_input`, `capture_output`, and `mask` do not apply to span `metadata`, propagated metadata, raw `attributes`, log attributes, stop sequences, tool descriptions, or the message and stack trace of a recorded exception. The capture flags also do not apply to logs. Keep sensitive data out of those fields, or redact it before you pass it to the SDK.
+
+:::
+
+The TypeScript SDK also masks log attributes. The Python SDK does not.
+
+`max_attribute_length` also truncates string metadata and log attributes, with the same marker. Other string attributes are cut at the same length without a marker.
 
 See [Privacy](/platform/privacy) for server-side capture and redaction controls.
 
-## Global OpenTelemetry registration and filtering
+## Errors and fail-open behavior
 
-The SDK uses an isolated tracer provider by default. Set `register_global=True` when other instrumentation must use this provider.
+The SDK never raises its own errors into your code. Failures during initialization, export, masking, and filtering go to `on_error` and the `telemetry_dev` logger. If `on_error` itself raises, the SDK logs that error at debug level and continues. `flush()` and `shutdown()` never raise.
 
-With global registration, the default filter exports only spans from the `telemetry_dev` instrumentation scope. Use a filter that returns `True` to export all spans:
+Without an API key, or with `enabled=False`, every SDK function does nothing.
+
+If `span_filter` raises, the SDK exports the span anyway and reports the error to `on_error`.
+
+## Share the provider with other instrumentation
+
+By default the SDK's tracer provider is private to the SDK. Set `register_global=True` when other OpenTelemetry instrumentation in the same process should send its spans through the SDK.
+
+With global registration, the SDK exports only its own spans by default: those from the `telemetry_dev` instrumentation scope. Pass a `span_filter` to choose a different set. This one exports every span:
 
 ```python
 telemetry_dev.init(
@@ -350,45 +446,62 @@ telemetry_dev.init(
 )
 ```
 
-A `span_filter` error does not drop the span. The SDK sends the error to `on_error` and exports the span.
-
 :::warning[Global provider]
 
-OpenTelemetry Python cannot unregister a global `TracerProvider`. The SDK cannot remove this registration during `shutdown()`.
+OpenTelemetry Python cannot unregister a global `TracerProvider`, so `shutdown()` does not remove the registration. A later `init(register_global=True)` in the same process cannot take the global slot back. For processes that initialize more than once, keep the default isolated provider or attach the [span processor](/sdk/opentelemetry#add-the-span-processor-in-python) to your own provider.
 
 :::
 
+Calling `init()` again shuts down the current client first, then replaces it.
+
 ## Automatic metrics
 
-The SDK records `gen_ai.client.operation.duration` for generation, agent, embedding, and tool spans. It records `gen_ai.client.token.usage` for generation, agent, and embedding spans.
+The SDK turns ended spans into OpenTelemetry histograms and sends them to telemetry.dev every 60 seconds, with delta temporality:
 
-Tool spans do not add data to the token histogram. Plain `function` spans do not add data to either histogram.
+| Metric | Unit | Recorded for |
+| --- | --- | --- |
+| `gen_ai.client.operation.duration` | `s` | Generation, agent, embedding, and tool spans |
+| `gen_ai.client.token.usage` | `{token}` | Generation, agent, and embedding spans with input or output token counts |
+| `gen_ai.client.operation.time_to_first_chunk` | `s` | Generation spans with `time_to_first_chunk_ms` |
+| `gen_ai.client.operation.time_per_output_chunk` | `s` | Generation spans with two or more recorded output chunks |
 
-The metrics use DELTA temporality. Metrics record only for spans that pass `span_filter`.
+Plain `"span"` spans record no metrics. Spans that `span_filter` rejects record no metrics.
 
-## Flush and shutdown
+If you pass your own `metric_reader`, the SDK cannot produce `gen_ai.client.operation.time_per_output_chunk`, and it reports that once through `on_error`. The other metrics still work.
 
-`flush(timeout_s=10.0)` sends pending traces, logs, and metrics. `shutdown(timeout_s=10.0)` flushes, releases resources, and resets the active client.
+### Measure streaming latency
 
-The SDK registers an automatic `atexit` shutdown hook by default. Set `disable_atexit=True` to prevent this registration.
-
-For long-running servers, use the default batched mode. The default processor values are:
-
-| Batch value | Default |
-| --- | --- |
-| Queue size | `2048` |
-| Delay | `1000` milliseconds |
-| Export batch size | `64` |
-| Export timeout | `30000` milliseconds |
-
-For short scripts, flush and shut down before exit:
+For a streamed model response, record when output arrives. Set `time_to_first_chunk_ms` on the generation span, and call `record_output_chunk()` on its handle each time a non-empty chunk arrives:
 
 ```python
-telemetry_dev.flush()
-telemetry_dev.shutdown()
+import time
+
+from telemetry_dev import start_span
+
+with start_span("chat-stream", type="generation", model="gpt-4o") as span:
+    started = time.perf_counter()
+    first = True
+    for chunk in stream:
+        if first:
+            span.update(time_to_first_chunk_ms=(time.perf_counter() - started) * 1000)
+            first = False
+        span.record_output_chunk()
+    span.update(finish_reason="stop")
 ```
 
-For serverless functions, use immediate export and call `flush()` before the runtime freezes:
+After the first chunk, each interval between chunks feeds the `time_per_output_chunk` histogram. The SDK times chunks when your loop receives them, so time your code spends between reads counts toward the interval. `record_output_chunk()` uses `time.perf_counter()` by default. If you pass your own `timestamp_ms`, use the same monotonic millisecond clock for every chunk of the span.
+
+## Flush and shut down
+
+`flush(timeout_s=10.0)` sends pending traces, logs, and metrics. `shutdown(timeout_s=10.0)` sends pending data, releases resources, and clears the active client. Calling either one again is safe.
+
+The SDK registers an `atexit` hook that calls `shutdown()` when the interpreter exits normally. Set `disable_atexit=True` to skip it.
+
+Pick the pattern for your runtime:
+
+- **Long-running server.** Keep the default batched mode. The `atexit` hook shuts the SDK down on a normal exit.
+- **Short script or CLI.** The `atexit` hook sends the last batch. Call `telemetry_dev.shutdown()` yourself if the process might exit without running `atexit` hooks.
+- **Serverless function.** Use immediate export, and call `flush()` before the runtime freezes:
 
 ```python
 telemetry_dev.init(export_mode="immediate")
@@ -397,7 +510,7 @@ telemetry_dev.init(export_mode="immediate")
 telemetry_dev.flush()
 ```
 
-Immediate mode affects spans and logs. The metric reader keeps a 60-second interval, so serverless functions must call `flush()` to send metrics.
+Immediate mode applies to spans and logs. Metrics still export on a 60-second interval, so a serverless function must call `flush()` to send them.
 
 ## Provider integrations
 

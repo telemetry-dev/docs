@@ -1,25 +1,25 @@
 ---
 title: Eve
-description: Export Eve model spans, lifecycle logs, agent turns, token usage, TTFT, and errors.
-lastModified: 2026-08-03
+description: Export Eve agent turns, model spans, lifecycle logs, token usage, time to first token, and errors.
+lastModified: 2026-10-18
 seo:
   title: "Vercel Eve Agent Tracing and Telemetry"
   description: "Connect the Vercel Eve agent framework to telemetry.dev. Export model spans, agent turns, lifecycle logs, token usage, time to first token, and errors."
 ---
 
-`@telemetry-dev/eve` connects Vercel's Eve agent framework to telemetry.dev. It operates with Eve 0.19 through versions before 1.0.
+`@telemetry-dev/eve` connects Vercel's [Eve](https://eve.dev) agent framework to telemetry.dev. Add it to your Eve server to export each agent turn with its model calls, tool calls, token usage, and lifecycle logs. Add it to an Eve HTTP client to record each turn from the caller's side.
 
 ## Install
-
-Install the integration and Eve:
 
 ```package-install
 npm i @telemetry-dev/eve eve
 ```
 
-Make a project at [telemetry.dev](https://telemetry.dev). Then copy an API key from the project's setup page.
+The package supports `eve` 0.47.0 and later 0.x releases, and needs Node.js 24 or later.
 
-Set the API key in the Eve process:
+## Set the API key
+
+Create a project at [telemetry.dev](https://telemetry.dev) and copy an API key from the project setup page. Set it in the Eve server process:
 
 ```sh
 export TELEMETRY_DEV_API_KEY=td_live_...
@@ -27,15 +27,23 @@ export TELEMETRY_DEV_ENVIRONMENT=development
 export OTEL_SERVICE_NAME=eve-agent
 ```
 
-## Select a surface
+Without an API key, the integration does nothing.
 
-The package has three setup surfaces. Use one or combine them for different telemetry records.
+## Choose what to add
 
-The first surface that initializes in a process supplies the shared SDK options. Later initialization calls ignore new SDK options.
+The package has three entry points. Use any combination:
 
-### Eve instrumentation
+| Entry point | Where it runs | What it records |
+| --- | --- | --- |
+| `telemetryDevInstrumentation()` | Eve server, `agent/instrumentation.ts` | Agent turn spans and model and tool spans from Eve's OpenTelemetry |
+| `telemetryDevHook()` | Eve server, `agent/hooks/` | Lifecycle logs for sessions, turns, steps, tools, approvals, and subagents |
+| `wrapEveClient()` | Your app that calls Eve over HTTP | One `invoke_agent` span per turn, from the caller's side |
 
-Use `telemetryDevInstrumentation()` for Eve model-call spans:
+Pass SDK options to one entry point per process. The first entry point that starts sets the options for the process, and later calls ignore new options.
+
+## Add server instrumentation
+
+Create `agent/instrumentation.ts`:
 
 ```ts agent/instrumentation.ts
 import "dotenv/config";
@@ -44,19 +52,31 @@ import { telemetryDevInstrumentation } from "@telemetry-dev/eve";
 export default telemetryDevInstrumentation();
 ```
 
-The example imports `dotenv/config` because the Eve development server does not load the app `.env` file.
+The `eve dev` server does not load your app's `.env` file, so the example imports `dotenv/config` to load it. Leave that line out if you set the variables another way.
 
-The instrumentation records model input, output, runtime context, and `user.id` from Eve session authentication. It can also compose a custom `step.started` callback.
+This registers telemetry.dev as the global OpenTelemetry tracer provider when Eve starts, so spans from Eve and from the AI SDK inside it export to telemetry.dev. The integration also adds `user.id` when Eve session authentication has a principal.
 
-For this surface, the service name has this precedence:
+The service name comes from the `serviceName` option, then `OTEL_SERVICE_NAME`, then the Eve agent name.
 
-1. The `serviceName` option
-2. `OTEL_SERVICE_NAME`
-3. The Eve agent name
+To add your own context to model-call spans, pass `runtimeContext` or a `stepStarted` callback:
 
-### Eve hook
+```ts agent/instrumentation.ts
+import { telemetryDevInstrumentation } from "@telemetry-dev/eve";
 
-Use `telemetryDevHook()` for Eve lifecycle logs:
+export default telemetryDevInstrumentation({
+  functionId: "support-agent",
+  runtimeContext: { "team.id": "support" },
+  stepStarted(input) {
+    return { runtimeContext: { "channel.kind": input.channel.kind } };
+  },
+});
+```
+
+Eve records runtime context on model-call spans under the `ai.settings.context.` prefix.
+
+## Add lifecycle logs
+
+Create `agent/hooks/telemetry-dev.ts`:
 
 ```ts agent/hooks/telemetry-dev.ts
 import { telemetryDevHook } from "@telemetry-dev/eve";
@@ -64,112 +84,177 @@ import { telemetryDevHook } from "@telemetry-dev/eve";
 export default telemetryDevHook();
 ```
 
-The wildcard hook records selected session, turn, step, action, authorization, subagent, compaction, and failure events. Each log includes Eve conversation, agent, channel, turn, and step attributes.
+The hook writes a log for each of these Eve events:
 
-### Eve client wrapper
+- Session started, waiting, completed, and failed
+- Turn started, completed, cancelled, and failed
+- User message received (without the message content)
+- Step started, completed (with usage when available), and failed
+- Tool results that did not complete
+- Input requests and authorization outcomes
+- Subagent calls and completions
+- Compaction requests and completions
 
-Use `wrapEveClient()` for one `invoke_agent` span per `session.send()` turn:
+Each log carries `gen_ai.conversation.id`, `gen_ai.agent.name`, the Eve turn and step IDs when present, and an `eventName` equal to the Eve event type. Logs from one session share its conversation ID, so they line up with the session's spans.
+
+## Wrap an Eve client
+
+Use `wrapEveClient()` in an app or script that calls an Eve agent over HTTP:
 
 ```ts scripts/run.ts
 import { flush } from "@telemetry-dev/sdk";
 import { wrapEveClient } from "@telemetry-dev/eve";
 import { Client } from "eve/client";
 
-const client = wrapEveClient(
-  new Client({ host: "http://127.0.0.1:2000" }),
-  {
-    agentName: "eve-agent-example",
-    serviceName: process.env.OTEL_SERVICE_NAME ?? "eve-agent-example",
-    onError: (error) => console.error("[telemetry.dev]", error),
-  },
-);
+const client = wrapEveClient(new Client({ host: "http://127.0.0.1:2000" }), {
+  agentName: "support-agent",
+  serviceName: "support-agent-client",
+  onError: (error) => console.error("[telemetry.dev]", error),
+});
 
-const session = client.session();
-const response = await session.send("Summarize this incident.");
+const { response, session } = await client.sessions.create({
+  message: "Summarize this incident.",
+});
 console.log(await response.result());
+
+const followUp = await session.send("What do we do next?");
+console.log(await followUp.result());
+
 await flush();
 ```
 
-The wrapper captures these values from the response stream:
+The example imports `flush` from `@telemetry-dev/sdk`. Install it next to the integration so your code can import it:
 
-- TTFT from the first message or reasoning append event
-- Input, output, cache-read, and cache-write token usage
-- Output from the final message or result event
-- Cancellation, incomplete streams, and Eve failure events
-- Subagent, input-request, and authorization span events
+```package-install
+npm i @telemetry-dev/sdk
+```
 
-Consume the response to close the span. An unconsumed response does not export because the stream generator closes the span.
+Call `flush()` before a script exits; the SDK does not flush on exit by itself. In serverless code, pass `waitUntil` or set `exportMode: "immediate"` instead.
 
-The wrapper instruments only `Client.session()` and `ClientSession.send()`. It does not instrument `ClientSession.stream()`, `Client.info()`, or `Client.health()`.
+The wrapper makes one caller-side `invoke_agent` span for each turn started by `sessions.create()`, `ClientSession.send()`, or `ClientSession.respond()`. Sessions returned by `sessions.attach()` are wrapped too, so their `send()` and `respond()` turns are traced. Each span records:
 
-Call `flush()` before a script exits. For serverless work, pass `waitUntil` or use `exportMode: "immediate"`.
+- The outgoing message, or the input responses for `respond()`
+- Time to first token, from the first message or reasoning delta
+- Input, output, cache-read, and cache-write token usage, summed from `step.completed` events
+- The output from the final message or result event
+- Cancellations, incomplete streams, and Eve failures, as errors
+- Subagent calls, input requests, and authorization requests, as span events
 
-## Global OpenTelemetry behavior
+`gen_ai.conversation.id` comes from the Eve session, so all turns of one session share one trace.
 
-All three surfaces force `registerGlobal` to `true`. Eve tracers can then use the telemetry.dev provider.
+Read the response to the end, or abort it, to close the span. A response you never read keeps its span open, and it is never exported.
 
-By default, the span filter exports every global span whose instrumentation scope is not `workflow`. This filter is not limited to Eve scopes.
+## Check the trace
 
-:::warning[Global span filter]
-A different library can use the global provider and export spans through this integration. Set `spanFilter` when you must limit the exported scopes.
-:::
+Start the Eve server, run one turn, and open [Traces](/platform/traces) in your project. A turn traced by the server instrumentation contains:
 
-Pass `spanFilter: () => true` if you also want Eve's internal `workflow` spans.
+- An Eve root span named `ai.eve.turn`, which telemetry.dev shows as `invoke_agent`
+- AI SDK spans under it: `chat {modelId}`, `step N`, provider `chat {modelId}` spans, and `execute_tool {toolName}` spans
+- Token usage, finish reasons, response IDs, and time to first token when Eve's AI SDK integration reports them
 
-## Environment variables
+All turns of one Eve session land in one trace.
 
-| Variable | Required | Default | Description |
-|---|---:|---|---|
-| `TELEMETRY_DEV_API_KEY` | Yes | None | Ingest API key. Without a key, the integration is a no-op. |
-| `TELEMETRY_DEV_BASE_URL` | No | `https://ingest.telemetry.dev` | OTLP ingest base URL. |
-| `TELEMETRY_DEV_ENVIRONMENT` | No | `production` | Environment on exported telemetry. |
-| `OTEL_SERVICE_NAME` | No | Surface-dependent | Service name. Instrumentation falls back to the Eve agent name. |
+## Control captured content
 
-## Common options
+Whether model content reaches telemetry.dev depends on Eve's trace policy as well as on this integration.
 
-Every surface accepts `TelemetryDevEveOptions`, which is `Omit<TelemetryOptions, "registerGlobal">`. The integration forces global registration.
+`telemetryDevInstrumentation()` maps `captureInput` and `captureOutput` to Eve's `recordInputs` and `recordOutputs`. Both default to `true`, but they cannot override Eve's trace policy. In Eve 0.47.0 and 0.50.0, the default policy records content only for a `public` audience, even with `EVE_DEV=1`. HTTP clients, web chat, and schedules have an `unknown` audience, so their content is not recorded.
+
+To record content for these channels during local development, switch to Eve's provider layout:
+
+<Steps>
+  <Step title="Remove the single-file instrumentation">
+
+Delete `agent/instrumentation.ts`. The two layouts cannot be combined: with providers turned on, Eve treats an `agent/instrumentation.ts` file as a build error.
+
+  </Step>
+
+  <Step title="Turn on instrumentation providers">
+
+In `agent.ts`, set `experimental.instrumentationProviders` to `true`.
+
+  </Step>
+
+  <Step title="Add the OpenTelemetry provider">
+
+```ts agent/instrumentation/otel.ts
+import { otel } from "eve/instrumentation/otel";
+
+export default otel({ tracePolicy: () => true });
+```
+
+  </Step>
+
+  <Step title="Add telemetry.dev as a destination">
+
+```ts agent/instrumentation/telemetry-dev.ts
+import { telemetryDevOtelIntegration } from "@telemetry-dev/eve";
+
+export default telemetryDevOtelIntegration();
+```
+
+  </Step>
+</Steps>
+
+With this policy, Eve applies its own audience rules. For local `unknown`-audience channels, run `eve dev` or set `EVE_DEV=1` in the Eve server process; without it, those channels export metadata only. Local private channels always export metadata only. Destination settings and forwarded parent policies can reduce capture further. This package cannot restore content that Eve removed.
+
+In the provider layout, Eve owns the tracer provider, so `telemetryDevOtelIntegration()` adds a span processor instead of registering a provider. It accepts the [span processor options](/sdk/opentelemetry#processor-options) plus `recordInputs` and `recordOutputs`. Eve 0.50 gives it no way to set the parent context, so provider-layout spans do not join the per-session trace.
+
+For the client wrapper, content follows the SDK `captureInput` and `captureOutput` options. The SDK `mask` and `maxAttributeLength` options apply to its captured inputs, outputs, and logs.
+
+## Which spans are exported
+
+By default, the integration exports only AI spans: the tracer scopes `eve`, `eve.agent`, and `gen_ai`, and the client wrapper's own spans. Spans from other libraries that use the same global tracer provider, such as better-auth, Nitro, or Eve's `workflow` engine, are dropped.
+
+To export every span, pass `spanFilter: () => true`. To export a different set, pass your own `spanFilter`.
+
+## Options
+
+Every entry point accepts the [`init()` options](/sdk/typescript#configure-init) of `@telemetry-dev/sdk`, except `registerGlobal`, which the integration always sets to `true`. The variables you are most likely to set:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `TELEMETRY_DEV_API_KEY` | None | Ingest API key. Without a key, the integration does nothing. |
+| `TELEMETRY_DEV_BASE_URL` | `https://ingest.telemetry.dev` | Ingest base URL |
+| `TELEMETRY_DEV_ENVIRONMENT` | `production` | Environment on exported telemetry |
+| `OTEL_SERVICE_NAME` | See below | Service name |
+
+The server instrumentation falls back to the Eve agent name for the service name. The hook and client wrapper do not, so set `serviceName` or `OTEL_SERVICE_NAME` when you use them alone.
+
+`telemetryDevInstrumentation()` also accepts:
 
 | Option | Type | Default | Description |
-|---|---|---|---|
-| `apiKey` | `string` | `TELEMETRY_DEV_API_KEY` | Ingest API key. |
-| `baseUrl` | `string` | `TELEMETRY_DEV_BASE_URL` or production ingest | Ingest base URL. |
-| `environment` | `string` | `TELEMETRY_DEV_ENVIRONMENT` or `production` | Deployment environment. |
-| `serviceName` | `string` | `OTEL_SERVICE_NAME` or surface fallback | Service name on each trace. |
-| `enabled` | `boolean` | `true` | Set to `false` for a complete no-op. |
-| `exportMode` | `"batched" \| "immediate"` | `batched` | Span export mode. |
-| `captureInput` | `boolean` | `true` | Capture inputs. |
-| `captureOutput` | `boolean` | `true` | Capture outputs. |
-| `mask` | `(value, context) => unknown` | None | Change captured values before serialization. |
-| `maxAttributeLength` | `number` | `65536` | Maximum content attribute length. |
-| `batch` | `BatchOptions` | SDK defaults | Batch size, delay, queue, and timeout settings. |
-| `spanFilter` | `(span) => boolean` | Every scope except `workflow` | Select global spans for export. |
-| `resourceAttributes` | `Record<string, AttributeValue>` | None | Add OpenTelemetry resource attributes. |
-| `logLevel` | `"debug" \| "info" \| "warn" \| "error" \| "silent"` | `warn` | SDK diagnostic level. |
-| `fetch` | `typeof fetch` | `globalThis.fetch` | Custom fetch implementation. |
-| `waitUntil` | `(promise) => void` | None | Extend serverless work for export. |
-| `onError` | `(error) => void` | None | Receive integration errors. The integration does not throw them into Eve. |
+| --- | --- | --- | --- |
+| `functionId` | `string` | Eve agent name | Eve's telemetry function ID |
+| `recordInputs` | `boolean` | `captureInput`, then `true` | Record model inputs, subject to Eve's trace policy |
+| `recordOutputs` | `boolean` | `captureOutput`, then `true` | Record model outputs, subject to Eve's trace policy |
+| `runtimeContext` | Eve `InstrumentationRuntimeContext` | None | Static context added to each model-call span |
+| `stepStarted` | Eve `step.started` callback | None | Adds context when a step starts. Its values win on key conflicts. |
 
-## Instrumentation options
-
-`telemetryDevInstrumentation()` also accepts these options:
+`wrapEveClient()` also accepts:
 
 | Option | Type | Default | Description |
-|---|---|---|---|
-| `functionId` | `string` | Eve agent name | Set Eve's telemetry function ID. |
-| `recordInputs` | `boolean` | `captureInput`, then `true` | Control Eve model input records. |
-| `recordOutputs` | `boolean` | `captureOutput`, then `true` | Control Eve model output records. |
-| `runtimeContext` | `InstrumentationRuntimeContext` | None | Add static context to each model-call span. |
-| `stepStarted` | Eve callback | None | Add runtime context at step start. Callback values take precedence on key conflicts. |
+| --- | --- | --- | --- |
+| `agentName` | `string` | None | Value for `gen_ai.agent.name` |
+| `spanName` | `string` | `invoke_agent` | Name of each turn span |
 
-## Client wrapper options
+Errors inside the integration go to `onError` and are never thrown into Eve.
 
-`wrapEveClient()` also accepts these options:
+## Limitations
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `agentName` | `string` | None | Value for `gen_ai.agent.name`. |
-| `spanName` | `string` | `invoke_agent` | Name for each `session.send()` span. |
+- The client wrapper does not trace `ClientSession.stream()`, `Client.info()`, or `Client.health()`. Attached streams have no end, and the probe routes are not agent turns.
+- The client wrapper reports a total cost only after a turn ends without error and every step reports a finite, non-negative `usage.costUsd`, including zero. Otherwise it records token usage without a total cost. Server-side pricing also needs the model name.
+- When caller and server spans share a trace and match on Eve turn metadata, the caller's cost replaces the cost of the server's main model calls. Tool and subagent costs stay separate. Without a match, both totals stay as reported.
+- The hook does not forward every event of an inline subagent's stream. It logs subagent started, called, and completed events, and child failures.
+- Eve workflow `$eve.*` run tags appear only in the Vercel dashboard. They are not visible to OpenTelemetry, so this package cannot capture them.
 
-For a complete app with instrumentation, a hook, tools, a subagent, and eight scenarios, use the [Eve agent example](https://github.com/telemetry-dev/telemetry.dev/tree/main/examples/eve-agent).
+For the package source and changelog, see [`@telemetry-dev/eve` on GitHub](https://github.com/telemetry-dev/telemetry/tree/main/packages/eve).
 
-Open the [trace explorer](/platform/traces) after a turn completes. For API key setup, refer to the [quickstart](/quickstart).
+<CardGroup cols={2}>
+  <Card title="View traces" href="/platform/traces" icon="activity">
+    Open the trace explorer and examine the span waterfall.
+  </Card>
+  <Card title="API key setup" href="/quickstart" icon="key">
+    Set the telemetry.dev API key and service name.
+  </Card>
+</CardGroup>

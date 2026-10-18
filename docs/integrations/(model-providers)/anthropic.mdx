@@ -1,27 +1,25 @@
 ---
 title: Anthropic
 description: Trace Anthropic Messages API calls, token usage, tools, thinking, and streams from TypeScript or Python.
-lastModified: 2026-10-14
+lastModified: 2026-10-18
 seo:
   title: "Anthropic Messages API Tracing"
   description: "Trace Anthropic Messages API calls from TypeScript or Python. Record messages, tool use, thinking, streams, and input, output, cache, and thinking token usage."
 ---
 
-The integration records Anthropic Messages API calls. Make a project at telemetry.dev. Copy an API key from the project setup page. Keys use the `td_live_...` format.
+Wrap your Anthropic client, and each Messages API call you make with it becomes a span in telemetry.dev. Your calls and their return values don't change.
 
-To use the native OpenTelemetry spans of the Claude SDK instead of this wrapper, read [Claude SDK](/integrations/claude-sdk). Do not use the wrapper and the native spans together.
+To trace requests on Anthropic's side instead, with no code changes, see [Claude Platform](/integrations/claude-platform). To use the Claude SDK's own OpenTelemetry spans instead of this wrapper, see [Claude SDK](/integrations/claude-sdk); don't use the wrapper and those spans together.
 
-## What it captures
-
-The integration records:
+## What you get
 
 - Messages, system instructions, tool definitions, tool choice, model, and sampling parameters
 - Response IDs, response models, stop reasons, content blocks, errors, and time to first chunk
-- Input, output, cache-read, cache-creation, and thinking token usage
-- Text, `tool_use`, `server_tool_use`, citations, thinking, and signature deltas from streams
-- Anthropic, Amazon Bedrock, or Google Vertex AI as the provider from the client class.
+- Input, output, cache-read, cache-write, and thinking token counts
+- Text, tool input, citations, thinking, and signatures rebuilt from stream deltas
+- Calls made through `beta.messages`, `messages.parse()`, and the SDK tool runner
 
-The Anthropic API does not supply a total-token field, and the integration does not calculate one.
+Span input tokens include cache reads and cache writes, following the OpenTelemetry convention. Anthropic's own `input_tokens` leaves them out. Anthropic reports no total token count, and the integration doesn't calculate one.
 
 ## Install
 
@@ -37,39 +35,38 @@ pip install telemetry-dev-anthropic
 
 </CodeGroup>
 
-**TypeScript**
+The Python package also installs `telemetry-dev` and `anthropic`.
 
-| Requirement | Version |
+| Language | Requirements |
 | --- | --- |
-| `@telemetry-dev/sdk` peer | `^0.1.0` |
-| `@anthropic-ai/sdk` peer | `>=0.110.0 <1` |
-| Node.js from `@telemetry-dev/sdk` | `>=20.19.0` |
+| TypeScript | Node.js `>=20.19.0`, `@telemetry-dev/sdk` `^0.1.8`, `@anthropic-ai/sdk` `>=0.110.0 <1` |
+| Python | Python `>=3.10`, `telemetry-dev` `>=0.2.9`, `anthropic` `>=0.116,<2` |
 
-**Python**
+## Trace a call
 
-| Requirement | Version |
-| --- | --- |
-| Python | `>=3.10` |
-| `telemetry-dev` | `>=0.2.0` |
-| `anthropic` | `>=0.116,<1` |
+Set your telemetry.dev project API key and your Anthropic key. Copy the telemetry.dev key from the project setup page; it starts with `td_live_`.
 
-## Quickstart
+```sh
+export TELEMETRY_DEV_API_KEY=td_live_...
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Call `init()`, wrap the client, and use it as usual:
 
 <CodeGroup>
 
 ```ts TypeScript
 import Anthropic from "@anthropic-ai/sdk";
-import { init, shutdown } from "@telemetry-dev/sdk";
+import { flush, init, shutdown } from "@telemetry-dev/sdk";
 import { wrapAnthropic } from "@telemetry-dev/anthropic";
 
 init({ serviceName: "anthropic-app" });
 const anthropic = wrapAnthropic(new Anthropic());
 
 try {
-  const response = await anthropic.messages.create({
+  const message = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 200,
-    top_p: 1,
     system: "You are a helpful bot",
     messages: [
       { role: "user", content: "Tell me a joke about OpenTelemetry" },
@@ -77,12 +74,13 @@ try {
   });
 
   console.log(
-    response.content
+    message.content
       .filter((block) => block.type === "text")
       .map((block) => block.text)
       .join("\n"),
   );
 } finally {
+  await flush();
   await shutdown();
 }
 ```
@@ -98,12 +96,13 @@ client = wrap_anthropic(Anthropic())
 try:
     message = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=1024,
+        max_tokens=200,
+        system="You are a helpful bot",
         messages=[
             {"role": "user", "content": "Tell me a joke about OpenTelemetry"},
         ],
     )
-    print(message.content)
+    print("\n".join(block.text for block in message.content if block.type == "text"))
 finally:
     telemetry_dev.flush()
     telemetry_dev.shutdown()
@@ -111,70 +110,84 @@ finally:
 
 </CodeGroup>
 
+Run the script, then open the [trace explorer](/platform/traces). The trace has one `chat claude-sonnet-4-6` generation span with the messages, the reply, and token usage.
+
+Without an API key, `init()` turns telemetry off and the wrapped client works as before.
+
+## Instrument all clients
+
+To trace every client without wrapping each one, call the global function once at startup:
+
+<CodeGroup>
+
+```ts TypeScript
+import { instrumentAnthropic } from "@telemetry-dev/anthropic";
+
+instrumentAnthropic();
+```
+
+```python Python
+from telemetry_dev_anthropic import instrument_anthropic
+
+instrument_anthropic()
+```
+
+</CodeGroup>
+
+In TypeScript, global instrumentation patches the ES module build of the `@anthropic-ai/sdk` copy that this package resolves. It misses clients created with `require()`, which use the CommonJS build. It can also miss the Bedrock, Vertex, AWS, and Foundry clients, because their packages can install a separate copy of `@anthropic-ai/sdk`. Wrap those clients with `wrapAnthropic()`.
+
 ## API
 
-### TypeScript
+| TypeScript | Python | What it does |
+| --- | --- | --- |
+| `wrapAnthropic(client)` | `wrap_anthropic(client)` | Instruments `messages` and `beta.messages` on one client and returns it. Wrapping the same client again has no effect. Python accepts synchronous and asynchronous clients. |
+| `instrumentAnthropic()` | `instrument_anthropic()` | Instruments every client through the stable and beta Messages classes. |
+| `uninstrumentAnthropic()` | `uninstrument_anthropic()` | Removes global instrumentation. |
 
-| Function | Purpose |
+These functions take no options.
+
+## Traced calls
+
+Each call produces one `chat {model}` generation span.
+
+| Anthropic call | Notes |
 | --- | --- |
-| `wrapAnthropic(client)` | Instruments `messages.create()` and `beta.messages.create()` for one client. |
-| `instrumentAnthropic()` | Instruments the stable and beta `Messages.prototype.create` for all clients. |
-| `uninstrumentAnthropic()` | Restores the original prototype methods. |
+| `messages.create()` | Includes `stream: true` (`stream=True` in Python). |
+| `messages.stream()` | In TypeScript, the helper goes through `create()`. In Python, the span starts when you enter the context manager, because that is when the SDK opens the HTTP stream. |
+| `messages.parse()` | One span for each request. |
+| `beta.messages.create()`, `stream()`, and `parse()` | Beta features such as context management and fast mode produce the same spans as `messages`. |
+| Tool runner: `beta.messages.toolRunner()` in TypeScript, `beta.messages.tool_runner()` in Python | The runner sends one request for each model turn, and each turn gets its own span. To group the turns, run the tool runner inside an `agent` span. |
 
-These functions have no options object. Call `instrumentAnthropic()` after `init()` and before you make an Anthropic client.
+The integration doesn't trace `messages.countTokens()` (`count_tokens()` in Python), `beta.messages.countTokens()`, Message Batches, or other non-Messages endpoints.
 
-### Python
+In TypeScript, traced calls keep `asResponse()` and `withResponse()`. Calling either one also records the HTTP status code and the `request-id` header on the span. The `withRawResponse` namespace isn't instrumented separately.
 
-| Function | Purpose |
-| --- | --- |
-| `wrap_anthropic(client)` | Instruments `create()`, `stream()`, and `parse()` on `messages` and `beta.messages` for one client. |
-| `instrument_anthropic()` | Instruments the synchronous and asynchronous stable and beta Messages classes. |
-| `uninstrument_anthropic()` | Restores the original class methods. |
-
-These functions have no options object.
-
-## Beta Messages and the tool runner (unreleased)
-
-The integration also records `beta.messages` calls, so beta features such as context management and fast mode produce the same generation spans as `messages`. `messages.parse()` and `beta.messages.parse()` record one span for each request.
-
-The SDK tool runner (`beta.messages.toolRunner()` in TypeScript, `beta.messages.tool_runner()` in Python) sends one request for each model turn. Each turn records its own generation span. To group the turns, run the tool runner inside an `agent` span.
+In Python, requests sent through `with_raw_response` or `with_streaming_response` aren't traced. The integration skips any request whose `X-Stainless-Raw-Response` header asks for a raw response.
 
 ## Streaming
 
-### TypeScript
+A stream span stays open until your code reads the stream to the end, closes it, or the stream fails. In Python, leaving the `messages.stream()` context manager also ends it. A stream you never read never finishes its span. Stream events reach your code unchanged.
 
-`messages.create({ stream: true })` and `messages.stream()` have instrumentation. The `messages.stream()` helper uses the instrumented `create()` method.
+The span combines usage from `message_start` and `message_delta`, plus text, citations, tool-input JSON, thinking, and signature deltas. If the final tool input isn't valid JSON, it stays as the raw string. The span records the time to the first event.
 
-The stream state combines text, citations, tool-input JSON, thinking text, and signature deltas. Invalid final tool JSON stays as a raw string.
+In TypeScript, aborting a request before you read its stream ends the span with an error.
 
-The integration records `timeToFirstChunkMs`. It also records an abort before stream consumption as an error.
+## Provider names
 
-### Python
+The span's `gen_ai.provider.name` comes from the client class, including subclasses:
 
-The span starts when the `messages.stream()` context manager starts. Stream events pass to the caller without changes.
-
-The stream state combines usage from `message_start` and `message_delta`. It also combines text, tool-input JSON, and thinking blocks.
-
-Requests with an `X-Stainless-Raw-Response` header do not get instrumentation. The integration does not instrument `count_tokens()`.
-
-## Response helpers
-
-Traced promises keep `asResponse()` and `withResponse()`. These methods record the `request-id` header and the HTTP status.
-
-The integration does not separately instrument the `withRawResponse` resource namespace. It also does not instrument `messages.countTokens()` or `beta.messages.countTokens()`.
-
-## Provider detection
-
-| Client class | Provider |
+| Client | Provider |
 | --- | --- |
-| `AnthropicBedrock` or `AsyncAnthropicBedrock` | `aws.bedrock` |
-| `AnthropicVertex` or `AsyncAnthropicVertex` | `gcp.vertex_ai` |
-| Other Anthropic clients | `anthropic` |
+| `AnthropicBedrock`, `AnthropicBedrockMantle` (and their `Async` variants in Python) | `aws.bedrock` |
+| `AnthropicVertex` (and `AsyncAnthropicVertex`) | `gcp.vertex_ai` |
+| Any other client, including Claude Platform on AWS and Microsoft Foundry clients | `anthropic` |
 
-## Flush
+## Captured content
 
-**TypeScript:** For a short script, call `await shutdown()` before exit. `shutdown()` flushes pending telemetry. In serverless code, call `await flush()` before return or pass the work to `waitUntil`.
+Prompts and responses follow the core SDK's `captureInput`, `captureOutput`, and `mask` settings (`capture_input`, `capture_output`, and `mask` in Python). Tools and `tool_choice` are part of the input, so turning input capture off removes them too. With output capture off, response IDs, models, stop reasons, usage, timing, and errors are still recorded.
 
-**Python:** For a short script, call `telemetry_dev.flush()` and `telemetry_dev.shutdown()` before exit. In serverless code, call `flush()` before the runtime freezes.
+The capture settings don't cover stop sequences, metadata and attributes you pass yourself, or exception messages and stack traces. Redact those separately if they can hold sensitive data. See [privacy](/platform/privacy) for server-side redaction.
 
-Open the [trace explorer](/platform/traces) to examine the spans. Refer to the [quickstart](/quickstart) for API-key setup.
+## Send telemetry before exit
+
+In a short script, call `flush()` and then `shutdown()` before the process exits, as in the example above. In serverless code, call `flush()` before the handler returns. In TypeScript you can pass a `waitUntil` function to `init()` instead. See the [TypeScript SDK](/sdk/typescript) and [Python SDK](/sdk/python) guides for details.

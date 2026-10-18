@@ -1,69 +1,72 @@
 ---
 title: Analytics
-description: Compare request volume, latency, errors, tokens, and cost across a project.
-lastModified: 2026-08-03
+description: Track a project's request volume, latency, errors, tokens, and cost over time.
+lastModified: 2026-10-18
 ---
 
-Open a project to see **Overview**. The page combines trace summaries with OTLP metric series for the selected period.
+The **Overview** page shows how a project is doing over a period: how many requests it served, how fast, how many failed, and what the model calls cost. It combines trace data with the OTLP metrics that your SDKs report.
 
-## Select a period
+Select **Overview** in the project sidebar. In telemetry.dev, a request is one trace.
 
-Select **Last 7 days**, **Last 30 days**, or **Last 90 days**. The default period is 30 days. The project retention setting limits the available data.
+## Choose a period
 
-## Read the summary
+Select **7d**, **30d**, or **90d**. The default is 30 days. Select the refresh button to load new data.
 
-The overview summarizes these values:
+The period cannot be longer than the project's retention. For example, a project with 14-day retention shows 14 days when you select **30d**, and the page says "Retention limits this view to 14 days."
 
-| Value | Definition |
+## Read the summary cards
+
+| Card | Value |
 | --- | --- |
-| Requests | Trace count |
-| Duration | Average duration and p95 latency |
-| Error rate | Error count divided by request count |
-| Tokens | Input tokens plus output tokens, with separate totals |
-| Total cost | Sum of calculated model cost in USD |
+| **Requests** | Number of traces |
+| **LLM cost** | Total calculated model cost in USD |
+| **p95 latency** | 95th percentile of trace duration |
+| **LLM tokens** | Input tokens plus output tokens |
+| **Error rate** | Traces with an error status, as a percentage of all traces |
 
-The KPI cards compare the selected period with the immediately prior period of the same length. A lower p95 latency or error rate is a positive change.
+Each card compares the period with the period of the same length just before it. For **p95 latency** and **Error rate**, a decrease counts as an improvement.
 
-A comparison appears only if the project retention contains two full periods. For example, a 30-day view needs at least 60 days of retention.
+A comparison appears only if the project's retention covers both periods. For example, the 30-day view needs at least 60 days of retention. With 14-day retention, the 7-day view has a comparison and the 30-day view does not.
 
-telemetry.dev calculates average and p95 duration. It does not calculate p50 duration.
+## Read the charts
 
-## Read time-series charts
+The page has these charts:
 
-The overview has three daily charts:
+- **Requests over time**: traces per day.
+- **LLM cost over time**: model cost per day, in USD.
+- **LLM tokens over time**: input and output tokens per day, with cache-read, reasoning, and text, image, or audio totals when your telemetry reports them.
+- **p95 latency** and **Error rate**: daily values for the period.
+- **Latency distribution**: how many traces fall into each duration range, with the p50, p95, and p99 durations marked.
+- **LLM cost by provider**: each provider's share of model cost.
+- **Slowest operations**: the 5 operations with the highest p95 span duration. Select one to list its spans.
+- **Top users**: the 5 users with the most traces. Select one to list their traces.
 
-- Requests over time
-- Cost over time
-- Input and output tokens over time
+Days with no data show as zero, so each chart covers the full period.
 
-telemetry.dev fills dates without data with zero values. This keeps each time axis continuous.
+## Break traces down by a dimension
 
-## Compare groups
+The breakdown chart shows traces by model at first. Select **By Model**, **By Provider**, **By Environment**, **By User**, or **By Framework** to change the grouping.
 
-Use **Group by** on the request breakdown. You can select these dimensions:
+The chart shows up to 8 groups, ordered by cost and then by number of traces.
 
-- Model
-- Provider
-- Environment
-- User
-- Framework
+## Read metric series
 
-The chart shows at most eight groups. It orders groups by total cost, then by request count.
+**Metric series** shows a small chart for each OTLP metric series that the project received in the period. The page shows the first three. Select **View all metrics** to see the rest; if the list was cut short, the button reads **View top 100 metrics**.
 
-## Read OTLP metric series
+telemetry.dev picks how to combine values from the metric type:
 
-The metric section shows one small chart for each ingested OTLP metric series. telemetry.dev selects the aggregation from the metric type:
-
-| Metric type | Aggregation |
+| Metric type | Value shown |
 | --- | --- |
-| Duration histogram with unit `s` or `ms` | p95 |
+| Histogram with unit `s` or `ms` | p95 |
 | Gauge | Average |
-| Other metric type | Total |
+| Other types | Sum |
 
-For duration histograms, telemetry.dev rebuilds p95 from the explicit bounds and bucket counts. It uses linear interpolation inside the selected bucket.
+For a duration histogram, telemetry.dev estimates the p95 from the histogram's bucket bounds and counts.
 
-The page uses hourly points for a period of 7 days or less. Longer periods use daily points.
+The charts use hourly points for the 7-day period and daily points for longer periods.
 
-The page can show 100 metric series. If a project has more series, it shows the most frequent series and a truncation notice.
+The page shows at most 100 series. If the project has more, it shows the series with the most data points and says that some series were omitted.
 
-If the period has no traces or metric series, select **Go to Setup** to connect an application.
+## When the page is empty
+
+If the period has no traces and no metrics, the page shows **Go to Setup**. Select it to connect an application. Read [Connect an application](/platform/projects#connect-an-application).

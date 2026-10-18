@@ -1,25 +1,38 @@
 ---
 title: OpenClaw
-description: Export OpenClaw agent runs, model calls, tools, token usage, cost, metrics, and logs over OTLP.
-lastModified: 2026-09-05
+description: Export OpenClaw agent runs, model calls, tools, token usage, cost, metrics, and logs to telemetry.dev over OTLP.
+lastModified: 2026-10-18
 seo:
   title: "OpenClaw Telemetry with OpenTelemetry"
   description: "Send OpenClaw telemetry to telemetry.dev with the official diagnostics-otel plugin. Export agent runs, model calls, tools, token usage, cost, metrics, and logs."
 ---
 
-OpenClaw's official `diagnostics-otel` plugin exports OTLP/HTTP protobuf directly to telemetry.dev. Setup requires configuration rather than an application SDK or collector.
+OpenClaw exports traces, metrics, and logs through its official `diagnostics-otel` plugin. Install the plugin, point it at telemetry.dev in your OpenClaw config, and each agent run appears as a trace with its model calls, tool calls, token usage, and cost.
 
-## Set up the exporter
+By default OpenClaw sends no prompt, response, or tool content: spans carry sizes, names, and IDs only. Content is a single opt-in setting; see [What leaves your machine](#what-leaves-your-machine).
 
-Create a telemetry.dev project and copy its API key. Install the plugin:
+## Set up
+
+<Steps>
+  <Step title="Create an API key">
+
+Create a project at [telemetry.dev](https://telemetry.dev) and copy its API key. Keys start with `td_live_`.
+
+  </Step>
+
+  <Step title="Install the plugin">
 
 ```sh
-openclaw plugins install clawhub:@openclaw/diagnostics-otel
+openclaw plugins install @openclaw/diagnostics-otel
 ```
 
-Add the exporter to your OpenClaw configuration:
+  </Step>
 
-```json5
+  <Step title="Configure the exporter">
+
+Add the plugin and exporter settings to `~/.openclaw/openclaw.json`:
+
+```json5 ~/.openclaw/openclaw.json
 {
   plugins: {
     allow: ["diagnostics-otel"],
@@ -32,44 +45,63 @@ Add the exporter to your OpenClaw configuration:
       endpoint: "https://ingest.telemetry.dev",
       protocol: "http/protobuf",
       serviceName: "openclaw-gateway",
-      headers: { Authorization: "Bearer <your-api-key>" },
+      headers: { Authorization: "Bearer td_live_..." },
     },
   },
 }
 ```
 
-Restart the Gateway. Traces and metrics then appear in telemetry.dev. Add `logs: true` inside `diagnostics.otel` to export structured Gateway logs.
+OpenClaw appends `/v1/traces`, `/v1/metrics`, and `/v1/logs` to the endpoint. Traces and metrics are on by default; add `logs: true` inside `diagnostics.otel` to also export Gateway logs.
 
-## What it captures
+  </Step>
 
-The plugin emits harness and run spans around model calls and tool executions. telemetry.dev normalizes the OpenTelemetry GenAI attributes into provider, model, latency, token, and cost fields. OpenClaw also exports operation-duration, queue, session, and token metrics; logs are opt-in.
+  <Step title="Restart the Gateway">
 
-OpenClaw reports usage on model-call spans and on a run-level `openclaw.model.usage` accounting span. telemetry.dev deduplicates these records per run when computing trace totals: it uses complete per-call values and falls back to the accounting span for missing usage or cost fields.
+Restart the Gateway so it loads the plugin. After that, changes to `diagnostics.otel` apply without a restart.
+
+  </Step>
+</Steps>
+
+## Check that data arrives
+
+Run an agent turn through the Gateway, then open the [trace explorer](/platform/traces). Metrics appear under **Metric series** on the project **Overview** after the first export.
+
+`openclaw doctor` and `openclaw status --all` show whether the exporter is running and whether its last export failed.
+
+The Gateway exports every run it executes, and `openclaw agent --local` exports from the CLI process. `openclaw agent exec` doesn't start the exporter, so its runs send nothing.
+
+## What is recorded
+
+The plugin sends spans for agent runs, harness lifecycle, model calls, tool executions, and exec. telemetry.dev reads the OpenTelemetry GenAI attributes on them for provider, model, latency, tokens, and cost.
+
+OpenClaw reports usage twice: on each `openclaw.model.call` span, when the provider returns usage, and on a run-level `openclaw.model.usage` accounting span. telemetry.dev counts each run once when it adds up a trace. It uses the per-call values and falls back to the accounting span for any usage or cost the calls don't report.
+
+OpenClaw also exports metrics for token usage, cost, run duration, message flow, queues, sessions, and tool execution. Logs are off unless you set `logs: true`.
+
+A run is usually one trace. A Gateway request that carries a W3C `traceparent` continues the caller's trace, and nested or delegated runs can share a parent trace.
+
+## What leaves your machine
+
+Without `captureContent`, OpenClaw sends no prompt text, response text, tool inputs, tool outputs, system prompts, or session keys. Spans carry bounded values such as channel, provider, model, error category, hashed request IDs, prompt sizes, and token counts. With `logs: true`, log records keep their severity and sanitized attributes, but not the message body.
+
+To export content, set `captureContent: true` inside `diagnostics.otel`. OpenClaw then sends redacted, length-bounded prompts, responses, tool inputs and outputs, tool definitions, and log message bodies. It still excludes system prompts and thinking blocks.
+
+:::warning[captureContent sends content off your machine]
+telemetry.dev's [privacy settings](/platform/privacy) decide whether received content is stored, not whether OpenClaw sends it. With **Store prompts and responses** off for the environment, telemetry.dev drops recognized content before storage, but it has already left the Gateway.
+:::
 
 ## Choose an environment
 
-OpenClaw does not set `deployment.environment.name`, so records use the project's default environment. To select an environment, set this variable on the Gateway process:
+OpenClaw doesn't set `deployment.environment.name`, so its data lands in the project's default environment. To pick one, set this variable for the Gateway process:
 
 ```sh
-export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
+export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=development"
 ```
 
-You can use an environment-scoped telemetry.dev API key with the matching resource attribute.
+OpenClaw's default resource detectors read this variable for traces and metrics. If you use an environment-scoped telemetry.dev API key, the attribute must match the key's environment, or telemetry.dev rejects the request.
 
-## Content capture and privacy
+## Limitations
 
-OpenClaw does not put prompts, responses, or tool content on the wire by default. To export that content, set `diagnostics.otel.captureContent: true`.
+OpenClaw's spans don't include a session key, session ID, or `gen_ai.conversation.id`, so telemetry.dev can't group separate runs into one conversation.
 
-:::warning[Content leaves the Gateway]
-With `captureContent: true`, OpenClaw includes prompt and tool content in outbound OTLP. telemetry.dev's environment capture setting controls whether received content is stored, not whether OpenClaw transmits it. When environment capture is off, ingest discards received content before storage.
-:::
-
-OpenClaw excludes system prompts and thinking blocks even when content capture is enabled.
-
-## Trace and session limitations
-
-A run is usually one trace. A Gateway request with a W3C `traceparent` continues its upstream trace, and nested or delegated runs can share a parent trace.
-
-OpenClaw exports no session key, session ID, or `gen_ai.conversation.id`. telemetry.dev therefore cannot join separate traces into a conversation.
-
-See the [OpenClaw OpenTelemetry documentation](https://docs.openclaw.ai/gateway/opentelemetry) for exporter settings. Open the [trace explorer](/platform/traces) after a run completes.
+For every exporter setting, see OpenClaw's [OpenTelemetry configuration](https://docs.openclaw.ai/gateway/opentelemetry/configuration) and [privacy](https://docs.openclaw.ai/gateway/opentelemetry/privacy-and-trace-context) pages.

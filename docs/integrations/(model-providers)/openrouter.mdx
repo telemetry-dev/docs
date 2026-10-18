@@ -1,20 +1,24 @@
 ---
 title: OpenRouter
 description: Trace OpenRouter chat, Responses API, embeddings, streams, usage, and cost from TypeScript or Python.
-lastModified: 2026-09-05
+lastModified: 2026-10-18
 seo:
   title: "OpenRouter Tracing, Usage, and Cost"
   description: "Trace OpenRouter chat, Responses API, embedding, and stream calls from TypeScript or Python. Record token usage and the cost that OpenRouter reports."
 ---
 
-The OpenRouter integrations wrap the official OpenRouter SDKs without changing request arguments. Calls remain usable when telemetry.dev is not initialized; instrumentation becomes a no-op.
+Wrap your client from the official OpenRouter SDK, and each chat, Responses API, and embedding call you make with it becomes a span in telemetry.dev. Your calls and their return values don't change.
 
-## What it captures
+If you call OpenRouter through the OpenAI SDK instead, use the [OpenAI integration](/integrations/openai). It records those calls with the provider `openrouter`.
+
+## What you get
 
 - Chat and Responses API input, model parameters, output, response IDs, finish reasons, errors, and token usage
-- Embedding input, models, response IDs, and usage, but never embedding vectors
-- Stream output as your application consumes it, including time to first chunk and terminal metadata
-- Cost from `usage.cost`, falling back to upstream inference cost when OpenRouter supplies it
+- Embedding input, models, response IDs, and usage
+- Stream output as your code reads it, with time to first chunk
+- The cost OpenRouter reports, as `gen_ai.usage.cost`
+
+Every span uses the provider `openrouter`. The integration never records embedding vectors.
 
 ## Install
 
@@ -30,9 +34,23 @@ pip install telemetry-dev-openrouter
 
 </CodeGroup>
 
-The TypeScript integration supports `@openrouter/sdk` 1.1.2 through versions before 2. The Python package requires Python 3.10 or later, `telemetry-dev` 0.2 or later, and `openrouter` 1.1 through versions before 2.
+The Python package also installs `telemetry-dev` and `openrouter`.
 
-## Quickstart
+| Language | Requirements |
+| --- | --- |
+| TypeScript | Node.js `>=20.19.0`, `@telemetry-dev/sdk` `^0.1.8`, `@openrouter/sdk` `>=1.1.2 <2` |
+| Python | Python `>=3.10`, `telemetry-dev` `>=0.2.6`, `openrouter` `>=1.1.0,<2` |
+
+## Trace a call
+
+Set your telemetry.dev project API key and your OpenRouter key. Copy the telemetry.dev key from the project setup page; it starts with `td_live_`.
+
+```sh
+export TELEMETRY_DEV_API_KEY=td_live_...
+export OPENROUTER_API_KEY=sk-or-v1-...
+```
+
+Call `init()`, wrap the client, and use it as usual:
 
 <CodeGroup>
 
@@ -42,7 +60,9 @@ import { flush, init, shutdown } from "@telemetry-dev/sdk";
 import { wrapOpenRouter } from "@telemetry-dev/openrouter";
 
 init({ serviceName: "openrouter-app" });
-const client = wrapOpenRouter(new OpenRouter({ apiKey: process.env.OPENROUTER_API_KEY }));
+const client = wrapOpenRouter(
+  new OpenRouter({ apiKey: process.env.OPENROUTER_API_KEY }),
+);
 
 try {
   const response = await client.chat.send({
@@ -51,7 +71,7 @@ try {
       messages: [{ role: "user", content: "Explain OpenTelemetry briefly" }],
     },
   });
-  console.log(response);
+  console.log(response.choices[0]?.message.content);
 } finally {
   await flush();
   await shutdown();
@@ -73,7 +93,7 @@ try:
         model="openai/gpt-4o-mini",
         messages=[{"role": "user", "content": "Explain OpenTelemetry briefly"}],
     )
-    print(response)
+    print(response.choices[0].message.content)
 finally:
     telemetry_dev.flush()
     telemetry_dev.shutdown()
@@ -81,30 +101,72 @@ finally:
 
 </CodeGroup>
 
-Set `TELEMETRY_DEV_API_KEY` for telemetry.dev and `OPENROUTER_API_KEY` for OpenRouter before running either example.
+Run the script, then open the [trace explorer](/platform/traces). The trace has one `chat openai/gpt-4o-mini` generation span with the messages, the reply, token usage, and cost.
+
+Without an API key, `init()` turns telemetry off and the wrapped client works as before.
+
+## Instrument all clients
+
+To trace every client without wrapping each one, call the global function once at startup:
+
+<CodeGroup>
+
+```ts TypeScript
+import { instrumentOpenRouter } from "@telemetry-dev/openrouter";
+
+instrumentOpenRouter();
+```
+
+```python Python
+from telemetry_dev_openrouter import instrument_openrouter
+
+instrument_openrouter()
+```
+
+</CodeGroup>
+
+In TypeScript, global instrumentation patches the SDK's `Chat`, `Responses`, and `Embeddings` resource classes. It doesn't cover the SDK's standalone functions, such as `chatSend()`.
 
 ## API
 
-| TypeScript | Python | Purpose |
+| TypeScript | Python | What it does |
 | --- | --- | --- |
-| `wrapOpenRouter(client)` | `wrap_open_router(client)` | Instrument one client. Repeated wrapping is safe. |
-| `instrumentOpenRouter()` | `instrument_openrouter()` | Instrument all new official SDK clients. |
-| `uninstrumentOpenRouter()` | `uninstrument_openrouter()` | Restore original SDK methods. Explicit client wrappers stay active. |
+| `wrapOpenRouter(client)` | `wrap_open_router(client)` | Instruments one client and returns it. Wrapping the same client again has no effect. |
+| `instrumentOpenRouter()` | `instrument_openrouter()` | Instruments every client. |
+| `uninstrumentOpenRouter()` | `uninstrument_openrouter()` | Removes global instrumentation. Clients you wrapped yourself stay instrumented. |
 
-Both integrations cover chat `send`, Responses `send`, and embeddings `generate`. Python covers synchronous methods and their `*_async` variants.
+These functions take no options. Note the Python spelling: `wrap_open_router`, but `instrument_openrouter`.
+
+## Traced calls
+
+| OpenRouter call | Span name | Span type |
+| --- | --- | --- |
+| `chat.send()` | `chat {model}` | generation |
+| `responses.send()` | `chat {model}` | generation |
+| `embeddings.generate()` | `embeddings {model}` | embedding |
+
+Python also traces the asynchronous `send_async()` and `generate_async()` methods.
+
+Other endpoints aren't traced. That includes video generation (`client.videoGeneration` in TypeScript, `client.video_generation` in Python).
+
+## Cost
+
+When OpenRouter returns a cost, the span records it as `gen_ai.usage.cost`. The integration uses `usage.cost` first and falls back to the upstream inference cost (`usage.costDetails.upstreamInferenceCost` in TypeScript, `usage.cost_details.upstream_inference_cost` in Python). If neither is present, the span has no cost attribute.
 
 ## Streaming
 
-Chat and Responses streams remain streams and async iterables. Instrumentation observes only events that your application consumes. Exhaust, close, or cancel a stream to finish its span; a returned stream that is never consumed cannot produce complete terminal telemetry.
+Chat and Responses streams stay usable as streams and async iterables. The span sees only the events your code reads. It ends when your code reads the stream to the end, cancels or closes it, or the stream fails. A stream you never read never finishes its span.
 
-The integrations do not add or change `stream_options`. Streamed usage and cost are recorded only when OpenRouter includes them. They reconstruct supported chat and Responses output from consumed events and retain terminal errors, usage, and cost when available.
+The integration sends requests unchanged and doesn't add `stream_options`, so a stream span has usage and cost only when OpenRouter includes them in the stream.
 
-TypeScript stream capture is limited to 64 KiB and 1,024 items. Python uses the core SDK capture budget. A partial capture sets `telemetry.dev.capture.truncated = true`; terminal metadata and usage can still be recorded.
+The span rebuilds chat output from the deltas you read: content, reasoning, refusal text, finish reasons, and tool-call arguments. Responses streams end on a `response.completed`, `response.failed`, `response.incomplete`, or `error` event. Some other Responses events, such as image generation and web search progress, are kept as `telemetry.dev.response_stream_event` entries after the output items.
 
-## Content and limitations
+Each stream keeps up to 64 KiB and 1,024 items of output. Past that, the span keeps the start of the output and sets `telemetry.dev.capture.truncated` to `true`. Usage and terminal metadata are still recorded.
 
-The core SDK captures model input and output by default. Use its `captureInput`, `captureOutput`, and masking options if prompts or responses contain sensitive data. Turning capture off prevents those content fields from being added by the integration, while operational metadata and usage remain.
+## Captured content
 
-Only the listed methods are instrumented. TypeScript global instrumentation patches the official SDK's Chat, Responses, and Embeddings resource classes; standalone generated functions and other endpoints are outside its scope.
+Prompts and responses follow the core SDK's `captureInput`, `captureOutput`, and `mask` settings (`capture_input`, `capture_output`, and `mask` in Python). With capture off, response IDs, models, finish reasons, usage, cost, timing, and errors are still recorded. See [privacy](/platform/privacy) for server-side redaction.
 
-Open the [trace explorer](/platform/traces) after a call completes. Refer to the [quickstart](/quickstart) for API-key and capture configuration.
+## Send telemetry before exit
+
+In a short script, call `flush()` and then `shutdown()` before the process exits, as in the example above. In serverless code, call `flush()` before the handler returns. In TypeScript you can pass a `waitUntil` function to `init()` instead. See the [TypeScript SDK](/sdk/typescript) and [Python SDK](/sdk/python) guides for details.

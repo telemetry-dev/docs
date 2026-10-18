@@ -2,29 +2,31 @@
 title: Quickstart
 description: Send a trace to telemetry.dev with TypeScript or Python in five minutes.
 sidebar: { label: "Quickstart", order: 1 }
-lastModified: 2026-08-03
+lastModified: 2026-10-18
 seo:
   title: "Quickstart: Send Your First LLM Trace"
   description: "Send your first LLM trace to telemetry.dev in five minutes with the TypeScript or Python SDK. The sample runs offline, so a model provider key is not necessary."
 ---
 
-These examples record an offline sample. You do not need a model-provider key.
+This guide sends one trace from a small sample program and finds it in the dashboard. The sample records a model call with a fixed answer, so you don't need a model-provider key.
+
+You need Node.js 22.18 or later, which runs TypeScript files directly, or Python 3.10 or later.
 
 <Steps>
-  <Step title="Make a project and API key">
+  <Step title="Create a project and copy its API key">
 
-Open [telemetry.dev](https://telemetry.dev). Make a project, then copy the API key from the project setup page.
+Sign in at [telemetry.dev](https://telemetry.dev) and create a project. The **Project created** dialog shows the project's first API key, named `default`. Copy it now: telemetry.dev shows the full key only once. Keys start with `td_live_`.
 
-A new project includes a `default` key. The dashboard shows the full key one time, and keys start with `td_live_`.
+If you closed the dialog, create another key on the project's **API keys** page.
 
   </Step>
 
-  <Step title="Install an SDK">
+  <Step title="Install the SDK">
 
 <CodeGroup>
 
 ```sh TypeScript
-npm i @telemetry-dev/sdk
+npm install @telemetry-dev/sdk
 ```
 
 ```sh Python
@@ -35,93 +37,99 @@ pip install telemetry-dev
 
   </Step>
 
-  <Step title="Initialize and record a trace">
+  <Step title="Set your API key">
 
-Put the API key and resource values in your environment:
+The SDKs read their settings from environment variables. In the terminal where you will run the sample:
 
-```sh .env
-TELEMETRY_DEV_API_KEY=td_live_...
-TELEMETRY_DEV_ENVIRONMENT=development
-OTEL_SERVICE_NAME=quickstart
+```sh
+export TELEMETRY_DEV_API_KEY=td_live_...
+export TELEMETRY_DEV_ENVIRONMENT=development
+export OTEL_SERVICE_NAME=quickstart
 ```
 
-Save one example as `quickstart.ts` or `quickstart.py`:
+The SDKs don't load `.env` files. If you keep these values in one, load it the way your app already does, for example with `node --env-file=.env`.
+
+  </Step>
+
+  <Step title="Save the sample">
+
+Save one of these files. It records an agent span named after the function, with one model-call span inside it.
 
 <CodeGroup>
 
-```ts TypeScript
-import {
-  flush,
-  init,
-  observe,
-  shutdown,
-  startSpan,
-} from "@telemetry-dev/sdk";
+```ts quickstart.mts
+import { init, observe, shutdown, startSpan } from "@telemetry-dev/sdk";
 
 init();
 
-const answer = observe(
-  function answer(question: string) {
-    const generation = startSpan("chat gpt-4", {
+const planTrip = observe(
+  async function planTrip(city: string) {
+    const generation = startSpan("chat gpt-5-mini", {
       type: "generation",
-      model: "gpt-4",
+      model: "gpt-5-mini",
       provider: "openai",
-      input: [{ role: "user", content: question }],
+      input: [{ role: "user", content: `Plan a day trip to ${city}` }],
     });
 
+    // A real app calls the model here. The fixed answer lets the sample run without a provider key.
+    const answer = "Take the scenic route.";
+
     generation.end({
-      output: [{ role: "assistant", content: "Take the scenic route." }],
+      output: [{ role: "assistant", content: answer }],
       usage: { inputTokens: 11, outputTokens: 7 },
       finishReason: "stop",
     });
-
-    return "Take the scenic route.";
+    return answer;
   },
   { type: "agent", agentName: "trip-planner" },
 );
 
-console.log(answer("Plan a day trip"));
-await flush();
+console.log(await planTrip("Kyoto"));
 await shutdown();
 ```
 
-```python Python
+```python quickstart.py
 import telemetry_dev
-from telemetry_dev import observe, start_span, update_current_span
+from telemetry_dev import observe, start_span
 
 telemetry_dev.init()
 
-@observe
-def plan_route(city: str) -> dict[str, str]:
+
+@observe(type="agent")
+def plan_trip(city: str) -> str:
     with start_span(
-        "chat gpt-4",
+        "chat gpt-5-mini",
         type="generation",
-        model="gpt-4",
+        model="gpt-5-mini",
         provider="openai",
         input=[{"role": "user", "content": f"Plan a day trip to {city}"}],
-    ):
-        update_current_span(
-            output=[{"role": "assistant", "content": "Take the scenic route."}],
+    ) as generation:
+        # A real app calls the model here. The fixed answer lets the sample run without a provider key.
+        answer = "Take the scenic route."
+        generation.update(
+            output=[{"role": "assistant", "content": answer}],
             usage={"input_tokens": 11, "output_tokens": 7},
             finish_reason="stop",
         )
-    return {"city": city, "route": "scenic"}
+    return answer
 
-print(plan_route("Kyoto"))
-telemetry_dev.flush()
+
+print(plan_trip("Kyoto"))
 telemetry_dev.shutdown()
 ```
 
 </CodeGroup>
 
+`shutdown()` sends any pending data before the program exits. A long-running server doesn't need it after each request; see [Flush and shut down](/sdk/typescript#flush-and-shut-down).
+
   </Step>
 
-  <Step title="Run the example">
+  <Step title="Run it">
 
 <CodeGroup>
 
 ```sh TypeScript
-node --experimental-strip-types quickstart.ts
+node quickstart.mts
 ```
 
 ```sh Python
@@ -130,39 +138,54 @@ python quickstart.py
 
 </CodeGroup>
 
+The program prints `Take the scenic route.`
+
   </Step>
 
   <Step title="Open the trace">
 
-Open your project in the dashboard. Select **Traces**, then select the new trace.
+In the dashboard, open your project and select **Traces**. The new trace is at the top of the list, in the `development` environment. Select it to see its two spans:
 
-The trace contains the observed parent span and its generation span. The dashboard shows duration, tokens, status, and cost when pricing exists.
+<TraceFigure
+  title="The quickstart trace"
+  caption="Timings are from one run of the TypeScript sample and vary from run to run. In Python, the agent span and its Operation are both named plan_trip."
+  spans={[
+    { name: "planTrip", type: "agent", operation: "trip-planner", depth: 0, start: 0, end: 0.51 },
+    { name: "chat gpt-5-mini", type: "generation", operation: "gpt-5-mini", depth: 1, start: 0, end: 0.13 },
+  ]}
+/>
+
+Select the `chat gpt-5-mini` span to read its input and output messages, its 11 input and 7 output tokens, and its cost. The cost appears because `gpt-5-mini` has a price in the pricing snapshot.
 
   </Step>
 </Steps>
+
+## If the trace doesn't appear
+
+- **Check the key.** Without `TELEMETRY_DEV_API_KEY`, `init()` returns a client that does nothing, and SDK calls don't raise errors. Confirm the variable is set in the same shell that runs the sample.
+- **Read the program's output.** Both SDKs print export failures. A key that telemetry.dev rejects shows `trace ingest failed: 401` in TypeScript and `code: 401` in Python.
+- **Clear the trace filters.** An **Environment** filter set to another environment hides the `development` trace.
 
 ## Environment variables
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `TELEMETRY_DEV_API_KEY` | None | Authenticates OTLP requests. Keys start with `td_live_`. |
-| `TELEMETRY_DEV_BASE_URL` | `https://ingest.telemetry.dev` | Sets a different ingest base URL. |
+| `TELEMETRY_DEV_API_KEY` | None | Authenticates exports. Keys start with `td_live_`. |
 | `TELEMETRY_DEV_ENVIRONMENT` | `production` | Sets `deployment.environment.name`. |
 | `OTEL_SERVICE_NAME` | `unknown_service` | Sets `service.name`. |
-
-:::note
-If `TELEMETRY_DEV_API_KEY` is not set, initialization returns a silent no-op client. SDK calls do not interrupt your application.
-:::
+| `TELEMETRY_DEV_BASE_URL` | `https://ingest.telemetry.dev` | Sends to a different ingest URL. |
 
 :::tip[Serverless runtimes]
-Before a serverless runtime freezes, flush all telemetry. In TypeScript, await `flush()` or pass the platform `waitUntil` function to `init()`. In Python, call `telemetry_dev.flush()`. The Python `export_mode="immediate"` option does not flush metrics by itself.
+Send pending telemetry before the runtime freezes. In TypeScript, await `flush()` at the end of each invocation, or pass the platform's `waitUntil` function to `init()`. In Python, call `telemetry_dev.flush()`.
 :::
 
-## Connect your model provider
+## Trace your real model calls
+
+Replace the hand-written span with an integration. It records model, tokens, input, and output from your existing client.
 
 <CardGroup cols={2}>
-  <IntegrationCard title="Vercel AI SDK" href="/integrations/vercel-ai-sdk" mark="vercel-ai-sdk">Connect the Vercel AI SDK.</IntegrationCard>
-  <IntegrationCard title="OpenAI" href="/integrations/openai" mark="openai">Connect the OpenAI SDK for TypeScript or Python.</IntegrationCard>
-  <IntegrationCard title="Anthropic" href="/integrations/anthropic" mark="anthropic">Connect the Anthropic SDK for TypeScript or Python.</IntegrationCard>
-  <Card title="All integrations" href="/integrations" icon="plug">Find all model-provider and agent integrations.</Card>
+  <IntegrationCard title="Vercel AI SDK" href="/integrations/vercel-ai-sdk" mark="vercel-ai-sdk">Trace generations, streams, agent loops, and tool calls.</IntegrationCard>
+  <IntegrationCard title="OpenAI" href="/integrations/openai" mark="openai">Wrap the OpenAI SDK for TypeScript or Python.</IntegrationCard>
+  <IntegrationCard title="Anthropic" href="/integrations/anthropic" mark="anthropic">Wrap the Anthropic SDK for TypeScript or Python.</IntegrationCard>
+  <Card title="All integrations" href="/integrations" icon="plug">Providers, frameworks, coding agents, and OpenTelemetry.</Card>
 </CardGroup>

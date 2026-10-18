@@ -1,74 +1,147 @@
 ---
 title: Hermes Agent
-description: Export Hermes Agent LLM calls, tool executions, sub-agents, and token metrics through the hermes-otel plugin.
-lastModified: 2026-10-01
+description: Export Hermes Agent turns, LLM calls, tool executions, sub-agents, and token metrics through the community hermes-otel plugin.
+lastModified: 2026-10-18
 seo:
   title: "Hermes Agent Telemetry with OpenTelemetry"
   description: "Export Hermes Agent traces with the hermes-otel plugin. Record the LLM calls, tool executions, and sub-agents of each turn, with token usage and GenAI metrics."
 ---
 
-## About the Hermes Agent integration
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) runs as a CLI and as a gateway behind chat apps such as Telegram, Discord, and Slack. The community [hermes-otel](https://github.com/briancaffey/hermes-otel) plugin turns each Hermes turn into an OpenTelemetry trace, with spans for LLM calls, API requests, tool calls, and sub-agents, and sends it with metrics to telemetry.dev over OTLP/HTTP.
 
-[Hermes Agent](https://github.com/NousResearch/hermes-agent) is an open-source agent that runs as a CLI and as a gateway behind Telegram, Discord, Slack, WhatsApp, and Teams. The community [hermes-otel](https://github.com/briancaffey/hermes-otel) plugin subscribes to Hermes lifecycle hooks and turns every session, LLM call, API request, tool execution, and sub-agent delegation into OpenTelemetry spans using the `gen_ai.*` semantic conventions — exported as OTLP/HTTP protobuf straight to `https://ingest.telemetry.dev`. Configuration only, no code changes.
+hermes-otel is maintained by its author, not by telemetry.dev or Nous Research.
 
-## Key features
+By default hermes-otel sends the complete prompt, including the system prompt and the whole conversation, and the complete response on every API call, plus previews of tool arguments and output. The setup below turns that off with `content_capture: "off"`. See [What leaves your machine](#what-leaves-your-machine).
 
-- **Full agent-loop tracing:** Each turn gets a root span with nested `llm.*`, `api.*`, and `tool.*` children, plus sub-agent spans.
-- **`gen_ai.*` native:** Token usage, model, provider, and operation name arrive as OpenTelemetry semantic-convention attributes; `session.id` and `gen_ai.conversation.id` correlate turns from the same session.
-- **GenAI metrics:** `gen_ai.client.token.usage` and operation-duration histograms land as time series for dashboard inspection and analysis.
-- **Bounded turn-end export:** The plugin ends each turn's spans, queues a coalesced background flush, and waits up to `force_flush_wait_ms` (1,500 ms by default). Graceful process shutdown performs the full synchronous flush.
-- **Privacy controls:** Content capture defaults to `full`. Set `content_capture: "off"` to omit normal prompt, response, tool-I/O, approval, and sub-agent content attributes; diagnostic error text may still export.
+## Before you start
 
-## Get started
+- Hermes Agent 0.21 or later. Hermes installs the plugin's Python dependencies automatically from that version on.
+- A telemetry.dev project and its API key. Keys start with `td_live_`.
 
-1. Create a telemetry.dev project API key.
-2. Install and enable the plugin from its repository subdirectory, pinned to the reviewed commit:
+## Set up
 
-   ```sh
-   hermes -p default plugins install briancaffey/hermes-otel/hermes_otel \
-     --ref 18313bde815d4dc6ab238e982c6aa86a63a512f8 \
-     --enable
-   ```
+<Steps>
+  <Step title="Install and enable the plugin">
 
-   Hermes 0.21.4 or later is required. Upgrade Hermes before installing this plugin, run the command interactively, and approve dependency preparation if prompted. Hermes 0.21.4 prepares the declared Python dependencies without a prompt; later releases may ask for consent. Do not add `--no-deps`. If preparation was skipped or declined, run `hermes -p default plugins enable hermes_otel` and approve it. Review upstream changes before replacing the pinned commit.
+```sh
+hermes plugins install hermes_otel
+hermes plugins enable hermes_otel
+```
 
-3. Export the project API key in the environment Hermes runs in:
+This installs the commit that the Hermes plugin catalog has reviewed. Installing doesn't enable the plugin, so run both commands.
 
-   ```sh
-   export TELEMETRY_DEV_API_KEY="td_live_..."
-   ```
+  </Step>
 
-4. Declare telemetry.dev for the default profile in `~/.hermes/hermes_otel.yaml`:
+  <Step title="Set the API key">
 
-   ```yaml
-   content_capture: "off"
+Export the key in the environment Hermes runs in, or add it to `~/.hermes/.env`:
 
-   backends:
-     - type: otlp
-       name: telemetry-dev
-       endpoint: https://ingest.telemetry.dev/v1/traces
-       headers:
-         Authorization: Bearer ${TELEMETRY_DEV_API_KEY}
-   ```
+```sh
+export TELEMETRY_DEV_API_KEY="td_live_..."
+```
 
-   Plugin installation and configuration are profile-local. For every named profile that should export telemetry, repeat the install command with `-p <profile>` and save the same configuration here:
+  </Step>
 
-   ```text
-   ~/.hermes/profiles/<profile>/hermes_otel.yaml
-   ```
+  <Step title="Point the plugin at telemetry.dev">
 
-5. Restart any running Hermes gateway for the configured profile. Then run `hermes -p default` for the setup above, or send a message through the restarted gateway. Startup logs:
+Create `~/.hermes/hermes_otel.yaml`:
 
-   ```text
-   [hermes-otel] ✓ telemetry-dev at https://ingest.telemetry.dev/v1/traces
-   ```
+```yaml ~/.hermes/hermes_otel.yaml
+content_capture: "off"
 
-   Each turn appears as its own root trace with token usage and tool activity; shared session and conversation IDs correlate the turns.
+backends:
+  - type: otlp
+    name: telemetry-dev
+    endpoint: https://ingest.telemetry.dev/v1/traces
+    headers:
+      Authorization: Bearer ${TELEMETRY_DEV_API_KEY}
+```
 
-## Good to know
+Keep the quotes around `"off"`: a bare `off` is YAML for `false`. The plugin replaces `${TELEMETRY_DEV_API_KEY}` with the variable's value when it loads the file. A `type: otlp` backend sends traces, metrics, and logs; logs flow only if you turn on log capture.
 
-Content capture defaults to `full`; the example above chooses `off`. Use `preview` for clipped previews instead. The legacy `capture_previews: false` setting is only a deprecated compatibility spelling for `content_capture: "off"`, and an explicit `content_capture` value wins.
+  </Step>
 
-Even with content capture off, tool names, inferred commands and targets, token counts, model and provider names, timings, outcomes, and all metrics still export. `hermes.tool.command` and `hermes.tool.target` can contain sensitive shell commands, file paths, or URLs. Diagnostic strings are truncated to 500 characters but are not secret-redacted: tool errors may appear in `error.message` and span status descriptions, provider or API errors in `exception.message` and status descriptions, and failed sub-agent summaries in status descriptions. Do not treat `off` as a guarantee that errors contain no sensitive data.
+  <Step title="Restart Hermes">
 
-Log export is a separate opt-in: `capture_logs: true` ships log bodies that `content_capture` does not suppress. The plugin attaches to the root logger by default, so scope it with `log_attach_logger` or leave logs off if that is a concern. Within each configured profile, the same config covers CLI and gateway sessions, including cron jobs and sub-agent (`delegate_task`) runs.
+Restart any running Hermes gateway, then start `hermes` or send a message through the gateway.
+
+  </Step>
+</Steps>
+
+### Named profiles
+
+Each Hermes profile has its own plugins and settings. The commands above set up the default profile, `~/.hermes`. For a named profile, install and enable the plugin with `-p`, and save the same config in that profile's home:
+
+```sh
+hermes -p <profile> plugins install hermes_otel
+hermes -p <profile> plugins enable hermes_otel
+```
+
+```text
+~/.hermes/profiles/<profile>/hermes_otel.yaml
+```
+
+A profile without the plugin or without this file sends nothing to telemetry.dev. Within a profile, the same config covers CLI and gateway sessions, cron jobs, and sub-agent runs.
+
+## Check that data arrives
+
+When Hermes starts, hermes-otel prints a startup banner with one `[hermes-otel] ✓` line per backend. Look for the line with `https://ingest.telemetry.dev/v1/traces`, and for the `content_capture=off` notice.
+
+Send a message, then open the [trace explorer](/platform/traces). Each turn is its own trace, and turns from one session share the `session.id` and `gen_ai.conversation.id` attributes. When a turn ends, the plugin flushes its spans in the background and waits up to 1.5 seconds (`force_flush_wait_ms`) before handing control back to Hermes.
+
+If there is no banner, or no telemetry.dev line, run `hermes plugins list` to check that `hermes_otel` is enabled. If `TELEMETRY_DEV_API_KEY` isn't set when Hermes starts, the plugin leaves `${TELEMETRY_DEV_API_KEY}` in the header as literal text and telemetry.dev rejects the requests. Set `HERMES_OTEL_DEBUG=true` for a per-span debug log.
+
+## What is recorded
+
+```text
+agent
+├── skill.{name}
+└── llm.{model}
+    ├── api.{model}
+    ├── tool.{name}
+    ├── approval.{pattern}
+    ├── subagent.{role}
+    │   └── agent
+    └── api.{model}
+```
+
+- `agent` (or `cron`) is the turn, with its status and a summary of tools, commands, skills, and API calls.
+- `llm.{model}` records the model, the provider, and, unless content capture is off, the user message and the response.
+- `api.{model}` is one HTTP request to the provider, with token counts, cache and reasoning tokens, duration, and finish reason.
+- `tool.{name}` records each tool call's outcome, the command or target the plugin infers from it, and, unless content capture is off, previews of its arguments and result.
+- `subagent.{role}` holds a delegated child run, so a multi-agent run is one trace.
+
+Attributes follow the OpenTelemetry GenAI conventions (`gen_ai.*`), which telemetry.dev reads for model, provider, and token usage. The plugin also sends metrics, including `gen_ai.client.token.usage` and `gen_ai.client.operation.duration`, which appear under **Metric series** on the project **Overview**.
+
+For every attribute and metric, see the hermes-otel [span attribute](https://briancaffey.github.io/hermes-otel/reference/span-attributes) and [metric](https://briancaffey.github.io/hermes-otel/reference/metrics) references.
+
+## What leaves your machine
+
+`content_capture` controls conversation content on spans:
+
+| Value | What is sent |
+| --- | --- |
+| `full` (default) | The complete prompt, including the system prompt and every message, and the complete response on every `api.*` span. Clipped previews on other spans. |
+| `preview` | Clipped previews only, 1,200 characters each by default. |
+| `off` | No prompt, response, or tool content. |
+
+Because `full` puts the whole conversation so far on every `api.*` span, the same content is sent again on each API call in a turn. The older `capture_previews: false` setting still means `off`; an explicit `content_capture` wins.
+
+Even with `content_capture: "off"`, these are sent:
+
+- Tool names, outcomes, and the command and target the plugin infers from each tool call. `hermes.tool.command` and `hermes.tool.target` can contain shell commands, file paths, or URLs.
+- Token counts, model and provider names, timings, and all metrics.
+- Error text, cut to 500 characters: tool errors in `error.message` and the span status, provider errors in the span's exception and status, and failed sub-agent summaries in the span status. Error text can quote file contents, commands, or other content.
+
+Two more settings can add content, and both are off by default:
+
+- `capture_logs: true` forwards Python log records, whose bodies `content_capture` doesn't cover. The plugin redacts secrets in them with Hermes' redactor, but other text goes out as logged. It attaches to the root logger, so it exports logs from every library Hermes uses. Scope it with `log_attach_logger`, or leave it off.
+- `capture_sender_id: true` adds the chat platform's sender ID to gateway sessions, which can identify users.
+
+telemetry.dev's [privacy settings](/platform/privacy) can also drop recognized content before storage, but only after it has left your machine.
+
+## Configuration
+
+The plugin reads its settings from `HERMES_OTEL_*` environment variables first, then `hermes_otel.yaml`, then its defaults. For example, `HERMES_OTEL_CONTENT_CAPTURE=off` sets `content_capture`. For every setting, see the hermes-otel [configuration docs](https://briancaffey.github.io/hermes-otel/configuration/overview) and its [`config.yaml.example`](https://github.com/briancaffey/hermes-otel/blob/main/config.yaml.example).
+
+To run newer plugin code than the catalog has reviewed, install from the repository instead: `hermes plugins install briancaffey/hermes-otel/hermes_otel --enable`. That installs the latest `main`, which no one has reviewed for the catalog yet.

@@ -1,135 +1,186 @@
 ---
 title: Cost calculation
 description: Learn how telemetry.dev calculates model cost from token usage and model prices.
-lastModified: 2026-08-03
+lastModified: 2026-10-18
 seo:
   title: "LLM Cost Calculation from Token Usage"
-  description: "telemetry.dev calculates LLM cost at ingest from token usage and model prices. A valid cost value from your SDK overrides the server calculation."
+  description: "telemetry.dev calculates LLM cost at ingest from token usage and a model price snapshot. A valid cost value from your SDK overrides the server calculation."
 ---
 
-telemetry.dev calculates span cost at ingest. The server uses normalized token usage and a vendored pricing snapshot compiled from [models.dev](https://models.dev) and supplementary catalogs.
+telemetry.dev sets each span's cost when the span is ingested:
 
-A client cost value has priority over the server calculation.
+1. If the span carries a valid [client cost](#client-cost), that value is stored as sent.
+2. Otherwise, the server multiplies the span's token counts by the model's prices from a [pricing snapshot](#pricing-snapshot).
+3. If neither is possible, the cost is null, which means unknown. A known cost of zero is stored as `0`.
 
-## Client cost override
+Costs are in US dollars.
 
-The first-party SDKs map `costUsd` in TypeScript and `cost_usd` in Python to `gen_ai.usage.cost`. If this value is present and valid, the ingest API stores it without a server calculation.
+## Server calculation
 
-The ingest API checks client cost attributes in this order:
+Snapshot prices are US dollars per 1,000,000 tokens. The server splits the span's input into three parts and prices each part with its own rate:
+
+| Token part | Tokens | Price field | If the price is missing |
+| --- | --- | --- | --- |
+| Uncached input | Input minus cache read minus cache creation | `input` | — |
+| Cache read | Cache-read input tokens | `cachedInput` | `input` |
+| Cache creation | Cache-creation input tokens | `cacheWrite` | `input` |
+| Output | Output tokens | `output` | — |
+
+```text
+uncached = max(0, input - cacheRead - cacheCreation)
+
+cost = ( uncached      * price.input
+       + cacheRead     * (price.cachedInput ?? price.input)
+       + cacheCreation * (price.cacheWrite  ?? price.input)
+       + output        * price.output
+       ) / 1,000,000
+```
+
+`input` is the total input, including cache reads and cache creation. `output` includes reasoning tokens, so reasoning has no separate charge. For which attributes supply each count, see [Token usage](/reference/span-attributes#token-usage).
+
+## Worked example
+
+This span used 12,000 input tokens, of which 8,000 were read from cache and 1,000 were written to cache, and 1,500 output tokens:
+
+```json
+{
+  "gen_ai.provider.name": "anthropic",
+  "gen_ai.request.model": "claude-sonnet-4-5",
+  "gen_ai.usage.input_tokens": 12000,
+  "gen_ai.usage.cache_read.input_tokens": 8000,
+  "gen_ai.usage.cache_creation.input_tokens": 1000,
+  "gen_ai.usage.output_tokens": 1500
+}
+```
+
+The prices below are illustrative. They match the `anthropic:claude-sonnet-4-5` entry in a snapshot generated on 2026-09-24, but each new snapshot can change them.
+
+<CostFigure
+  title="Where the cost of this span comes from"
+  caption="Uncached input is 12,000 − 8,000 − 1,000 = 3,000 tokens. Cache reads are most of the tokens but a small part of the cost; output is a small part of the tokens but most of the cost."
+  input={12000}
+  cacheRead={8000}
+  cacheWrite={1000}
+  output={1500}
+  prices={{ input: 3, cachedInput: 0.3, cacheWrite: 3.75, output: 15 }}
+/>
+
+The stored cost is `0.03765`. Adding reasoning tokens to this span would not change it, because they are already counted in the 1,500 output tokens.
+
+## Rounding and precision
+
+The server works with exact decimal values of the prices, not floating-point arithmetic. It rounds the final cost once, to the nearest 0.00000001 dollars (eight decimal places), and drops trailing zeros. For example, 7 input tokens at $3.00 per million is stored as `0.000021`.
+
+A stored cost can have at most ten digits before the decimal point. A calculated cost above $9,999,999,999.99999999 is null.
+
+## Client cost
+
+A client cost replaces the server calculation. Use it for a custom or private model, for negotiated prices, or when the snapshot does not know your model. It does not need a model or token counts.
+
+The ingest API checks these attributes in order and uses the first valid one:
 
 1. `gen_ai.usage.cost`
 2. `ai.usage.cost`
 3. `td.cost_usd`
 4. `telemetry.dev.cost_usd`
 
-A client cost must be a nonnegative number. The ingest API also accepts a decimal string with at most eight fractional digits.
+A valid client cost is one of:
 
-A client cost does not require a model match. Thus, you can send `gen_ai.usage.cost` for a custom or private model.
+- A finite, nonnegative number. The server rounds it to eight decimal places.
+- A string of digits with an optional decimal part of one to eight digits, such as `"0.5"` or `"12.00000001"`. Strings with a sign, an exponent, or more than eight decimal places are invalid.
 
-## Server calculation
+Either way, the value can have at most ten digits before the decimal point. An invalid value is skipped, and the next attribute in the list is tried.
 
-The pricing snapshot gives prices in US dollars per 1,000,000 tokens. The server calculates these token kinds:
+The first-party SDKs send `costUsd` (TypeScript) and `cost_usd` (Python) as `gen_ai.usage.cost`.
 
-| Token kind | Normalized usage | Price field |
-| --- | --- | --- |
-| Noncached input | Input minus cache read and cache creation | `input` |
-| Cache read | Cache-read input tokens | `cachedInput`, or `input` as a fallback |
-| Cache creation | Cache-creation input tokens | `cacheWrite`, or `input` as a fallback |
-| Output | Output tokens | `output` |
-| Reasoning | Reasoning output tokens | No separate price |
+## When cost is null
 
-The calculation is:
+The server stores a null cost, and adds nothing to the trace total, when there is no valid client cost and any of these is true:
 
-```text
-nonCached = max(0, input - cacheRead - cacheCreation)
+- The span has no model attribute.
+- No snapshot entry matches the provider and model; see [Model matching](#model-matching).
+- The span has no token counts at all.
+- The span has an input count, and cache read plus cache creation is larger than it. The ingest API also records the diagnostic `inconsistent_usage_counts`.
+- The model has [context tiers](#context-tiers) and the span reports no input count of its own.
+- The modality counts contradict the aggregate counts; see [Modality pricing](#modality-pricing).
+- A one-hour cache-creation count or a compaction count is larger than the total it is part of; see [Provider-specific adjustments](#provider-specific-adjustments).
+- The result is larger than $9,999,999,999.99999999.
 
-cost = (
-  nonCached    * price.input
-  + cacheRead  * (price.cachedInput ?? price.input)
-  + cacheCreation * (price.cacheWrite ?? price.input)
-  + output     * price.output
-) / 1_000_000
-```
-
-The server accepts reasoning-token attributes, but it does not add a separate reasoning charge. Providers count those tokens inside output usage.
-
-If output usage is absent, normalization can use reasoning output as the output total. If input usage is absent, normalization can use cache-read plus cache-creation usage.
-
-The server formats the result with at most eight decimal places. The stored cost has eight decimal places of precision.
+If a model is missing from the snapshot or priced wrong for you, send a [client cost](#client-cost).
 
 ## Modality pricing
 
-Some providers price image and audio tokens differently from text tokens. When a span carries the [modality usage attributes](https://telemetry.dev/docs/reference/span-attributes#modality-token-usage), the server splits each aggregate count into a text remainder and the reported image and audio parts, and prices each part with the matching rate from the snapshot:
+Some providers price image and audio tokens differently from text. When a span carries [modality usage attributes](https://telemetry.dev/docs/reference/span-attributes#modality-token-usage), the server prices the reported image and audio parts with their own rates, and the rest of each aggregate at the text rate:
 
-| Part | Price field | Fallback |
+| Part | Price field | If the price is missing |
 | --- | --- | --- |
-| Image input, noncached | `imageInput` | `input` |
-| Audio input, noncached | `audioInput` | `input` |
+| Image input, uncached | `imageInput` | `input` |
+| Audio input, uncached | `audioInput` | `input` |
 | Image cache read | `imageCachedInput` | `cachedInput`, then `input` |
 | Audio cache read | `audioCachedInput` | `cachedInput`, then `input` |
 | Image output | `imageOutput` | `output` |
 | Audio output | `audioOutput` | `output` |
-| Text and any remainder | `input`, `cachedInput`, `output` | — |
+| Text and any remainder | `input`, `cachedInput`, `output` | As in the [main table](#server-calculation) |
 
-A modality's noncached input is its input count minus its cache-read count. If the span reports a positive aggregate cache-read count but no cache-read count for a modality, that modality's noncached input stays at the base input rate. Any cache creation keeps all noncached modality input at the base rate, because the server cannot separate cache overlap per modality without charging twice. Reported image and audio cache reads still use their cache-read rates, and cache creation still uses `cacheWrite`.
+A modality's uncached input is its input count minus its own cache-read count. Two cases keep a modality's uncached input at the base `input` rate instead:
 
-When a span has no aggregate input, cache-read, or output count, the server uses the sum of the modality counts for that kind.
+- The span has a cache-read count above zero but no cache-read count for that modality. Send the modality's cache-read count, even `0`, to avoid this.
+- The span has any cache creation. The server cannot tell which modality the cache writes belong to, so it does not split them.
 
-Cost is null when the modality detail contradicts the aggregate counts:
+Reported image and audio cache reads still use their own cache-read rates in both cases, and cache creation still uses `cacheWrite`.
 
-- Image plus audio input allocated to modality-specific noncached pricing exceeds the noncached input total. Modalities that fall back to base pricing under the rules above are excluded from this check.
-- Modality cache reads above the cache-read total, or above their own modality's input
-- Image plus audio output above the output total
-- Cache reads plus cache creation above the input total, when the server derived the input or cache-read total from modality counts
+When a span has no aggregate count for a kind, the server uses the sum of its modality counts for that kind.
 
-Send consistent aggregate and modality counts, or send a client cost.
+The cost is null when the modality counts contradict the aggregates:
 
-Snapshot entries without image or audio rates price every modality at the text rate. These are token-cost estimates. They do not include per-image generation fees, service-tier modifiers, or other charges that a provider bills outside of token counts.
+- Image plus audio uncached input, at their modality rates, is larger than the total uncached input.
+- The modality cache reads add up to more than the cache-read total, or a modality's cache read is larger than its own input.
+- Image plus audio output is larger than the output total.
 
-## Usage attributes
+These are token-cost estimates. Snapshot entries without image or audio rates price every modality at the text rate. The calculation does not include per-image generation fees, service-tier surcharges, or other charges that a provider bills outside token counts.
 
-The primary first-party usage attributes are:
+## Context tiers
 
-| Usage | Attribute |
-| --- | --- |
-| Input | `gen_ai.usage.input_tokens` |
-| Output | `gen_ai.usage.output_tokens` |
-| Total fallback | `gen_ai.usage.total_tokens` |
-| Cache read | `gen_ai.usage.cache_read.input_tokens` |
-| Cache creation | `gen_ai.usage.cache_creation.input_tokens` |
-| Reasoning output | `gen_ai.usage.reasoning.output_tokens` |
-| Modality detail | `gen_ai.usage.{text,image,audio}.{input_tokens,output_tokens,cache_read.input_tokens}` |
+Some models charge more for every token once a request's input is larger than a threshold. For these models, the total input count, including cache reads and cache creation, selects the rates for the whole request. The server does not charge only the tokens above the threshold at the higher rate.
 
-The ingest API also normalizes compatibility attributes. See [Span attributes](/reference/span-attributes) for the complete priority order.
+A tiered model has a null cost when the span reports no input count of its own, because the server cannot pick a tier. An input attribute or modality input counts are enough, and so is the total on an `embeddings` or `rerank` span. An input that the ingest API filled in from cache counts, or from the total on another kind of span, is not.
+
+## Provider-specific adjustments
+
+These adjustments come from Claude Platform and Claude Code telemetry:
+
+| Adjustment | Applies when | Effect |
+| --- | --- | --- |
+| One-hour cache writes | The span has `anthropic.usage.cache_creation.ephemeral_1h_input_tokens` | That part of cache creation is priced at `cacheWrite1h`, falling back to `cacheWrite` and then `input`. The rest of cache creation uses `cacheWrite`. |
+| Fast mode | A Claude Code `claude_code.llm_request` span has `speed` set to `fast`, and the snapshot entry has a fast-mode multiplier | Every rate is multiplied by the entry's multiplier. |
+| Compaction | An Anthropic SDK request span has `anthropic.usage.compaction.input_tokens` or `anthropic.usage.compaction.output_tokens` | The compaction tokens are added to the span's input and output, and priced as a separate request with all input uncached. They do not change the main request's context tier. |
 
 ## Pricing snapshot
 
-The ingest service vendors a pricing snapshot into its deployment image. The build process compiles it from four catalogs and refreshes it for a build, test, development run, or deployment:
+The server reads prices from a snapshot file that ships with the ingest service. It does not call any catalog while it ingests a span.
+
+The snapshot is generated when the ingest service's deployment image is built, so production prices are as of that build. Generating it needs all four catalogs below. On a local machine, the `build`, `dev`, `start`, and `test` scripts refresh it, and a failed refresh keeps the previous snapshot. A failed refresh with no previous snapshot fails, so the image build stops rather than ship without prices.
 
 | Source | Role |
 | --- | --- |
 | [models.dev](https://models.dev/api.json) | Primary prices for direct and hosted providers |
-| [LiteLLM](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) | Fills provider and model entries that models.dev lacks, and image or audio rates that a models.dev entry lacks |
-| [Vercel AI Gateway](https://ai-gateway.vercel.sh/v1/models) | Prices for Vercel gateway routes only |
+| [LiteLLM](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) | Fills provider and model entries that models.dev lacks. For entries models.dev has, fills only image and audio rates, one-hour cache-write rates, and fast-mode multipliers. |
+| [Vercel AI Gateway](https://ai-gateway.vercel.sh/v1/models) | Prices for Vercel AI Gateway routes only |
 | [OpenRouter](https://openrouter.ai/api/v1/models) | Prices for OpenRouter routes only |
 
-Gateway catalogs price only their own routes. A gateway route that is absent from its catalog is not priced from another provider's entry for the same model.
+Gateway routes are priced only from their own catalog. A Vercel AI Gateway or OpenRouter route missing from that catalog has no price, even if another provider prices the same model.
 
-If the refresh is not successful, an existing snapshot stays in use. The ingest API does not request any catalog for each span.
-
-For models with context-tier pricing, the total reported input count, including cache reads and cache creation, selects the rates for the whole request. The server does not charge only the tokens above the threshold at the higher rate. A tiered model with no input count has null cost, because the server cannot select a tier.
-
-The snapshot file is generated and is not in the source repository. As a result, the repository does not prove a fixed model count.
+The snapshot is generated and is not stored in the source repository, so the number of priced models varies by build.
 
 ## Model matching
 
-Before a lookup, the server trims and lowercases the model. It also removes these Google Vertex model prefixes:
+Before the lookup, the server trims and lowercases the model, and removes these Google Vertex prefixes:
 
-- `projects/…/publishers/google/models/`
+- `projects/<project>/locations/<location>/publishers/google/models/`
 - `publishers/google/models/`
 - `models/`
 
-The server lowercases the provider and applies these provider mappings:
+It then trims and lowercases the provider and maps these names:
 
 | Received provider | Lookup provider |
 | --- | --- |
@@ -143,23 +194,25 @@ The server lowercases the provider and applies these provider mappings:
 | `mistral_ai` | `mistral` |
 | `together_ai` | `togetherai` |
 | `x_ai` | `xai` |
-| Any other provider with `.` | The segment before the first `.`, then the same mappings |
+| Any other name that contains `.` | The part before the first `.`, then the mappings above |
 
-The lookup builds these model forms:
+The lookup tries these model forms, in order:
 
-1. The model as received
-2. The model without a version or date suffix
-3. An Anthropic form that changes `claude-N-M-` to `claude-N.M-`
-4. That Anthropic form without a version or date suffix
+1. The model as received.
+2. The model without a version or date suffix: a `-` or `@` followed by `YYYY-MM-DD`, `YYYYMMDD`, `vN`, `latest`, or three digits at the end.
+3. The Anthropic form, which changes a leading `claude-N-M-` to `claude-N.M-`.
+4. The Anthropic form without a version or date suffix.
 
-It first tries `provider:model` for each form. If none matches, it tries each form without a provider. The `vercel` and `openrouter` providers skip the second pass, because gateway catalogs price only their own routes.
+For example, `claude-3-5-sonnet-20241022` is tried as `claude-3-5-sonnet-20241022`, `claude-3-5-sonnet`, `claude-3.5-sonnet-20241022`, and `claude-3.5-sonnet`.
 
-The suffix matcher removes a `-` or `@` followed by `YYYY-MM-DD`, `YYYYMMDD`, `vN`, `latest`, or three digits.
+The server first looks up `provider:model` for each form. If none matches, or the span has no provider, it looks up each form without a provider. That lookup uses the entry from the first provider in this order that prices the model: `openai`, `anthropic`, `google`, `google-vertex`, `xai`, `deepseek`, `mistral`, `meta`, `meta-llama`, `cohere`, `groq`, `amazon-bedrock`, `azure`, then all other providers in alphabetical order.
 
-## Unknown models and absent usage
+The `vercel` and `openrouter` providers skip the lookup without a provider, because gateway routes are priced only from their own catalog.
 
-If no snapshot entry matches the model, the calculated cost is null. If each token field is null, the calculated cost is also null.
+The snapshot also has an entry for each undated model family, such as `gpt-4o`, that points to the family's `-latest` entry or, without one, its newest dated version, unless the catalog already lists the family name.
 
-A real zero stays different from null. Trace cost totals stay null until at least one span supplies a cost.
+## Trace totals
 
-Use `gen_ai.usage.cost` when the pricing snapshot cannot identify your model or price. Client cost remains the highest-priority value.
+A trace's cost is the sum of its spans' costs. It stays null until at least one span has a cost, so a trace with no priced spans shows no cost rather than `$0`.
+
+For integrations that report the same usage on more than one span, such as OpenClaw, Eve, and Claude Platform, the server counts that usage once in trace totals.

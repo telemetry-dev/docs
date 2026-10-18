@@ -1,24 +1,96 @@
 ---
 title: OTLP ingest API
 description: Send OTLP/HTTP traces, logs, and metrics to telemetry.dev.
-lastModified: 2026-09-05
+lastModified: 2026-10-18
 seo:
   title: "OTLP/HTTP Ingest API (Protobuf and JSON)"
-  description: "Send OpenTelemetry traces, logs, and metrics to telemetry.dev over OTLP/HTTP with protobuf or JSON. This page gives endpoints, authentication, and limits."
+  description: "Send OpenTelemetry traces, logs, and metrics to telemetry.dev over OTLP/HTTP with protobuf or JSON. This page gives endpoints, authentication, limits, and error responses."
 ---
 
-The ingest API accepts OTLP/HTTP protobuf and JSON at `https://ingest.telemetry.dev`.
+The ingest API accepts OTLP/HTTP at `https://ingest.telemetry.dev`. Send traces to `/v1/traces`, logs to `/v1/logs`, and metrics to `/v1/metrics`, as protobuf or OTLP JSON, with your API key as a bearer token.
+
+## Send a span with curl
+
+This request sends one model span. Save the body as `traces.json`:
+
+```json
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          { "key": "service.name", "value": { "stringValue": "support-bot" } },
+          { "key": "deployment.environment.name", "value": { "stringValue": "production" } }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": { "name": "manual-curl" },
+          "spans": [
+            {
+              "traceId": "5b8efff798038103d269b633813fc60c",
+              "spanId": "eee19b7ec3c1b174",
+              "name": "chat claude-sonnet-4-5",
+              "kind": 3,
+              "startTimeUnixNano": "1760832000000000000",
+              "endTimeUnixNano": "1760832001200000000",
+              "attributes": [
+                { "key": "gen_ai.operation.name", "value": { "stringValue": "chat" } },
+                { "key": "gen_ai.provider.name", "value": { "stringValue": "anthropic" } },
+                { "key": "gen_ai.request.model", "value": { "stringValue": "claude-sonnet-4-5" } },
+                { "key": "gen_ai.usage.input_tokens", "value": { "intValue": "12000" } },
+                { "key": "gen_ai.usage.cache_read.input_tokens", "value": { "intValue": "8000" } },
+                { "key": "gen_ai.usage.cache_creation.input_tokens", "value": { "intValue": "1000" } },
+                { "key": "gen_ai.usage.output_tokens", "value": { "intValue": "1500" } }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+Then post it:
+
+```sh
+curl "https://ingest.telemetry.dev/v1/traces" \
+  --request POST \
+  --header "Authorization: Bearer ${TELEMETRY_DEV_API_KEY}" \
+  --header "Content-Type: application/json" \
+  --data-binary @traces.json
+```
+
+A successful request returns HTTP `200` with the body `{}`. The span is stored with operation `chat`, its token counts, and a cost the server calculates from the pricing snapshot. The [cost worked example](/reference/cost#worked-example) shows that calculation for these exact counts.
+
+In OTLP JSON, trace and span IDs are hex strings, `kind` is an integer (`3` is `CLIENT`), and timestamps are nanoseconds since the Unix epoch. Use a new `traceId` and `spanId` for each test so that you do not resend an identical body; see [Duplicate requests](#duplicate-requests).
+
+For logs, send an `ExportLogsServiceRequest` to `/v1/logs`. For metrics, send an `ExportMetricsServiceRequest` to `/v1/metrics`.
 
 ## Endpoints
 
-| Method | Path | Signal |
+| Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/v1/traces` | Traces |
-| `POST` | `/v1/logs` | Logs |
-| `POST` | `/v1/metrics` | Metrics |
-| `GET` | `/health` | Service health |
+| `POST` | `/v1/traces` | Ingest an OTLP `ExportTraceServiceRequest` |
+| `POST` | `/v1/logs` | Ingest an OTLP `ExportLogsServiceRequest` |
+| `POST` | `/v1/metrics` | Ingest an OTLP `ExportMetricsServiceRequest` |
+| `GET` | `/health` | Liveness. Always returns `{"ok":true}`. |
+| `GET` | `/ready` | Readiness. Returns `200` when every check passes and `503` when one fails. |
 
-`GET /health` returns `{"ok":true}`. An unregistered route or method returns HTTP `404`, not `405`.
+A `/ready` response looks like this:
+
+```json
+{
+  "ok": true,
+  "checks": { "clickhouse": "ok", "modalityUsageConfig": "ok", "postgres": "ok" },
+  "configuration": { "modalityUsageEnabled": true }
+}
+```
+
+`configuration.modalityUsageEnabled` tells you whether the server reads [modality token usage](/reference/span-attributes#modality-token-usage). The hosted service reports `true`.
+
+Any other path or method returns HTTP `404` with the JSON body `{"error":{"code":"not_found","message":"Route not found"}}`. A `GET` to `/v1/traces` is a `404`, not a `405`.
 
 ## Authentication
 
@@ -28,109 +100,147 @@ Send the API key in the `Authorization` header:
 Authorization: Bearer td_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-The `Bearer ` prefix is case-sensitive. The ingest API does not accept an `x-api-key` header.
+- The header value must be `Bearer`, one space, and the key. `Bearer` is case-sensitive.
+- The key must start with `td_live_` and contain only letters, digits, `_`, and `-`.
+- The ingest API does not read an `x-api-key` header or a key in the URL.
 
-A key can have an environment scope. If it does, each resource block must resolve to that environment. The ingest API resolves the environment from these resource attributes, in order:
+A missing, malformed, unknown, or revoked key returns HTTP `401`.
+
+### Environment-scoped keys
+
+A key can be limited to one environment. See [Environments](/platform/environments) for how to create one.
+
+The ingest API reads the environment of each resource block from these resource attributes, in order:
 
 1. `deployment.environment.name`
 2. `deployment.environment`
-3. `default`
+3. If neither is set: the key's environment for a scoped key, or `default` for an unscoped key.
 
-The comparison removes surrounding whitespace and uses lowercase characters. A mismatch rejects the complete request with HTTP `403`.
+The comparison ignores surrounding whitespace and letter case. If any resource block names a different environment from a scoped key, the server rejects the whole request with HTTP `403`. A scoped key also gets `403` when the batch adds to a trace that is already stored under a different environment.
 
-## Request encoding
+## Request headers
 
-| Header | Accepted value | Behavior |
+| Header | Accepted values | Notes |
 | --- | --- | --- |
-| `Content-Type` | `application/x-protobuf` | The response uses protobuf. |
-| `Content-Type` | `application/json` | The response uses OTLP JSON. |
-| `Content-Encoding` | `identity` | The body is not compressed. This is the default. |
-| `Content-Encoding` | `gzip` | The server decompresses the body before decode. |
+| `Content-Type` | `application/x-protobuf` or `application/json` | Parameters such as `; charset=utf-8` are allowed. Any other value, or no header, returns `415`. |
+| `Content-Encoding` | `gzip` or `identity` | Optional. No header means `identity`. Any other value returns `415`. |
+| `Authorization` | `Bearer td_live_...` | Required. See [Authentication](#authentication). |
 
-A media-type parameter is permitted. For example, `application/json; charset=utf-8` is valid. A missing or different `Content-Type` returns HTTP `415`. A different `Content-Encoding` also returns HTTP `415`.
+The response uses the same encoding as the request: protobuf for a protobuf request and JSON for a JSON request.
 
-OTLP JSON field names must use `lowerCamelCase`. The server ignores unknown fields. It rejects duplicate object keys and `snake_case` aliases.
+### OTLP JSON rules
+
+- Field names must be `lowerCamelCase`, such as `traceId` and `startTimeUnixNano`. A `snake_case` field name such as `trace_id` returns `400`.
+- Trace and span IDs are hex strings: 32 hex characters for a trace ID and 16 for a span ID.
+- Enum values, such as span `kind` and status `code`, must be integers.
+- A duplicate key in a JSON object returns `400`.
+- Unknown fields are ignored.
+
+### IDs
+
+A span must have a 16-byte trace ID and an 8-byte span ID, and neither can be all zeros. A wrong length or an all-zero span or trace ID returns `400`. On logs and metric exemplars, IDs are optional; an all-zero ID there is treated as absent.
 
 ## Body limits
 
 | Limit | Maximum |
 | --- | --- |
-| Raw request body | 4 MiB |
+| Request body as sent | 4 MiB |
 | Body after gzip decompression | 16 MiB |
 
-The server applies the raw limit to declared and streamed body sizes. It counts decompressed bytes to stop gzip expansion beyond 16 MiB.
+The server returns `413` as soon as a declared `Content-Length` is over 4 MiB, or while it streams a body that grows past 4 MiB. For gzip bodies it counts decompressed bytes as it goes and stops at 16 MiB. If you hit either limit, send smaller batches.
 
-## Send OTLP JSON with curl
+## Rate limits and quotas
 
-Put a valid OTLP JSON `ExportTraceServiceRequest` in `traces.json`. Use `lowerCamelCase` field names.
+| Limit | Scope | Default | Response |
+| --- | --- | --- | --- |
+| Failed authentication attempts | Per sender, per minute | 20 | `429` with `Retry-After` |
+| Requests | Per project, per minute | 6,000 | `429` with `Retry-After` |
+| Monthly ingestion units | Per organization without a paid subscription | Plan dependent | `429` until the next UTC month |
 
-```sh
-curl "https://ingest.telemetry.dev/v1/traces" \
-  --request POST \
-  --header "Authorization: Bearer ${TELEMETRY_DEV_API_KEY}" \
-  --header "Content-Type: application/json; charset=utf-8" \
-  --data-binary @traces.json
-```
+The per-minute limits use fixed one-minute windows counted separately on each server instance. `Retry-After` gives the seconds until the current window ends. A key that authenticated recently on an instance gets its own failure budget, so failed attempts from other clients behind the same address do not lock it out.
 
-Use `/v1/logs` for an `ExportLogsServiceRequest`. Use `/v1/metrics` for an `ExportMetricsServiceRequest`.
+Organizations without a paid subscription have a hard monthly cap on ingestion units. For the cap and how units are counted, see [Plans and billing](/platform/billing). Paid subscriptions are metered and are not rejected for volume.
+
+When a cap applies, every accepted response also carries:
+
+| Response header | Value |
+| --- | --- |
+| `ratelimit-limit` | The organization's hard cap in ingestion units |
+| `ratelimit-reset` | Seconds until the next UTC month |
+
+A request that would go over the monthly cap returns `429` with `retry-after` set to the seconds until the next UTC month. An organization that redeemed a gift code also has a lifetime gift budget, which does not reset monthly. A batch that would go over it returns `429` with `ratelimit-limit` set to the budget and `ratelimit-remaining` set to the units left, and no `retry-after`.
 
 ## Success response
 
-A successful request returns HTTP `200`. The body is the canonical empty OTLP `ExportTraceServiceResponse`, `ExportLogsServiceResponse`, or `ExportMetricsServiceResponse`.
+A successful request returns HTTP `200`. The body is an empty OTLP response message (`ExportTraceServiceResponse`, `ExportLogsServiceResponse`, or `ExportMetricsServiceResponse`): `{}` in JSON, or zero bytes in protobuf.
 
-The response encoding matches the request encoding. A protobuf request receives `application/x-protobuf`. A JSON request receives `application/json`.
+The server never returns OTLP partial-success counts. A batch is either accepted or rejected as a whole; see [Imperfect and out-of-order data](#imperfect-and-out-of-order-data).
 
-## Imperfect and out-of-order data
+Every response from the ingest API, including errors, carries the header `x-telemetry-dev: telemetry.dev`.
 
-The same ingestion rules apply to first-party SDK exports and other OTLP clients. There is no separate strict-SDK ingestion endpoint.
+## Error responses
 
-- **Malformed batches:** a structurally invalid item rejects the complete request before persistence. The server does not return OTLP partial-success counts for valid siblings.
-- **Missing optional information:** an accepted record can have null token, cost, or extracted-content fields. Null means unavailable, not zero. Supported aliases and fallbacks can fill those fields.
-- **Out-of-order delivery:** a child span can arrive before its root, and a log can arrive before its referenced span. The server retains available correlation IDs and reconciles later arrivals within retention limits.
-- **Reversed timing:** valid source timestamps are retained, but derived durations are clamped to zero rather than displayed as negative.
-- **Isolation and privacy:** best-effort extraction never bypasses project ownership, environment scope, capture settings, redaction, or retention.
+An OTLP error body is a `google.rpc.Status` in protobuf or JSON, with the same encoding as the request. It carries only a message:
 
-A persistence error is different from a malformed batch: it can occur after some writes have completed. Follow the retry response rather than assuming either complete acceptance or a complete rollback. Identical request bytes have a project-scoped, one-hour replay marker; this is not an indefinite exactly-once guarantee.
+```json
+{ "message": "API key was not accepted" }
+```
 
-An unreleased normalization correction will omit negative, fractional, non-finite, and unsafe-integer token counts from derived usage fields while retaining the rest of the span or log. Generic signed metric measurements are unaffected.
+`Status.code` is always `0`. Use the HTTP status to decide what to do. A `415` for an unsupported `Content-Type` uses protobuf, because the server cannot tell which encoding you wanted.
 
-The same correction will ignore explicit costs outside the stored decimal field's range. Numeric costs are rounded to eight fractional digits before checking the ten-integer-digit limit; decimal strings must already have at most eight fractional digits. A valid lower-priority cost alias can still supply the value.
+The server also records each rejection of an authenticated request as an ingestion error on the project, under the diagnostic code below. telemetry.dev uses these codes in its ingestion error diagnostics and alerts; the code is not in the response body. Rejections that happen before authentication, such as `415` and `401`, are not recorded on any project.
 
-## Error response
+| HTTP | Diagnostic code | Message sent to the client | Cause | Retry? |
+| --- | --- | --- | --- | --- |
+| `400` | `invalid_body` | `Failed to read request body` | The body stream could not be read. | No |
+| `400` | `decompression_failed` | `Failed to decompress gzip body` | The gzip stream is invalid. | No |
+| `400` | `invalid_protobuf` | `Failed to decode OTLP protobuf payload` | The protobuf body does not decode. | No |
+| `400` | `invalid_json` | `Failed to decode OTLP JSON payload` | The JSON does not parse or is not valid UTF-8. | No |
+| `400` | `invalid_id` | Names the field, such as `Span span_id must be exactly 8 bytes` | A trace or span ID has the wrong length, is all zeros on a span, or is not hex in JSON. | No |
+| `400` | `invalid_payload` | Describes the problem | A bad or missing timestamp, a duplicate or `snake_case` JSON key, a non-integer enum, nesting that is too deep, or a trace token total above 2<sup>53</sup> − 1. | No |
+| `400` | `empty_payload` | `OTLP request body is empty`, or `Request contains no spans`, `no log records`, or `no metric data points` | The body is empty or contains no items. | No |
+| `401` | `invalid_api_key` | `Authorization must be Bearer td_live_xxx` or `API key was not accepted` | The key is missing, malformed, unknown, or revoked. | No |
+| `403` | `environment_mismatch` | `API key is scoped to another environment` | A resource environment, or the stored trace's environment, differs from the key's environment. | No |
+| `409` | `telemetry_deleted` | `Telemetry was deleted` | The project's telemetry, or a trace in the batch, was deleted. | No |
+| `413` | `body_too_large` | `Request body exceeds limit` or `Decompressed request body exceeds limit` | The body is over 4 MiB as sent or 16 MiB after decompression. | No; split the batch |
+| `415` | `unsupported_media_type` | `Content-Type must be application/x-protobuf or application/json` | Missing or unsupported `Content-Type`. | No |
+| `415` | `unsupported_encoding` | `Content-Encoding must be gzip or identity` | Unsupported `Content-Encoding`. | No |
+| `429` | `rate_limited` | `Too many failed authentication attempts`, `Authentication rate-limit capacity reached; retry later`, or `Too many requests for this project; export larger batches less often` | A per-minute limit was reached. | After `Retry-After` |
+| `429` | `quota_exceeded` | `Monthly ingestion quota exceeded; ...` or a lifetime gift budget message | The batch would exceed the organization's monthly cap or gift budget. | After `Retry-After`, if present |
+| `500` | `authentication_failed` | `Failed to authenticate request` | The key lookup failed or took longer than 10 seconds. | Later, with backoff |
+| `500` | `privacy_configuration_invalid` | `Project privacy settings are invalid` | The project's stored privacy settings cannot be read. | No |
+| `500` | `ingestion_failed` | `Failed to decode OTLP payload` | An unexpected error while decoding. | No |
+| `503` | `request_in_progress` | `An identical request is already being processed` | The same body is still being stored from an earlier attempt. | After `Retry-After: 1` |
+| `503` | `ingestion_failed` | `Failed to claim request key`, `Failed to reserve ingestion quota`, or `Failed to persist OTLP batch` | A storage step failed. | After `Retry-After: 1` |
 
-An OTLP error body is a protobuf or ProtoJSON `google.rpc.Status`. The response encoding matches the request when the server can identify it.
+## Duplicate requests
 
-The wire `Status` contains the error message. Its `Status.code` remains `0`. The diagnostic codes below do not replace `Status.code` on the wire.
+The server remembers each accepted request body for one hour, per project and per endpoint. The key is a SHA-256 hash of the endpoint and the body after gzip decompression.
 
-The `details.*` names are internal diagnostics. The `Retry-After` entries are HTTP response headers.
+- If the same body arrives again within the hour after it was stored, the server returns `200` and does not store it again.
+- If the same body arrives while the first copy is still being stored, the server returns `503 request_in_progress` with `Retry-After: 1`.
 
-| HTTP | Diagnostic code | Condition | Diagnostic detail or HTTP header |
-| --- | --- | --- | --- |
-| `400` | `invalid_body` | The server cannot read the body stream. | `details.cause` |
-| `400` | `decompression_failed` | The gzip stream is invalid. | `details.cause` |
-| `400` | `invalid_protobuf` | Protobuf decode is not successful. | `details.cause` |
-| `400` | `invalid_json` | JSON parsing or UTF-8 decode is not successful. | `details.cause` |
-| `400` | `invalid_id` | A trace or span ID has the wrong length or is all zero. | `details.length` |
-| `400` | `invalid_payload` | The payload has a bad timestamp, duplicate key, `snake_case` key, or too much nesting. | — |
-| `400` | `empty_payload` | The body is empty or the decoded batch contains no items. | — |
-| `401` | `invalid_api_key` | The key is absent, malformed, unknown, or revoked. | — |
-| `403` | `environment_mismatch` | The payload environment differs from the key or stored trace environment. | `details.expected`, `details.received` |
-| `409` | `trace_conflict` | A different project owns the trace ID. | — |
-| `413` | `body_too_large` | The raw body exceeds 4 MiB or the decompressed body exceeds 16 MiB. | `details.limit_bytes`, `details.received_bytes`, or `details.hint` |
-| `415` | `unsupported_media_type` | `Content-Type` is not protobuf or JSON. | `details.received` |
-| `415` | `unsupported_encoding` | `Content-Encoding` is not `gzip` or `identity`. | `details.received` |
-| `429` | `quota_exceeded` | A free project exceeds its ingestion quota. | `Retry-After` contains seconds to the next UTC month. |
-| `500` | `authentication_failed` | The authentication database request is not successful or times out. | — |
-| `500` | `privacy_configuration_invalid` | The server cannot decode the project privacy settings. | — |
-| `500` | `ingestion_failed` | An unexpected decode error occurs. | — |
-| `503` | `ingestion_failed` | Persistence is not successful. | `Retry-After: 1` |
-
-If the server cannot identify a supported request media type, the HTTP `415` response uses protobuf. An unregistered route returns JSON with diagnostic code `not_found` and message `Route not found`.
+This protects retries of the same bytes. It is not a general exactly-once guarantee: a re-serialized batch with different bytes, or a repeat after the hour, is stored again.
 
 ## Retries
 
-Retry HTTP `429`, `502`, `503`, and `504` for traces and logs. Use backoff. If the response includes `Retry-After`, obey it.
+Retry `429`, `502`, `503`, and `504` with backoff, and wait at least as long as `Retry-After` when the response includes it. A `500 authentication_failed` is also temporary and can be retried later. Do not retry other `4xx` responses; the same request will fail again.
 
-The telemetry.dev TypeScript transport makes at most three attempts. Its delays are 100 ms and 500 ms. It also retries network errors.
+A `503` from a storage step can arrive after some of the batch was written. Retry with the same body so the replay marker can recognize it, rather than assuming the batch was fully stored or fully rolled back.
 
-Do not automatically retry DELTA metric batches. The TypeScript metric exporter does not retry them because a duplicate request can double-count metrics.
+The telemetry.dev TypeScript SDK makes at most three attempts for each trace, log, and metric batch. It retries the four statuses above and network errors. Between attempts it waits 100 ms and then 500 ms, or the `Retry-After` value when the response has one. If `Retry-After` is longer than 2 seconds, it stops and reports the failure. The Python SDK uses the standard OpenTelemetry OTLP/HTTP exporters with gzip, so their retry behavior applies.
+
+## Imperfect and out-of-order data
+
+The same rules apply to the first-party SDKs and to any other OTLP client. There is no separate strict endpoint for SDK traffic.
+
+| Situation | What the server does |
+| --- | --- |
+| One structurally invalid item in a batch | Rejects the whole request before storing anything. Valid items in the same batch are not stored. |
+| Missing optional fields | Stores the record with null token, cost, or content fields. Null means unknown, not zero. |
+| Invalid token count, such as negative, fractional, or above 2<sup>53</sup> − 1 | Ignores that attribute and tries the next alias; the rest of the span or log is stored. Metric data points are not affected. |
+| Invalid client cost | Ignores that attribute and tries the next cost alias. See [Client cost](/reference/cost#client-cost). |
+| Child span before its parent, or a log before its span | Stores what arrived and links the records when the rest of the trace arrives, within retention. |
+| End time before start time | Keeps both timestamps and stores the duration as `0`. |
+
+Best-effort extraction never bypasses project ownership, environment scope, capture settings, redaction, or retention. For how the server reads each attribute, see [Span attributes](/reference/span-attributes).
