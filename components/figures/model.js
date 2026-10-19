@@ -45,8 +45,10 @@ export const buildTicks = (totalMs, widthPx = 244) => {
  * matching apps/ingest/src/pricing.ts.
  */
 export const costParts = ({ input, cacheRead = 0, cacheWrite = 0, output, prices }) => {
+  // The server stores no cost for these counts, so a figure must not show one.
+  if (cacheRead + cacheWrite > input) throw new Error("CostFigure: cache tokens exceed input tokens");
   const parts = [
-    { key: "uncached", label: "Uncached input", tokens: Math.max(0, input - cacheRead - cacheWrite), price: prices.input },
+    { key: "uncached", label: "Uncached input", tokens: input - cacheRead - cacheWrite, price: prices.input },
     { key: "cacheRead", label: "Cache read", tokens: cacheRead, price: prices.cachedInput ?? prices.input },
     { key: "cacheWrite", label: "Cache creation", tokens: cacheWrite, price: prices.cacheWrite ?? prices.input },
     { key: "output", label: "Output", tokens: output, price: prices.output },

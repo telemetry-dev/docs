@@ -11,9 +11,15 @@ The ingest API accepts OTLP/HTTP at `https://ingest.telemetry.dev`. Send traces 
 
 ## Send a span with curl
 
-This request sends one model span. Save the body as `traces.json`:
+This request sends one model span. The script writes the body to `traces.json` with the current time and new random IDs:
 
-```json
+```sh
+START="$(date +%s)000000000"
+END=$((START + 1200000000))
+TRACE_ID=$(openssl rand -hex 16)
+SPAN_ID=$(openssl rand -hex 8)
+
+cat > traces.json <<EOF
 {
   "resourceSpans": [
     {
@@ -28,12 +34,12 @@ This request sends one model span. Save the body as `traces.json`:
           "scope": { "name": "manual-curl" },
           "spans": [
             {
-              "traceId": "5b8efff798038103d269b633813fc60c",
-              "spanId": "eee19b7ec3c1b174",
+              "traceId": "${TRACE_ID}",
+              "spanId": "${SPAN_ID}",
               "name": "chat claude-sonnet-4-5",
               "kind": 3,
-              "startTimeUnixNano": "1760832000000000000",
-              "endTimeUnixNano": "1760832001200000000",
+              "startTimeUnixNano": "${START}",
+              "endTimeUnixNano": "${END}",
               "attributes": [
                 { "key": "gen_ai.operation.name", "value": { "stringValue": "chat" } },
                 { "key": "gen_ai.provider.name", "value": { "stringValue": "anthropic" } },
@@ -50,6 +56,7 @@ This request sends one model span. Save the body as `traces.json`:
     }
   ]
 }
+EOF
 ```
 
 Then post it:
@@ -64,7 +71,7 @@ curl "https://ingest.telemetry.dev/v1/traces" \
 
 A successful request returns HTTP `200` with the body `{}`. The span is stored with operation `chat`, its token counts, and a cost the server calculates from the pricing snapshot. The [cost worked example](/reference/cost#worked-example) shows that calculation for these exact counts.
 
-In OTLP JSON, trace and span IDs are hex strings, `kind` is an integer (`3` is `CLIENT`), and timestamps are nanoseconds since the Unix epoch. Use a new `traceId` and `spanId` for each test so that you do not resend an identical body; see [Duplicate requests](#duplicate-requests).
+In OTLP JSON, trace and span IDs are hex strings, `kind` is an integer (`3` is `CLIENT`), and timestamps are nanoseconds since the Unix epoch. The script uses the current time because the trace explorer hides spans older than the project's retention period. It generates new IDs so that each run sends a different body; see [Duplicate requests](#duplicate-requests).
 
 For logs, send an `ExportLogsServiceRequest` to `/v1/logs`. For metrics, send an `ExportMetricsServiceRequest` to `/v1/metrics`.
 

@@ -33,13 +33,14 @@ Set the variables in your shell, or save them in the `env` object of `~/.claude/
 <CodeGroup>
 
 ```sh Shell
-export TELEMETRY_DEV_API_KEY="td_live_..."
+TELEMETRY_DEV_API_KEY="td_live_..."
 export CLAUDE_CODE_ENABLE_TELEMETRY=1
 export OTEL_METRICS_EXPORTER=otlp
 export OTEL_LOGS_EXPORTER=otlp
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 export OTEL_EXPORTER_OTLP_ENDPOINT="https://ingest.telemetry.dev"
 export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer $TELEMETRY_DEV_API_KEY"
+unset TELEMETRY_DEV_API_KEY
 export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=development"
 ```
 
@@ -59,6 +60,7 @@ export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=development"
 
 </CodeGroup>
 
+- The header variable holds the key, so the last line removes `TELEMETRY_DEV_API_KEY` from the shell. Programs that Claude Code starts then can't inherit your key.
 - Put a literal space between `Bearer` and the key, not `%20`. Claude Code sends `%20` unchanged, and telemetry.dev rejects the export with `401 Unauthorized`.
 - `OTEL_EXPORTER_OTLP_PROTOCOL` is required because Claude Code has no default protocol. Keep it at `http/protobuf`; telemetry.dev doesn't accept `grpc`.
 - `OTEL_RESOURCE_ATTRIBUTES` sets the telemetry.dev environment. Use any name you like.
@@ -70,7 +72,7 @@ To turn on telemetry for every developer on a team, see [Roll out to a team](#ro
 
   <Step title="Start Claude Code">
 
-Run `claude` in a new terminal. The variables must be set before Claude Code starts; changing them in a running session has no effect.
+Run `claude` in the terminal where you set the variables. If you used `settings.json`, any terminal works. Claude Code reads the variables when it starts, so changing them in a running session has no effect.
 
   </Step>
 </Steps>
@@ -258,7 +260,7 @@ With the setup above, Claude Code sends no prompt text, response text, tool argu
 | `OTEL_LOG_ASSISTANT_RESPONSES=1` | Claude's response text on `assistant_response` events. |
 | `OTEL_LOG_TOOL_DETAILS=1` | Tool arguments: Bash commands, file paths, URLs, search patterns, and MCP server and tool names, on events and tool spans. |
 | `OTEL_LOG_TOOL_CONTENT=1` | File contents, command output, and web results, on a `tool.output` event of each tool span. Needs tracing. |
-| `OTEL_LOG_RAW_API_BODIES=1` | Full API request and response bodies, which contain the whole conversation, so they reveal everything the other variables would. |
+| `OTEL_LOG_RAW_API_BODIES=1` | API request and response bodies, on `api_request_body` and `api_response_body` events. They contain the conversation so far, including the system prompt and tool results, so they reveal what the other variables would. Each body is cut at about 60 KB by default, and Claude Code always redacts extended-thinking content. |
 
 Even with all of these unset, Claude Code sends:
 
@@ -270,4 +272,4 @@ Even with all of these unset, Claude Code sends:
 
 telemetry.dev's [built-in redaction](/platform/privacy) replaces email addresses and common secret formats before it stores data, but that happens after the data leaves your machine. To keep account UUIDs off metrics, set `OTEL_METRICS_INCLUDE_ACCOUNT_UUID=false`. To filter any other attribute before it is sent, route Claude Code through your own OpenTelemetry Collector.
 
-Claude Code doesn't pass `OTEL_*` variables to the commands, hooks, or MCP servers it starts, so programs it runs don't export to telemetry.dev with your key.
+Claude Code doesn't pass `OTEL_*` variables to the commands, hooks, or MCP servers it starts, so they don't inherit the exporter endpoint or the header that holds your key. Other variables are inherited: if you export `TELEMETRY_DEV_API_KEY` in the same shell, a program that uses a telemetry.dev SDK can send telemetry with it.
