@@ -10,6 +10,7 @@ export default defineMeta({
     "environments",
     "traces",
     "analytics",
+    "alerts",
     "privacy",
     "team",
     "billing",

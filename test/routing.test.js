@@ -280,8 +280,12 @@ test("the integration catalog and guide-title markup reference available branded
   );
 });
 
-test("modality cross-references in Markdown resolve inside the docs site", async () => {
+test("cross-references in Markdown resolve inside the docs site", async () => {
   for (const [page, label, destination] of [
+    ["platform/billing", "**Quota runway** alert", "platform/alerts#quota-runway"],
+    ["reference/otlp", "Ingestion error alerts", "platform/alerts#ingestion-error-cluster"],
+    ["platform/alerts", "diagnostic code", "reference/otlp#error-responses"],
+    ["platform/alerts", "Plans and billing", "platform/billing"],
     ["reference/cost", "modality usage attributes", "reference/span-attributes#modality-token-usage"],
     ["reference/span-attributes", "Cost", "reference/cost#modality-pricing"],
     ["sdk/typescript", "Cost", "reference/cost#modality-pricing"],
@@ -295,7 +299,7 @@ test("modality cross-references in Markdown resolve inside the docs site", async
     const target = new URL(`https://telemetry.dev/docs/${destination}`);
     const linkedResponse = await server.fetch(target.pathname);
     assert.equal(linkedResponse.status, 200);
-    assert.ok((await linkedResponse.text()).includes(`id="${target.hash.slice(1)}"`));
+    if (target.hash) assert.ok((await linkedResponse.text()).includes(`id="${target.hash.slice(1)}"`));
   }
 });
 
