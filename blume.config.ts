@@ -1,6 +1,6 @@
 import { defineConfig } from "blume";
 import type { ComponentMarkdown } from "blume";
-import { costMarkdown, pipelineMarkdown, traceMarkdown } from "./components/figures/model.js";
+import { alertLifecycleMarkdown, costMarkdown, pipelineMarkdown, traceMarkdown } from "./components/figures/model.js";
 import { DOCS_BASE_PATH, pageCardMarkdown as serializePageCard } from "./page-card-markdown.js";
 
 const pageCardMarkdown: ComponentMarkdown = serializePageCard;
@@ -39,6 +39,7 @@ export default defineConfig({
         lossy || typeof props.src !== "string" || typeof props.alt !== "string"
           ? null
           : `![${props.alt}](${DOCS_BASE_PATH}/${props.src})`,
+      AlertLifecycleFigure: alertLifecycleMarkdown as ComponentMarkdown,
       CostFigure: costMarkdown as ComponentMarkdown,
       PipelineFigure: pipelineMarkdown as ComponentMarkdown,
       TraceFigure: traceMarkdown as ComponentMarkdown,

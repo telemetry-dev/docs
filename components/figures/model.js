@@ -128,3 +128,73 @@ export const pipelineMarkdown = ({ lossy, props }) => {
     `${PIPELINE.ingest.length + 3}. **${PIPELINE.store.title}.** ${PIPELINE.store.detail}${note(PIPELINE.store)}`,
   ].join("\n");
 };
+
+/** Timing from the alert evaluator; if the product changes these, update the Alerts page too. */
+export const ALERT_RULES = { checkMinutes: 5, breachesToOpen: 2, healthyToResolve: 3, quietMinutes: 30, reminderHours: 6 };
+
+/**
+ * Replays a sequence of checks through the open and resolve rules.
+ * `steps` holds "breached", "healthy", or "gap" (time skipped until the next reminder).
+ * Covers the email rules the figure shows; a held opening email is not replayed later.
+ */
+export const alertTimeline = (steps) => {
+  const { breachesToOpen, healthyToResolve, quietMinutes, checkMinutes } = ALERT_RULES;
+  let open = false;
+  let announced = false;
+  let breaches = 0;
+  let healthy = 0;
+  let quiet = 0;
+  let afterGap = false;
+  return steps.map((step) => {
+    if (step === "gap") {
+      afterGap = true;
+      return { kind: "gap", state: open ? "open" : "none" };
+    }
+    const breached = step === "breached";
+    breaches = breached ? breaches + 1 : 0;
+    healthy = breached ? 0 : healthy + 1;
+    let email;
+    const inQuiet = quiet > 0;
+    let state = open ? "open" : inQuiet ? "quiet" : "none";
+    if (inQuiet) quiet -= 1;
+    if (!open && breaches >= breachesToOpen) {
+      open = true;
+      state = "open";
+      announced = !inQuiet;
+      email = announced ? "Opened" : undefined;
+    } else if (open && healthy >= healthyToResolve) {
+      open = false;
+      email = announced ? "Resolved" : undefined;
+      quiet = quietMinutes / checkMinutes;
+    } else if (open && announced && breached && afterGap) {
+      email = "Reminder";
+    }
+    afterGap = false;
+    return { kind: "check", breached, state, email, run: breached ? breaches : healthy };
+  });
+};
+
+export const ALERT_EXAMPLE = [
+  "healthy", "breached", "breached", "breached", "gap", "breached",
+  "healthy", "healthy", "healthy", "healthy", "healthy", "healthy", "healthy", "healthy", "healthy",
+];
+
+export const alertTimelineEvents = (steps = ALERT_EXAMPLE) => {
+  const { breachesToOpen, healthyToResolve, quietMinutes, reminderHours } = ALERT_RULES;
+  const events = [];
+  for (const item of alertTimeline(steps)) {
+    if (item.kind === "gap") events.push(`Time passes while the alert stays open. Every ${reminderHours} hours a reminder email goes out.`);
+    else if (item.email === "Opened") events.push(`Breached check ${item.run} in a row: the alert opens and the opening email goes out.`);
+    else if (item.email === "Reminder") events.push("Still breached: reminder email.");
+    else if (item.email === "Resolved") events.push(`Healthy check ${item.run} in a row: the alert resolves and the resolved email goes out. For the next ${quietMinutes} minutes, a new alert from this rule is recorded but its opening email is held.`);
+    else if (item.breached && item.run < breachesToOpen) events.push("A breached check. One is not enough to open the alert.");
+    else if (!item.breached && item.state === "open" && item.run < healthyToResolve) events.push(`Healthy check ${item.run} in a row. The alert stays open.`);
+  }
+  return events;
+};
+
+export const alertLifecycleMarkdown = ({ lossy, props }) => {
+  if (lossy) return null;
+  const lines = alertTimelineEvents().map((event, index) => `${index + 1}. ${event}`);
+  return [props.title ? `${props.title} (one check every ${ALERT_RULES.checkMinutes} minutes):` : "", "", ...lines].join("\n").trim();
+};

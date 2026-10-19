@@ -1,52 +1,48 @@
-<div align="center">
+# telemetry.dev docs
 
-# telemetry.dev
-
-### See every AI call, tool run, token, and error in one trace.
-
-Open-source observability for AI applications and agents. Trace model calls, inspect tool use, measure cost and latency, and find errors without changing providers.
-
-[Start tracing](https://telemetry.dev) · [Read the docs](https://docs.telemetry.dev)
-
-</div>
+This repository is the source of the [telemetry.dev documentation](https://telemetry.dev/docs). telemetry.dev records traces of AI applications and coding agents, with each model call, tool run, token count, cost, and error in one view.
 
 ![A trace and its spans in the telemetry.dev dashboard](public/dashboard-trace.png)
 
-## Understand what your AI application does
+The SDKs and integrations are open source in the [telemetry repository](https://github.com/telemetry-dev/telemetry). The ingest service and dashboard are hosted at [telemetry.dev](https://telemetry.dev) and their source is not public. To report a problem with a page, [open an issue](https://github.com/telemetry-dev/docs/issues) in this repository.
 
-A single request can call a model, run several tools, retry, and call the model again. telemetry.dev joins that work into one trace, so you can see the full path from input to output.
+## Run the docs locally
 
-- **Trace complete agent runs.** See model calls, tool executions, retries, and errors in order.
-- **Measure usage and cost.** Compare token use, latency, time to first token, and estimated cost.
-- **Inspect safely.** Control input and output capture, mask sensitive values, and set content limits.
-- **Use your current stack.** Send OpenTelemetry data or install an integration for your provider, framework, or coding agent.
-
-## Start in minutes
-
-Create a project at [telemetry.dev](https://telemetry.dev), copy an API key, and install the SDK.
+You need Node.js and [pnpm](https://pnpm.io).
 
 ```sh
-npm install @telemetry-dev/sdk
+pnpm install
+pnpm dev
 ```
 
-```ts
-import { init } from "@telemetry-dev/sdk";
+`pnpm dev` prints the local URL. Pages are served under `/docs`.
 
-const telemetry = init({
-  apiKey: process.env.TELEMETRY_DEV_API_KEY,
-});
+## Check a change
+
+```sh
+pnpm test
+npx blume validate
 ```
 
-The SDK sends traces through OTLP, the OpenTelemetry Protocol. You can also use the Python SDK or an OpenTelemetry exporter.
+`pnpm test` builds the site and runs the tests in `test/`. `npx blume validate` reports broken links.
 
-[Open the quickstart](https://docs.telemetry.dev/quickstart)
+## How the repository is organized
 
-## Works with your AI stack
+| Path | Contents |
+| --- | --- |
+| `docs/` | The pages, as MDX. The path of a file is its URL under `/docs`; folders in parentheses, such as `(coding-agents)`, group pages without changing their URL. |
+| `docs/**/meta.ts` | The order and titles of the pages in each sidebar section. |
+| `components/figures/` | Figures drawn in HTML and CSS, so they follow the light and dark themes. `model.js` holds their data and the Markdown versions used for `.md` pages and `llms-full.txt`. |
+| `public/` | Screenshots and integration marks. [ASSET_PROVENANCE.md](ASSET_PROVENANCE.md) records where each mark came from. |
+| `blume.config.ts`, `theme.css` | Site configuration and styles. The site is built with [Blume](https://www.npmjs.com/package/blume). |
 
-telemetry.dev has integrations for OpenAI, Anthropic, Google Gen AI, Amazon Bedrock, LiteLLM, the Vercel AI SDK, TanStack AI, Eve, opencode, Oh My Pi, and Pi.
+## Writing guidelines
 
-[See all integrations](https://docs.telemetry.dev/integrations)
+- Check each claim against the product and the released SDK versions, not against older pages. Say which SDK version a statement applies to when behavior changed between releases.
+- Document what users can see and rely on: endpoints, limits, status codes, settings, and what data is sent. Leave out how the hosted service is built, such as databases, internal flags, and deployment steps.
+- When a page says what is not captured or not sent, also say what still is.
+- A figure that shows the dashboard has to match it. When the dashboard changes, update the figure too.
 
-## Open source
+## Deployment
 
-This repository contains the documentation for telemetry.dev. The open-source SDKs and integrations are in the [telemetry repository](https://github.com/telemetry-dev/telemetry).
+Changes merged to `main` deploy to [telemetry.dev/docs](https://telemetry.dev/docs) through Cloudflare Workers Builds. Each pull request gets a preview build.

@@ -183,7 +183,7 @@ An OTLP error body is a `google.rpc.Status` in protobuf or JSON, with the same e
 
 `Status.code` is always `0`. Use the HTTP status to decide what to do. A `415` for an unsupported `Content-Type` uses protobuf, because the server cannot tell which encoding you wanted.
 
-telemetry.dev also records each rejection of an authenticated request on the project, with the diagnostic code below. Ingestion error alerts name this code; the response body does not include it. Rejections that happen before authentication, such as `415` and `401`, are not recorded on any project.
+telemetry.dev also records each rejection of an authenticated request on the project, with the diagnostic code below. [Ingestion error alerts](https://telemetry.dev/docs/platform/alerts#ingestion-error-cluster) name this code; the response body does not include it. Rejections that happen before authentication, such as `415` and `401`, are not recorded on any project.
 
 | HTTP | Diagnostic code | Message sent to the client | Cause | Retry? |
 | --- | --- | --- | --- | --- |

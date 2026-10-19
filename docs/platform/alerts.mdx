@@ -1,0 +1,150 @@
+---
+title: Alerts
+description: Get an email when model cost, traces, model failures, ingestion errors, or quota usage need attention.
+lastModified: 2026-10-19
+---
+
+Alerts check your telemetry every 5 minutes and email you when something needs attention: model cost heading over budget, a trace that might be an agent loop, a burst of failed model calls, or ingestion that is failing or running out of quota.
+
+There are two places to set them up:
+
+- **Project alerts** cover cost, traces, model calls, and ingestion errors for one project. Select **Alerts** in the project sidebar.
+- **Organization alerts** cover quota and the mix of data the whole organization sends. Open the organization settings and select the **Alerts** tab.
+
+Organization owners and admins can create and change alerts. Other members can see the rules and the alert history but cannot change them. Alerts are available on every plan.
+
+## Create an alert
+
+The **Alert rules** section has a card for each kind of alert.
+
+1. Fill in the card's fields. Each field shows its unit, and most have a default.
+2. In **Email recipients**, enter the addresses to notify, separated by commas. Leave it blank to record alerts in the history without sending email.
+3. Select **Preview alert**. The preview runs the rule against your current telemetry and shows whether it would open, with the same explanation an email would contain. A preview sends no email.
+4. Select **Create alert**. The button is available after a preview.
+
+The new rule is on and starts checking within 5 minutes. To change it later, edit the fields and select **Save changes**. **Disable alert** stops checks and email without deleting the rule; to turn it back on, preview it again and select **Enable alert**. **Remove** deletes the rule and its history.
+
+Each card shows the rule's state: **Not configured**, **Healthy**, **Open**, **Learning**, or **Disabled**.
+
+## Email recipients
+
+Organization members with a verified email get alerts right away. Any other address has to confirm first. When you save the rule, each of those addresses gets an email titled "Confirm alert emails from telemetry.dev". The recipient selects **Review and confirm**, then **Confirm alert emails**. The link expires after 7 days.
+
+Until an address confirms, it gets no alert email, and the card lists it as waiting for confirmation. To ask again, for example after the link expired, select **Send confirmation emails**. Addresses outside the organization can unsubscribe from a link at the bottom of each alert email. To stop alerts for a member, remove their address from the rule.
+
+When telemetry.dev sends an email, it checks each address again. An address stops getting alerts when its owner leaves the organization or unsubscribes.
+
+## Project alerts
+
+### Monthly cost budget
+
+**Settings:** **Monthly budget** in USD, and the **Environment** to watch (default `production`).
+
+Opens when the environment's model cost so far this month, projected to the end of the month at the same rate, is over the budget. Months follow UTC.
+
+### Cost per trace increase
+
+**Settings:** **Environment** (default `production`).
+
+Opens when model cost per successful trace in the last hour is at least 1.5 times its usual level for the last 30 days, is outside its usual variation, and the increase adds at least $5 a day. When the hour has fewer than 100 successful traces, the rule uses the last 6 hours.
+
+### Runaway trace
+
+**Settings:** **Minimum trace cost** in USD (default $2), and **Use learned baseline** (on by default).
+
+A runaway trace is often an agent stuck in a loop, so the rule checks both cost and span count. It opens when a trace that finished in the last hour costs more than the cost limit or has more spans than the span limit. Traces are grouped by agent.
+
+| Limit | Learned baseline off | Learned baseline on |
+| --- | --- | --- |
+| Cost | **Minimum trace cost** | The higher of **Minimum trace cost** and 3 times the project's 99th percentile trace cost |
+| Spans | 30 | The higher of 30 and 2 times the project's 99th percentile span count |
+
+The learned baseline comes from the 6 hours before the last hour, or the 24 hours before it when the project had fewer than 100 traces. The baseline only raises the limits, for projects whose traces are usually large. It never adds alerts.
+
+### Model failure cluster
+
+**Settings:** **Environments**, separated by commas (default `production`), and **Minimum calls** (default 50).
+
+Opens when calls to one provider and model fail with the same error type often enough: at least 10 failures, a failure rate above 5%, and at least 3 times the usual rate. When the last hour has fewer calls than **Minimum calls**, the rule uses the last 6 hours.
+
+### Ingestion error cluster
+
+**Settings:** **Minimum occurrences** (default 3, at most 100).
+
+Opens when telemetry.dev records at least that many diagnostics with the same [diagnostic code](https://telemetry.dev/docs/reference/otlp#error-responses) within 5 minutes, from API keys for the same environment or from unscoped keys. It counts recorded diagnostics, not requests. Quota rejections are covered by the organization's [Quota runway](#quota-runway) alert instead.
+
+### Cost undercount
+
+**Settings:** **Minimum calls** (default 100), and **Minimum priced share** in percent (default 90).
+
+Opens when fewer than the minimum share of model calls with token usage have a cost. When the last hour has fewer calls than **Minimum calls**, the rule uses the last 6 hours. A call usually has no cost because telemetry.dev has no price for its model; see [Cost](https://telemetry.dev/docs/reference/cost).
+
+## Organization alerts
+
+### Quota runway
+
+**Settings:** **Warning runway** in hours (default 72), and **Critical runway** in hours (default 24).
+
+The rule uses the organization's average ingestion rate over the last 6 hours. It opens when:
+
+- The organization is likely to use its monthly allowance within **Warning runway** hours.
+- On the Free plan, ingestion is likely to reach the hard stop within **Critical runway** hours.
+- On a paid plan, projected usage for the month is over 125% of the allowance.
+
+It also emails once a month when usage passes 80% and 100% of the allowance, and right away when the ingest API rejects a batch because of the monthly cap or a gift budget. Rejection emails go out at most once every 5 minutes. For plan allowances and the hard stop, see [Plans and billing](https://telemetry.dev/docs/platform/billing).
+
+### Ingestion mix change
+
+**Settings:** none. The rule compares with the organization's history.
+
+Opens when spans, log records, or metric points suddenly make up most of the organization's ingestion. In the last hour, one of them has to be more than half of all records, at least 500 records, more than 3 times its usual count for that hour of the day, and a larger share than usual.
+
+## When an alert opens and resolves
+
+Each check reports every rule as breached, healthy, or still learning.
+
+<AlertLifecycleFigure
+  title="How an alert opens and resolves"
+  caption="Each dot is one check. The break skips ahead 6 hours, the time between reminders, so the strip is not to scale there. The alert opens on the second breached check in a row and resolves on the third healthy check in a row."
+/>
+
+- **Opening.** An alert opens after two breached checks in a row, about 10 minutes. Some opens are immediate: a runaway trace over the cost limit, a rejected batch, and ingestion errors whose HTTP status means a retry would fail too (anything other than `429`, `502`, `503`, and `504`).
+- **Reminders.** While an alert stays open, recipients get a reminder every 6 hours.
+- **Resolving.** An alert resolves after three healthy checks in a row, about 15 minutes. Recipients get a resolved email if they got the opening email.
+- **Quiet period.** For 30 minutes after an alert resolves, new alerts from the same rule still appear in the history, but their opening email is held. It goes out on the first check after the 30 minutes if the alert is still breached. An alert that resolves before then sends no email. Immediate opens are not held.
+
+A rule can have several alerts open at once, one for each thing it watches: each environment for a budget, each provider and model for failures, each diagnostic code and API key environment for ingestion errors.
+
+### Learning
+
+Rules that compare with your usual traffic need history before they can decide. **Cost per trace increase** and **Model failure cluster** need at least 7 comparable hours from the last 30 days, and **Ingestion mix change** needs 7 samples of the same hour of the day. **Cost undercount** is learning when even the last 6 hours have fewer calls than **Minimum calls**. A learning rule does not open or resolve alerts.
+
+Checks leave out the last 3 minutes of data, so telemetry that arrives a little late is counted on the next check. The hourly rules use the last completed hour, so their results change about once an hour.
+
+## Alert emails
+
+Alert emails come from `telemetry.dev alerts <alerts@mail.telemetry.dev>`. The subject is the alert title, such as "Monthly cost budget at risk for production" or "Ingestion errors: invalid_json from the production key in Checkout". Reminders start with "Reminder:" and resolved alerts with "Resolved:".
+
+Each email has these sections:
+
+- **What changed**: the measurement that broke the rule.
+- **Compared with**: the limit or usual level it was compared with.
+- **Why it matters**: what the problem means for your application or bill.
+- **Likely cause**: the model, provider, agent, or error that contributed most, when telemetry.dev can tell.
+
+The **Investigate** button opens the page to start from: the project overview filtered to the environment, the trace itself for a runaway trace, the project's setup page for ingestion errors, or the organization's **Usage** or **Billing** tab for quota.
+
+## Alert history
+
+The **Alert history** section lists open alerts and alerts that resolved recently. Select **Open** or **Resolved** to switch lists, and **Load more** to see older alerts. Each entry shows when the alert opened and resolved, and the measurements behind it. The organization's **Alerts** tab shows the history of organization alerts only.
+
+## Limits
+
+| Limit | Value |
+| --- | --- |
+| Alert rules | 100 per organization, counting organization and project rules |
+| Recipients | 50 per rule |
+| Alert emails | 1,000 per organization in a 24-hour window, including confirmation requests |
+| Emails per rule per check | 5 alerts |
+
+Saving a rule over the first two limits fails with an error. The email limits hold email back instead, and the alerts still appear in the history. A held opening email goes out on a later check if the alert is still breached; an alert that recovers first resolves without email. An alert whose opening email was sent stays open until its resolved email can be sent.
