@@ -49,4 +49,4 @@ telemetry.dev has integrations for OpenAI, Anthropic, Google Gen AI, Amazon Bedr
 
 ## Open source
 
-This repository contains the documentation for telemetry.dev. The product source is available in the [telemetry.dev repository](https://github.com/telemetry-dev/telemetry).
+This repository contains the documentation for telemetry.dev. The open-source SDKs and integrations are in the [telemetry repository](https://github.com/telemetry-dev/telemetry).

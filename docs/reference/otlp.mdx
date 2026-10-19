@@ -83,19 +83,7 @@ For logs, send an `ExportLogsServiceRequest` to `/v1/logs`. For metrics, send an
 | `POST` | `/v1/logs` | Ingest an OTLP `ExportLogsServiceRequest` |
 | `POST` | `/v1/metrics` | Ingest an OTLP `ExportMetricsServiceRequest` |
 | `GET` | `/health` | Liveness. Always returns `{"ok":true}`. |
-| `GET` | `/ready` | Readiness. Returns `200` when every check passes and `503` when one fails. |
-
-A `/ready` response looks like this:
-
-```json
-{
-  "ok": true,
-  "checks": { "clickhouse": "ok", "modalityUsageConfig": "ok", "postgres": "ok" },
-  "configuration": { "modalityUsageEnabled": true }
-}
-```
-
-`configuration.modalityUsageEnabled` tells you whether the server reads [modality token usage](/reference/span-attributes#modality-token-usage). The hosted service reports `true`.
+| `GET` | `/ready` | Readiness. Returns `200` when the service can accept data and `503` when it cannot. |
 
 Any other path or method returns HTTP `404` with the JSON body `{"error":{"code":"not_found","message":"Route not found"}}`. A `GET` to `/v1/traces` is a `404`, not a `405`.
 
@@ -164,7 +152,7 @@ The server returns `413` as soon as a declared `Content-Length` is over 4 MiB, o
 | Requests | Per project, per minute | 6,000 | `429` with `Retry-After` |
 | Monthly ingestion units | Per organization without a paid subscription | Plan dependent | `429` until the next UTC month |
 
-The per-minute limits use fixed one-minute windows counted separately on each server instance. `Retry-After` gives the seconds until the current window ends. A key that authenticated recently on an instance gets its own failure budget, so failed attempts from other clients behind the same address do not lock it out.
+The per-minute limits use fixed one-minute windows. `Retry-After` gives the seconds until the current window ends. A key that authenticated recently has its own failure budget, so failed attempts from other clients behind the same address do not normally lock it out.
 
 Organizations without a paid subscription have a hard monthly cap on ingestion units. For the cap and how units are counted, see [Plans and billing](/platform/billing). Paid subscriptions are metered and are not rejected for volume.
 
@@ -195,7 +183,7 @@ An OTLP error body is a `google.rpc.Status` in protobuf or JSON, with the same e
 
 `Status.code` is always `0`. Use the HTTP status to decide what to do. A `415` for an unsupported `Content-Type` uses protobuf, because the server cannot tell which encoding you wanted.
 
-The server also records each rejection of an authenticated request as an ingestion error on the project, under the diagnostic code below. telemetry.dev uses these codes in its ingestion error diagnostics and alerts; the code is not in the response body. Rejections that happen before authentication, such as `415` and `401`, are not recorded on any project.
+telemetry.dev also records each rejection of an authenticated request on the project, with the diagnostic code below. Ingestion error alerts name this code; the response body does not include it. Rejections that happen before authentication, such as `415` and `401`, are not recorded on any project.
 
 | HTTP | Diagnostic code | Message sent to the client | Cause | Retry? |
 | --- | --- | --- | --- | --- |
@@ -222,7 +210,7 @@ The server also records each rejection of an authenticated request as an ingesti
 
 ## Duplicate requests
 
-The server remembers each accepted request body for one hour, per project and per endpoint. The key is a SHA-256 hash of the endpoint and the body after gzip decompression.
+The server remembers each accepted request body for one hour, per project and per endpoint. Two requests are the same when they go to the same endpoint and their bodies match byte for byte after gzip decompression.
 
 - If the same body arrives again within the hour after it was stored, the server returns `200` and does not store it again.
 - If the same body arrives while the first copy is still being stored, the server returns `503 request_in_progress` with `Retry-After: 1`.
@@ -233,7 +221,7 @@ This protects retries of the same bytes. It is not a general exactly-once guaran
 
 Retry `429`, `502`, `503`, and `504` with backoff, and wait at least as long as `Retry-After` when the response includes it. A `500 authentication_failed` is also temporary and can be retried later. Do not retry other `4xx` responses; the same request will fail again.
 
-A `503` from a storage step can arrive after some of the batch was written. Retry with the same body so the replay marker can recognize it, rather than assuming the batch was fully stored or fully rolled back.
+A `503` from a storage step can arrive after some of the batch was written. Retry with the same body so the server can recognize it, rather than assuming the batch was fully stored or fully rolled back.
 
 The telemetry.dev TypeScript SDK makes at most three attempts for each trace, log, and metric batch. It retries the four statuses above and network errors. Between attempts it waits 100 ms and then 500 ms, or the `Retry-After` value when the response has one. If `Retry-After` is longer than 2 seconds, it stops and reports the failure. The Python SDK uses the standard OpenTelemetry OTLP/HTTP exporters with gzip, so their retry behavior applies.
 

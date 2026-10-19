@@ -53,7 +53,7 @@ This span used 12,000 input tokens, of which 8,000 were read from cache and 1,00
 }
 ```
 
-The prices below are illustrative. They match the `anthropic:claude-sonnet-4-5` entry in a snapshot generated on 2026-09-24, but each new snapshot can change them.
+The prices below are illustrative. They match the `anthropic:claude-sonnet-4-5` entry in the snapshot of 2026-09-24, but each new snapshot can change them.
 
 <CostFigure
   title="Where the cost of this span comes from"
@@ -157,9 +157,7 @@ These adjustments come from Claude Platform and Claude Code telemetry:
 
 ## Pricing snapshot
 
-The server reads prices from a snapshot file that ships with the ingest service. It does not call any catalog while it ingests a span.
-
-The snapshot is generated when the ingest service's deployment image is built, so production prices are as of that build. Generating it needs all four catalogs below. On a local machine, the `build`, `dev`, `start`, and `test` scripts refresh it, and a failed refresh keeps the previous snapshot. A failed refresh with no previous snapshot fails, so the image build stops rather than ship without prices.
+The server reads prices from a pricing snapshot that telemetry.dev updates from the four catalogs below. It does not call any catalog while it ingests a span, so a price change reaches telemetry.dev with the next snapshot, not immediately. The set of priced models can change between snapshots.
 
 | Source | Role |
 | --- | --- |
@@ -169,8 +167,6 @@ The snapshot is generated when the ingest service's deployment image is built, s
 | [OpenRouter](https://openrouter.ai/api/v1/models) | Prices for OpenRouter routes only |
 
 Gateway routes are priced only from their own catalog. A Vercel AI Gateway or OpenRouter route missing from that catalog has no price, even if another provider prices the same model.
-
-The snapshot is generated and is not stored in the source repository, so the number of priced models varies by build.
 
 ## Model matching
 

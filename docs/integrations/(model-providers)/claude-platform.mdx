@@ -78,7 +78,7 @@ telemetry.dev treats the two spans as the same request when either of these is t
 - The API span is a child of your application's span. The Claude SDK's OpenTelemetry tracing sets this link when your application uses the W3C trace context propagator. See Anthropic's guide to [connecting API spans to your own traces](https://platform.claude.com/docs/en/manage-claude/opentelemetry/api#connect-api-spans-to-your-own-traces).
 - Both spans carry the same `anthropic.request.id` or `gen_ai.response.id`. This match works across traces, so it also covers API spans that start their own trace.
 
-To match spans that arrive in different requests to telemetry.dev, ingest keeps hashes of the request and response IDs for at least 7 days. A span that arrives after that can count on its own.
+The two spans can arrive in different requests to telemetry.dev. They match when they arrive within 7 days of each other; a span that arrives later can count on its own.
 
 If the destination uses an environment-scoped API key, its API spans take over only spans in that environment. With an unscoped key, they take over spans in any environment of the project.
 

@@ -168,8 +168,6 @@ Modality counts are parts of the aggregate counts, not additions to them:
 
 When an aggregate is absent, token totals and cost use the sum of the modality counts that are present.
 
-The ingest server reads these attributes only when modality extraction is turned on. The hosted service has it on, and `GET /ready` reports it as `configuration.modalityUsageEnabled`; see [Endpoints](/reference/otlp#endpoints). When it is off, the attributes stay in the stored attributes but do not affect token totals or cost.
-
 The first-party SDKs accept modality fields, and several provider integrations set them when the provider reports modality detail. See [Cost](https://telemetry.dev/docs/reference/cost#modality-pricing) for how modality counts change the calculation.
 
 ## Cost attributes
