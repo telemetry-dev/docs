@@ -1,0 +1,459 @@
+---
+// Mirrors the dashboard's span waterfall (apps/web/src/components/trace/span-waterfall.tsx and
+// span-ui.ts in the product repository): its columns, connectors, icons, colors, tick steps, and
+// duration labels. If the dashboard's waterfall changes, update this figure to match.
+import { buildTicks, formatMs, SPAN_TYPES } from "./model.js";
+
+type SpanType = keyof typeof SPAN_TYPES;
+
+interface Span {
+  name: string;
+  type: SpanType;
+  depth?: number;
+  /** Milliseconds from the trace start. */
+  start: number;
+  end: number;
+  /** The Operation column: the span's model, tool name, or agent name. Defaults to the type label. */
+  operation?: string;
+  error?: boolean;
+}
+
+interface Props {
+  title: string;
+  caption?: string;
+  spans: Span[];
+}
+
+const { title, caption, spans } = Astro.props;
+
+const COLORS: Record<SpanType, string> = {
+  agent: "oklch(0.68 0.17 30)",
+  generation: "oklch(0.7 0.16 300)",
+  tool: "oklch(0.72 0.15 130)",
+  span: "oklch(0.72 0.15 160)",
+  embedding: "oklch(0.7 0.15 330)",
+  retrieval: "oklch(0.7 0.13 200)",
+};
+const ERROR_COLOR = "oklch(0.58 0.22 27)";
+
+const stroke = (paths: string[]) =>
+  paths
+    .map((d) => `<path d="${d}" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" />`)
+    .join("");
+const ICONS: Record<SpanType, string> = {
+  agent: stroke([
+    "M12 2V7M12 7H10C8.13872 7 7.20808 7 6.45492 7.24472C4.93273 7.73931 3.73931 8.93273 3.24472 10.4549C3 11.2081 3 12.1387 3 14C3 15.8613 3 16.7919 3.24472 17.5451C3.73931 19.0673 4.93273 20.2607 6.45492 20.7553C7.20808 21 8.13872 21 10 21H14C15.8613 21 16.7919 21 17.5451 20.7553C19.0673 20.2607 20.2607 19.0673 20.7553 17.5451C21 16.7919 21 15.8613 21 14C21 12.1387 21 11.2081 20.7553 10.4549C20.2607 8.93273 19.0673 7.73931 17.5451 7.24472C16.7919 7 15.8613 7 14 7H12ZM9 14C8.44772 14 8 13.5523 8 13C8 12.4477 8.44772 12 9 12C9.55228 12 10 12.4477 10 13C10 13.5523 9.55228 14 9 14ZM15 14C14.4477 14 14 13.5523 14 13C14 12.4477 14.4477 12 15 12C15.5523 12 16 12.4477 16 13C16 13.5523 15.5523 14 15 14Z",
+  ]),
+  generation: stroke([
+    "M8.57741 5.76368C9.03709 4.87064 9.26694 4.42412 9.57572 4.27944C9.84455 4.15348 10.1554 4.15348 10.4243 4.27944C10.7331 4.42412 10.9629 4.87064 11.4226 5.76368L12.6143 8.07877C12.6939 8.23349 12.7337 8.31085 12.7853 8.37917C12.831 8.43981 12.8835 8.49505 12.9417 8.54381C13.0073 8.59874 13.0825 8.64245 13.233 8.72989L15.6194 10.1166C16.4013 10.571 16.7922 10.7982 16.9237 11.0943C17.0383 11.3526 17.0383 11.6474 16.9237 11.9057C16.7922 12.2018 16.4013 12.429 15.6194 12.8834L13.233 14.2701C13.0825 14.3575 13.0073 14.4013 12.9417 14.4562C12.8835 14.505 12.831 14.5602 12.7853 14.6208C12.7337 14.6891 12.6939 14.7665 12.6143 14.9212L11.4226 17.2363C10.9629 18.1294 10.7331 18.5759 10.4243 18.7206C10.1554 18.8465 9.84455 18.8465 9.57572 18.7206C9.26694 18.5759 9.03709 18.1294 8.5774 17.2363L7.38572 14.9212C7.30608 14.7665 7.26625 14.6891 7.21474 14.6208C7.16902 14.5602 7.11653 14.505 7.0583 14.4562C6.9927 14.4013 6.91747 14.3575 6.76701 14.2701L4.38063 12.8834C3.59872 12.429 3.20777 12.2018 3.07632 11.9057C2.96166 11.6474 2.96166 11.3526 3.07632 11.0943C3.20777 10.7982 3.59872 10.571 4.38063 10.1166L6.76701 8.72989C6.91747 8.64245 6.9927 8.59874 7.0583 8.54381C7.11653 8.49505 7.16902 8.43981 7.21474 8.37917C7.26625 8.31085 7.30608 8.23349 7.38572 8.07877L8.57741 5.76368Z",
+    "M17.4595 19.4062C17.2058 19.089 17.0789 18.9304 17.0314 18.7475C16.9895 18.5866 16.9895 18.4134 17.0314 18.2525C17.0789 18.0696 17.2058 17.911 17.4595 17.5938L18.2751 16.5744C18.5288 16.2572 18.6557 16.0986 18.802 16.0392C18.9307 15.9869 19.0693 15.9869 19.198 16.0392C19.3443 16.0986 19.4712 16.2572 19.7249 16.5744L20.5405 17.5938C20.7942 17.911 20.9211 18.0696 20.9686 18.2525C21.0105 18.4134 21.0105 18.5866 20.9686 18.7475C20.9211 18.9304 20.7942 19.089 20.5405 19.4062L19.7249 20.4256C19.4712 20.7428 19.3443 20.9014 19.198 20.9608C19.0693 21.0131 18.9307 21.0131 18.802 20.9608C18.6557 20.9014 18.5288 20.7428 18.2751 20.4256L17.4595 19.4062Z",
+    "M18.2298 4.36247C18.1029 4.23559 18.0394 4.17215 18.0157 4.099C17.9948 4.03466 17.9948 3.96534 18.0157 3.901C18.0394 3.82785 18.1029 3.76441 18.2298 3.63753L18.6375 3.22976C18.7644 3.10289 18.8278 3.03945 18.901 3.01568C18.9653 2.99477 19.0347 2.99477 19.099 3.01568C19.1722 3.03945 19.2356 3.10289 19.3625 3.22976L19.7702 3.63753C19.8971 3.76441 19.9605 3.82785 19.9843 3.901C20.0052 3.96534 20.0052 4.03466 19.9843 4.099C19.9605 4.17215 19.8971 4.23559 19.7702 4.36247L19.3625 4.77024C19.2356 4.89711 19.1722 4.96055 19.099 4.98432C19.0347 5.00523 18.9653 5.00523 18.901 4.98432C18.8278 4.96055 18.7644 4.89711 18.6375 4.77024L18.2298 4.36247Z",
+  ]),
+  tool: stroke([
+    "M13.6672 7.84076C13.8108 8.42155 14.1097 8.97368 14.568 9.43193C15.0262 9.89017 15.5783 10.189 16.1591 10.3327M13.6672 7.84076C13.3547 6.57723 13.777 5.17802 14.8916 4.31463L17.2341 2.5L16.915 3.11595C16.3248 4.25512 16.5402 5.64531 17.4474 6.55251C18.3546 7.45971 19.7448 7.67508 20.8839 7.0849L21.4999 6.7658L19.6853 9.10832C18.8219 10.2229 17.4227 10.6452 16.1591 10.3327M13.6672 7.84076L3.56706 16.609C3.35292 16.7949 3.24585 16.8879 3.16484 16.9733C2.11129 18.0844 2.44365 19.5888 3.42735 20.5725C4.41105 21.5562 5.91545 21.8886 7.02658 20.835C7.11182 20.7542 7.20455 20.6474 7.38963 20.4342L16.1591 10.3327M21.1556 21.3911L15.999 16.2346M5.44831 9.90825L3.47739 7.93731C3.14894 7.60886 2.98471 7.44463 2.86906 7.28546C2.23245 6.40924 2.23245 5.22275 2.86906 4.34653C3.19975 3.89137 3.67409 3.41703 4.12925 3.08634C5.00547 2.44973 6.19196 2.44973 7.06817 3.08634C7.22735 3.20199 7.39158 3.36622 7.72003 3.69467L9.99903 5.97367",
+  ]),
+  span: stroke([
+    "M17.0004 18C18.8177 16.423 20.4474 14.5771 21.848 12.5102C22.0511 12.2104 22.0511 11.7897 21.848 11.4899C20.4474 9.42298 18.8177 7.57705 17.0004 6.00004M7.00391 18C5.18658 16.423 3.5569 14.5771 2.15627 12.5101C1.95312 12.2103 1.95312 11.7897 2.15627 11.4899C3.5569 9.42294 5.18658 7.57701 7.00391 6M14.0039 4.00098L10.0039 20.001",
+  ]),
+  embedding: stroke([
+    "M12.9 3C13.5401 8.03653 15.5305 11.1418 21 12C15.8102 12.8143 13.5701 15.7277 12.9 21C12.2299 15.7277 9.98984 12.8143 4.8 12C9.98984 11.1857 12.2299 8.2723 12.9 3Z",
+    "M5.7 3C5.94808 4.50612 6.8515 5.44494 8.4 5.7C6.8515 5.95506 5.94808 6.89388 5.7 8.4C5.45192 6.89388 4.5485 5.95506 3 5.7C4.50612 5.45192 5.44494 4.5485 5.7 3Z",
+  ]),
+  retrieval: stroke([
+    "M20 5.7V12M20 5.7C20 7.19117 16.4183 8.4 12 8.4C7.58172 8.4 4 7.19117 4 5.7M20 5.7C20 4.20883 16.4183 3 12 3C7.58172 3 4 4.20883 4 5.7M20 12V18.1312C20 19.7156 16.4183 21 12 21C7.58172 21 4 19.7156 4 18.1312V12M20 12C20 13.4912 16.4183 14.7 12 14.7C7.58172 14.7 4 13.4912 4 12M4 12V5.7M16 11H16.01M16 17H16.01",
+  ]),
+};
+
+// Geometry from the dashboard: a 16px gutter per depth, an 8px cell pad, and a 6px flex gap.
+const GUTTER = 16;
+const railX = (column: number) => 8 + 6 + column * GUTTER + GUTTER / 2;
+
+const total = Math.max(...spans.map((span) => span.end));
+const ticks = buildTicks(total);
+
+const rows = spans.map((span, index) => {
+  const depth = span.depth ?? 0;
+  const later = spans.slice(index + 1);
+  const children = later.findIndex((next) => (next.depth ?? 0) <= depth);
+  const childCount = (children === -1 ? later : later.slice(0, children)).filter(
+    (next) => (next.depth ?? 0) === depth + 1,
+  ).length;
+  // A rail at column c runs through this row when the ancestor at depth c + 1 has a later sibling.
+  const hasLaterSibling = (atIndex: number, atDepth: number) => {
+    for (const next of spans.slice(atIndex + 1)) {
+      const nextDepth = next.depth ?? 0;
+      if (nextDepth < atDepth) return false;
+      if (nextDepth === atDepth) return true;
+    }
+    return false;
+  };
+  const ancestorIndex = (targetDepth: number) => {
+    for (let at = index; at >= 0; at--) if ((spans[at].depth ?? 0) === targetDepth) return at;
+    return index;
+  };
+  const rails = Array.from({ length: Math.max(depth - 1, 0) }, (_, column) =>
+    hasLaterSibling(ancestorIndex(column + 1), column + 1),
+  );
+  const offset = Math.min((span.start / total) * 100, 99.7);
+  const width = Math.min(Math.max(((span.end - span.start) / total) * 100, 0.3), 100 - offset);
+  return {
+    ...span,
+    depth,
+    childCount,
+    rails,
+    isLast: !hasLaterSibling(index, depth),
+    color: span.error ? ERROR_COLOR : COLORS[span.type],
+    operation: span.operation ?? SPAN_TYPES[span.type],
+    offset,
+    width,
+    duration: formatMs(span.end - span.start),
+    labelInside: width > 24,
+    labelOnLeft: offset > 50,
+  };
+});
+const legend = [...new Set(spans.map((span) => span.type))];
+---
+
+<figure class="td-figure not-prose">
+  <div class="td-figure-card">
+    <p class="td-figure-title">{title}</p>
+    <div class="td-wf-legend" aria-hidden="true">
+      {
+        legend.map((type) => (
+          <span>
+            <span class="td-wf-legend-dot" style={`background: ${COLORS[type]}`} />
+            {SPAN_TYPES[type]}
+          </span>
+        ))
+      }
+    </div>
+    <div class="td-wf-scroll">
+      <div class="td-wf" role="tree" aria-label={title}>
+        <div class="td-wf-row td-wf-head" aria-hidden="true">
+          <div class="td-wf-cell">Span</div>
+          <div class="td-wf-cell td-wf-sep">Operation</div>
+          <div class="td-wf-sep td-wf-time">
+            <div class="td-wf-inset">
+              {
+                ticks.map((tick) => (
+                  <span>
+                    <span class="td-wf-tick-mark" style={`left: ${tick.percent}%`} />
+                    <span class="td-wf-tick-label" style={`left: ${tick.percent}%`}>{tick.label}</span>
+                  </span>
+                ))
+              }
+            </div>
+          </div>
+        </div>
+        {
+          rows.map((row) => (
+            <div
+              class="td-wf-row"
+              role="treeitem"
+              aria-level={row.depth + 1}
+              aria-label={`${row.name}, ${SPAN_TYPES[row.type]}, ${row.operation}, ${row.duration}`}
+              style={`--td-span: ${row.color}`}
+            >
+              <div class="td-wf-cell td-wf-span">
+                {row.rails.map((rail, column) =>
+                  rail ? <span class="td-wf-line td-wf-rail" style={`left: ${railX(column)}px`} /> : null,
+                )}
+                {row.depth > 0 && (
+                  <>
+                    <span
+                      class:list={["td-wf-line", row.isLast ? "td-wf-tee-end" : "td-wf-rail"]}
+                      style={`left: ${railX(row.depth - 1)}px`}
+                    />
+                    <span
+                      class="td-wf-line td-wf-branch"
+                      style={`left: ${railX(row.depth - 1) + (row.isLast ? 0 : 1)}px; width: ${(row.childCount > 0 ? GUTTER / 2 : GUTTER - 3) - (row.isLast ? 0 : 1)}px`}
+                    />
+                  </>
+                )}
+                {row.childCount > 0 && (
+                  <span class="td-wf-line td-wf-down" style={`left: ${railX(row.depth)}px`} />
+                )}
+                <span style={`width: ${row.depth * GUTTER}px`} class="td-wf-indent" />
+                {row.childCount > 0 ? (
+                  <span class="td-wf-hub">{row.childCount}</span>
+                ) : (
+                  <span class="td-wf-leaf">
+                    <span />
+                  </span>
+                )}
+                <svg class="td-wf-icon" viewBox="0 0 24 24" fill="none" stroke-width="2" set:html={ICONS[row.type]} />
+                <span class:list={["td-wf-name", { "td-wf-name--error": row.error }]}>{row.name}</span>
+              </div>
+              <div class="td-wf-cell td-wf-sep td-wf-op">{row.operation}</div>
+              <div class="td-wf-sep td-wf-time">
+                <div class="td-wf-inset">
+                  {ticks.map((tick) =>
+                    tick.percent > 0 ? <span class="td-wf-grid" style={`left: ${tick.percent}%`} /> : null,
+                  )}
+                  <div class="td-wf-bar" style={`left: ${row.offset}%; width: ${row.width}%`}>
+                    {row.labelInside && <span>{row.duration}</span>}
+                  </div>
+                  {!row.labelInside && (
+                    <span
+                      class="td-wf-duration"
+                      style={
+                        row.labelOnLeft
+                          ? `right: ${100 - row.offset}%; margin-right: 6px`
+                          : `left: ${row.offset + row.width}%; margin-left: 6px`
+                      }
+                    >
+                      {row.duration}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </div>
+  {caption && <figcaption class="td-figure-caption">{caption}</figcaption>}
+</figure>
+
+<style>
+  .td-wf-legend {
+    color: var(--blume-muted-foreground);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.75rem;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .td-wf-legend > span {
+    align-items: center;
+    display: flex;
+    gap: 0.375rem;
+  }
+
+  .td-wf-legend-dot {
+    border-radius: 999px;
+    height: 0.375rem;
+    width: 0.375rem;
+  }
+
+  .td-wf-scroll {
+    background: var(--blume-background);
+    border: 1px solid var(--blume-border);
+    border-radius: 0.5rem;
+    overflow-x: auto;
+  }
+
+  .td-wf {
+    min-width: calc(13rem + 7rem + 12rem);
+  }
+
+  .td-wf-row {
+    border-bottom: 1px solid var(--blume-border);
+    display: grid;
+    grid-template-columns: 13rem 7rem minmax(12rem, 1fr);
+    height: 1.75rem;
+  }
+
+  .td-wf-row:last-child {
+    border-bottom: 0;
+  }
+
+  .td-wf-head {
+    color: var(--blume-muted-foreground);
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .td-wf-cell {
+    align-items: center;
+    display: flex;
+    min-width: 0;
+    overflow: hidden;
+    padding-inline: 0.5rem;
+    position: relative;
+  }
+
+  .td-wf-sep {
+    border-inline-start: 1px solid var(--blume-border);
+  }
+
+  .td-wf-time {
+    position: relative;
+  }
+
+  .td-wf-inset {
+    inset-block: 0;
+    inset-inline: 0.5rem 2rem;
+    position: absolute;
+  }
+
+  .td-wf-tick-mark,
+  .td-wf-grid {
+    background: var(--blume-border);
+    position: absolute;
+    width: 1px;
+  }
+
+  .td-wf-tick-mark {
+    bottom: 0;
+    height: 0.375rem;
+  }
+
+  .td-wf-grid {
+    inset-block: 0;
+  }
+
+  .td-wf-tick-label {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 400;
+    padding-inline-start: 0.25rem;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    white-space: nowrap;
+  }
+
+  .td-wf-span {
+    gap: 0.375rem;
+  }
+
+  .td-wf-line {
+    background: var(--blume-border);
+    position: absolute;
+    width: 1px;
+  }
+
+  .td-wf-rail {
+    inset-block: 0;
+  }
+
+  .td-wf-tee-end {
+    height: 50%;
+    top: 0;
+  }
+
+  .td-wf-branch {
+    height: 1px;
+    top: 50%;
+  }
+
+  .td-wf-down {
+    bottom: 0;
+    top: calc(50% + 8px);
+  }
+
+  .td-wf-indent {
+    flex: none;
+  }
+
+  .td-wf-hub,
+  .td-wf-leaf {
+    align-items: center;
+    display: flex;
+    flex: none;
+    height: 1rem;
+    justify-content: center;
+    position: relative;
+    width: 1rem;
+    z-index: 1;
+  }
+
+  .td-wf-hub {
+    background: color-mix(in oklab, var(--td-span) 18%, transparent);
+    border-radius: 999px;
+    color: var(--td-span);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+
+  .td-wf-leaf > span {
+    background: color-mix(in oklab, var(--td-span) 45%, var(--blume-background));
+    border-radius: 999px;
+    height: 0.375rem;
+    width: 0.375rem;
+  }
+
+  .td-wf-icon {
+    color: var(--td-span);
+    flex: none;
+    height: 0.875rem;
+    width: 0.875rem;
+  }
+
+  .td-wf-name {
+    color: var(--blume-foreground);
+    font-size: 0.75rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .td-wf-name--error {
+    color: var(--td-span);
+  }
+
+  .td-wf-op {
+    color: var(--blume-muted-foreground);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+    line-height: 1.75rem;
+  }
+
+  .td-wf-bar {
+    background: var(--td-span);
+    border-radius: 3px;
+    height: 0.875rem;
+    min-width: 2px;
+    overflow: hidden;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .td-wf-bar > span {
+    color: rgb(255 255 255 / 0.95);
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 0.875rem;
+    overflow: hidden;
+    padding-inline: 0.375rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .td-wf-duration {
+    color: var(--blume-muted-foreground);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 30rem) {
+    .td-wf {
+      min-width: 0;
+    }
+
+    .td-wf-row {
+      grid-template-columns: 10.5rem minmax(7rem, 1fr);
+    }
+
+    .td-wf-row > .td-wf-cell.td-wf-sep {
+      display: none;
+    }
+  }
+</style>

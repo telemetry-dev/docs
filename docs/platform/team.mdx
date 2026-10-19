@@ -1,43 +1,49 @@
 ---
 title: Team members
-description: Manage roles, invitations, seats, member access, and workspace departure.
-lastModified: 2026-08-03
+description: Invite people to an organization, set their roles, and remove or leave members.
+lastModified: 2026-10-18
 ---
 
-Open **Organization settings → Members** to manage access to the organization and its projects.
+Members of an organization can use all of its projects. To manage members, open the organization switcher in the sidebar, select **Organization settings**, and then select the **Members** tab.
 
 ## Roles
 
-An organization has three roles:
+An organization member has one of three roles:
 
-| Role | Access |
+| Role | What the role can do |
 | --- | --- |
-| Member | View telemetry, usage, and privacy settings. Create projects. |
-| Admin | Member access, plus project settings, API keys, privacy, retention, and organization settings. |
-| Owner | Admin access, plus the ability to assign the owner role and change other owners. |
+| `member` | View telemetry, usage, settings, and the API key list. Create projects. |
+| `admin` | Everything a member can do. Also invite and manage members, create and revoke API keys, change project names, privacy settings, and retention, delete projects, rename the organization, manage alert rules, and change the plan. |
+| `owner` | Everything an admin can do. Also give the `owner` role, manage other owners, and delete the organization. |
 
-An admin can assign the `member` or `admin` role. Only an owner can assign the `owner` role. An admin cannot change another owner. An owner cannot change their own role from the member table.
+An admin can give the `member` or `admin` role, and cannot change or remove an owner. Only an owner can give the `owner` role. The member table does not let you change your own role.
 
 ## Invite a member
 
+An owner or admin can invite people.
+
 <Steps>
   <Step title="Open members">
-    Open **Organization settings → Members**.
+    Open **Organization settings**, then the **Members** tab.
   </Step>
-  <Step title="Start an invitation">
+  <Step title="Start the invitation">
     Select **Invite member**.
   </Step>
-  <Step title="Set access">
-    Enter the email address. Then select a role.
+  <Step title="Enter the details">
+    Enter the **Email** address and select a **Role**.
   </Step>
-  <Step title="Send the invitation">
-    Submit the invitation.
+  <Step title="Send it">
+    Select **Send invitation**. telemetry.dev emails an invitation link.
   </Step>
 </Steps>
 
-An admin can invite a member or admin. An owner can also invite an owner.
+An invitation expires 48 hours after it is sent.
 
-The seat count includes organization members and active pending invitations. At the plan limit, the invite button is not available. The server also rejects an invitation if a concurrent invitation takes the last seat.
+The person opens the link and selects **Accept invitation** or **Decline**. They must sign in with the invited email address and verify it before they can see the invitation.
+
+### Seats
+
+Each member and each unexpired pending invitation uses one seat.
 
 | Plan | Seats |
 | --- | ---: |
@@ -45,24 +51,26 @@ The seat count includes organization members and active pending invitations. At 
 | Pro | 5 |
 | Team | Unlimited |
 
-Read [Plans and billing](/platform/billing) to change the seat limit.
+When every seat is in use, **Invite member** is turned off. If two people send invitations for the last seat at the same moment, telemetry.dev accepts one and rejects the other. To free a seat, revoke a pending invitation or remove a member. To add seats, read [Change your plan](/platform/billing#change-your-plan).
 
 ## Manage pending invitations
 
-The pending invitation table shows the email address, role, and expiration. Use its action menu to:
+**Pending invitations** lists each invitation's email address, role, and expiry time. Each row has these buttons:
 
-- **Copy link** for direct delivery
-- **Resend** the invitation email
-- **Revoke** the invitation
+- **Copy invite link**: copy the link to send it yourself, for example if the email did not arrive.
+- **Resend invitation**: send the email again. Owners and admins only.
+- **Revoke invitation**: cancel the invitation and free its seat. Owners and admins only.
 
-A new member can accept or decline the invitation. telemetry.dev asks an unverified account to complete email verification before it shows the invitation.
+## Change a member's role
 
-## Change or remove a member
+Select a new role in the member's row. The role limits above still apply.
 
-Use the role menu in the member row to change access. Role limits still apply to owners and admins.
+## Remove a member
 
-Select **Remove member** to revoke a member's organization and project access. Confirm the removal in the dialog.
+Select the delete button in the member's row, then select **Remove** to confirm. The person loses access to the organization and its projects.
 
 ## Leave an organization
 
-Select **Leave organization** in the Members tab, then confirm the action. telemetry.dev removes the active organization and sends you to onboarding.
+Select **Leave** in your own row, then select **Leave** again to confirm. telemetry.dev takes you to onboarding, where you can accept another invitation or create an organization.
+
+If you are the only owner, you cannot leave. Give another member the `owner` role first.

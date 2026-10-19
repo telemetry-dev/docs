@@ -1,45 +1,50 @@
 ---
 title: telemetry.dev documentation
-description: Send your first AI trace, then choose the integration that matches your stack.
+description: Send your first AI trace, then connect the provider, framework, or coding agent you already use.
 sidebar: { label: "Introduction", order: 0 }
-lastModified: 2026-09-30
+lastModified: 2026-10-18
 seo:
   title: "LLM Observability Documentation"
   description: "Docs for telemetry.dev, OpenTelemetry-native observability for AI apps. Send your first trace, then connect your model provider, framework, or coding agent."
 ---
 
-telemetry.dev is OpenTelemetry-native observability for AI applications. Start with one trace, then connect the provider, framework, coding agent, or SDK you already use.
+telemetry.dev records what your AI application does. Each run becomes one trace that shows every model call, tool call, and step in order, with the tokens, cost, latency, and errors of each one.
 
-## Start here
+<Frame caption="A trace in the dashboard. Each row is a span, nested under the span that started it, with a bar for when it ran.">
+  <Screenshot src="trace-waterfall.webp" alt="A telemetry.dev trace: the agent.workflow span at the top with its status, duration, tokens, and cost, and a waterfall of 18 child spans for retrieval, model calls, HTTP requests, tool calls, and embeddings." priority />
+</Frame>
+
+telemetry.dev is built on OpenTelemetry. The SDKs send standard OTLP/HTTP, and so can the OpenTelemetry setup you already run.
+
+## Get started
 
 <CardGroup cols={2}>
   <Card title="Quickstart" href="/quickstart" icon="rocket">Send a real trace and find it in your project in about five minutes.</Card>
-  <Card title="Choose your integration" href="/integrations" icon="plug">Find the supported setup path for your existing stack.</Card>
+  <Card title="How it works" href="/how-it-works" icon="workflow">Traces, spans, environments, and what the ingest service does with your data.</Card>
 </CardGroup>
 
-## Choose your integration
+## Connect your application
 
 <CardGroup cols={2}>
-  <Card title="TypeScript" href="/sdk/typescript" icon="/integrations/typescript-sdk.svg">Instrument functions, model calls, tools, and agents on Node, Vercel Edge, or Cloudflare Workers with `nodejs_compat`.</Card>
-  <Card title="Python" href="/sdk/python" icon="/integrations/python-sdk.svg">Instrument synchronous and asynchronous Python applications.</Card>
-  <Card title="Provider or framework" href="/integrations" icon="plug">Use a first-party wrapper or framework-specific OpenTelemetry guide.</Card>
-  <Card title="Existing OpenTelemetry" href="/sdk/opentelemetry" icon="/integrations/opentelemetry-sdk.svg">Keep your instrumentation and point OTLP/HTTP at telemetry.dev.</Card>
+  <Card title="Model provider or framework" href="/integrations" icon="plug">Wrap the OpenAI, Anthropic, Gemini, or Bedrock client, or add tracing to the Vercel AI SDK, LangChain, and other frameworks.</Card>
+  <Card title="Coding agent" href="/integrations#coding-agents" icon="terminal">Record Claude Code, Cursor, opencode, and other agents on your machine.</Card>
+  <Card title="TypeScript SDK" href="/sdk/typescript" icon="/integrations/typescript-sdk.svg">Record functions, model calls, tools, and agents on Node.js, Vercel Edge, or Cloudflare Workers.</Card>
+  <Card title="Python SDK" href="/sdk/python" icon="/integrations/python-sdk.svg">Record synchronous and asynchronous Python code with a decorator or context managers.</Card>
+  <Card title="Existing OpenTelemetry" href="/sdk/opentelemetry" icon="/integrations/opentelemetry-sdk.svg">Keep your instrumentation and add telemetry.dev as an OTLP/HTTP destination.</Card>
 </CardGroup>
 
-## What you get
+## What you can do
 
-- Token usage, cost, latency, and errors for each trace and span.
-- Standard OTLP/HTTP ingest for first-party SDKs and your OpenTelemetry stack.
-- Environment-level controls for input and output capture.
-- SDK masking and server-side redaction before storage.
-
-The wire format is OpenTelemetry. You can keep your instrumentation and use standard OTLP/HTTP instead of a proprietary trace protocol.
+- **Debug a single run.** Open a trace to read each model call's input and output, each tool's arguments and result, and the error that ended a failed run.
+- **Follow a conversation.** Traces that share a session ID are grouped into one session.
+- **Track cost and usage.** Tokens and cost are calculated per span and added up per trace, model, user, and environment.
+- **Keep sensitive data out.** Turn off prompt and response capture per environment, and redact secrets and personal data before storage.
 
 ## Platform
 
 <CardGroup cols={2}>
-  <Card title="Traces" href="/platform/traces" icon="activity">Examine the trace explorer and span waterfall.</Card>
-  <Card title="Analytics" href="/platform/analytics" icon="gauge">Monitor cost, tokens, p95 latency, requests, and errors.</Card>
-  <Card title="Privacy" href="/platform/privacy" icon="shield">Control capture and redact sensitive values.</Card>
-  <Card title="OTLP ingest" href="/reference/otlp" icon="plug">Send traces, logs, and metrics through OTLP/HTTP.</Card>
+  <Card title="Traces, sessions, and logs" href="/platform/traces" icon="activity">Search traces, read the span waterfall, and follow sessions.</Card>
+  <Card title="Analytics" href="/platform/analytics" icon="gauge">Requests, cost, p95 latency, tokens, and error rate over time.</Card>
+  <Card title="Privacy and retention" href="/platform/privacy" icon="shield">Control what is captured, redact sensitive values, and set retention.</Card>
+  <Card title="OTLP ingest API" href="/reference/otlp" icon="book-open">Endpoints, authentication, limits, and error responses.</Card>
 </CardGroup>

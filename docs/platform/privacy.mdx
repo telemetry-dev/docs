@@ -1,88 +1,176 @@
 ---
 title: Privacy and retention
-description: Control content capture, redact sensitive values, and set project retention.
-lastModified: 2026-08-03
+description: Choose what telemetry.dev stores, what it redacts, and how long it keeps telemetry.
+lastModified: 2026-10-18
 ---
 
-telemetry.dev applies privacy controls before it stores telemetry. Built-in redaction, environment capture settings, and custom patterns work together.
+telemetry.dev stores prompts and responses by default. You can limit what it keeps in three places:
 
-## Layer 1: Built-in redaction
+1. **In your application.** SDK capture options and your exporter decide what leaves your process. This is the only place where you can guarantee that content is never sent.
+2. **Per environment.** The **Store prompts and responses** setting removes recognized prompt and response fields for one environment.
+3. **Redaction.** Built-in patterns always replace common secrets and personal data. You can add your own patterns for each project.
 
-Built-in redaction is always on. It applies to each stored string and to attribute keys.
+telemetry.dev applies the server-side controls before it writes telemetry. They apply to data received after you save a change. They do not change telemetry that is already stored.
 
-Sensitive attribute keys are dropped. These keys include authorization, cookie, credential, password, secret, token, and API-key names. Token-count and token-time attributes remain available for analytics.
+## How the ingest service processes a request
 
-The ingest service has 13 secret-value patterns. The patterns cover these secret categories:
+<PipelineFigure
+  title="Where content is removed"
+  focus="privacy"
+  caption="The highlighted stages remove content. Only the first one runs before data leaves your application; the others act on what telemetry.dev has already received."
+/>
 
-- Private-key material
-- telemetry.dev and provider API keys
-- Bearer credentials and signed web tokens
-- Secret assignments in text or JSON
-- Credentials in URLs
-- Email addresses
+For each OTLP request, the ingest service does these steps in order:
 
-The ingest service replaces a matched value with `[REDACTED]`.
+1. It checks the API key and loads the project's capture settings and custom redaction patterns.
+2. It reads the environment of each resource block. A key that is limited to one environment rejects the request if any block has a different environment.
+3. It selects the capture setting for the environment of each resource block.
+4. It drops attributes whose keys look like secrets. If capture is off for that environment, it also drops prompt and response fields and replaces the span name with `[REDACTED]`.
+5. It runs redaction on each remaining string value: built-in secret patterns first, then built-in personal-data patterns, then your custom patterns.
+6. It counts usage and stores the result.
 
-Five numeric PII patterns cover valid U.S. Social Security numbers, phone numbers, and payment-card numbers. Phone coverage includes North American and international formats. Payment-card matches must pass a Luhn check.
+## Keep content in your application
 
-## Layer 2: Environment capture controls
+Use SDK options when content must not leave your application. The server-side controls run only after telemetry reaches telemetry.dev.
 
-Prompt and response capture is on by default. An owner or admin can change capture for each environment.
+- The TypeScript SDK has `captureInput`, `captureOutput`, and `mask`. Read [TypeScript SDK capture controls](/sdk/typescript#control-captured-content).
+- The Python SDK has `capture_input`, `capture_output`, and `mask`. Read [Python SDK capture controls](/sdk/python#control-captured-content).
+- For another OpenTelemetry exporter, remove the content before export, with your instrumentation's own settings or a span processor.
+
+The server-side controls below still apply to everything the SDK sends.
+
+## Turn off prompt and response capture for an environment
+
+An organization owner or admin can change capture settings. Members can view them.
 
 <Steps>
   <Step title="Open privacy settings">
-    Open the project. Then select **Settings → Privacy**.
+    In the project, select **Settings** in the sidebar. Then select the **Privacy** tab.
   </Step>
-  <Step title="Select an environment">
-    Use the `production` or `development` row. Select **Add environment** for a different name.
+  <Step title="Find the environment">
+    The `production` and `development` rows are always present. For another environment, select **Add environment** and enter its name.
   </Step>
-  <Step title="Set capture">
-    Select or clear **Store prompts and responses**.
+  <Step title="Clear the checkbox">
+    Clear **Store prompts and responses** for that environment.
   </Step>
-  <Step title="Save settings">
-    Save the project privacy settings.
+  <Step title="Save">
+    Select **Save privacy settings**.
   </Step>
 </Steps>
 
-If capture is off, telemetry.dev omits recognized input and output fields for that environment, drops recognized content attributes, and replaces the span name with `[REDACTED]`. It also suppresses content in legacy GenAI message logs.
+Enter the environment name that your telemetry reports in `deployment.environment.name`. Letter case and spaces at either end do not matter: `Production ` and `production` are the same environment. Telemetry without an environment attribute uses the environment of its API key if the key is limited to one environment, and `default` otherwise. Add a `default` row to cover the second case.
 
-Capture-off does not remove all free-form text. Ordinary log bodies, unknown attributes, metadata, and error text can still be stored after built-in and custom redaction. Prompt or response text placed in those fields is not reliably identifiable as input or output. Omit sensitive content at the exporter when it must not leave your application; do not rely on capture-off or pattern matching to identify arbitrary private text.
+An environment without a saved row stores prompts and responses. A project can have at most 100 environment rows, and each name can have at most 100 characters. Select **Remove** to delete a row that you added.
 
-Environment names use lowercase after whitespace removal at each end. You can save at most 100 environment rows.
+### What capture-off removes
 
-## Layer 3: Custom redaction patterns
+When capture is off for an environment, telemetry.dev removes these items from that environment's telemetry:
 
-Add one pattern per line in **Settings → Privacy**. telemetry.dev applies custom patterns after the built-in patterns.
+- The span input and output that appear in the **Input / Output** tab and in the trace table's **Input** and **Output** columns.
+- Attributes with recognized prompt or response keys, at any depth. These include `gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions`, `gen_ai.prompt.*`, `gen_ai.completion.*`, the Vercel AI SDK `ai.prompt`, `ai.prompt.*`, `ai.response.*`, `ai.toolCall.args`, and `ai.toolCall.result` keys, `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result`, `llm.prompts`, `llm.completions`, `traceloop.entity.input`, `traceloop.entity.output`, `langchain.inputs`, `langchain.outputs`, and Anthropic tool-result content.
+- Attributes whose whole key is one of these words: `input`, `inputs`, `prompt`, `prompts`, `messages`, `request`, `request_body`, `question`, `output`, `outputs`, `response`, `responses`, `completion`, `completions`, `answer`, or `result`.
+- The span name. telemetry.dev stores `[REDACTED]` instead, so the trace name is also `[REDACTED]` and name search cannot find it.
+- The message text and content attributes of GenAI message log events (`gen_ai.system.message`, `gen_ai.user.message`, `gen_ai.assistant.message`, `gen_ai.tool.message`, and `gen_ai.choice`).
 
-| Limit | Value |
+Key matching ignores letter case.
+
+### What capture-off keeps
+
+Capture-off finds content by its key or event name. It does not read text to decide whether the text is a prompt. These items are still stored when capture is off:
+
+- Ordinary log bodies, including log text that quotes a prompt or a response.
+- Attributes under other keys, such as `app.prompt` or `chat.history`.
+- Span event names, span status messages, and exception types, messages, and stack traces.
+- Metadata, resource attributes, scope attributes, and metric attributes.
+- User IDs, session IDs, service names, model names, and tool and agent names.
+- Token counts, cost, and timing.
+
+Redaction still runs on these values. It catches only the patterns described below. If a field can contain private text, remove it in your application.
+
+## What built-in redaction removes
+
+Built-in redaction is always on. You cannot turn it off.
+
+### Attributes with secret-like keys
+
+telemetry.dev drops an attribute, at any depth, if a word in its key is `authorization`, `cookie`, `credential`, `credentials`, `password`, `secret`, or `token`, if the key has the word `api` followed by `key`, or if the whole key is `apikey`. It splits keys into words at dots, dashes, underscores, and case changes. For example, it drops `http.request.header.authorization`, `db.password`, `x-api-key`, `apiKey`, and `sessionToken`.
+
+Token usage and timing keys stay, such as `gen_ai.usage.input_tokens`, `llm.token_count.prompt`, and `time_to_first_token`.
+
+### Secret and personal values in text
+
+telemetry.dev replaces each match in a string value with `[REDACTED]`. It looks for:
+
+- Private-key blocks (`-----BEGIN ... PRIVATE KEY-----`).
+- telemetry.dev API keys (`td_live_...`).
+- `Bearer` credentials and JSON Web Tokens.
+- Provider and service keys: keys that start with `sk-`, AWS access key IDs (`AKIA...`), Google API keys (`AIza...`), GitHub tokens (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, and `github_pat_`), and Slack tokens (`xoxb-`, `xoxp-`, and similar, and `xapp-`).
+- The value after `api_key`, `access_token`, `refresh_token`, `password`, or `secret` in `name=value`, `name: value`, or JSON `"name": "value"` form. The name stays.
+- The user name and password in a URL. `https://user:pass@db.example.com` becomes `https://[REDACTED]@db.example.com`.
+- Email addresses. Asset file names such as `logo@2x.png` are not changed.
+- U.S. Social Security numbers written as `123-45-6789`. Numbers that cannot be valid, such as an area of `000`, are not changed.
+- Phone numbers: North American numbers written with separators or parentheses, such as `415-555-0134` or `(415) 555-0134`, and international numbers that start with `+`.
+- Payment card numbers of 13 to 19 digits that pass the Luhn check.
+
+### What built-in redaction misses
+
+Pattern matching cannot find all private data. It does not find:
+
+- Names, street addresses, and other free-form personal details.
+- Secrets in other formats, such as AWS secret access keys or a password that is not in `name=value` form.
+- Numbers in other formats, such as a Social Security number without dashes or a phone number without separators.
+
+### Dashboard fields
+
+Redaction also runs on the values that the dashboard shows as fields and columns, such as span names, service names, and log messages. A few fields work differently:
+
+- **Environment** is stored as sent, so that capture settings and API key limits match it exactly. Do not put private data in an environment name.
+- **User ID**, **session ID**, conversation ID, and response ID are kept whole or not stored. If redaction would change one of these values, telemetry.dev stores no value for it. For example, a user ID that is an email address does not appear in the **User** column, and the trace is not linked to that user.
+- Standard operation names, exception event names, and model and provider names that telemetry.dev prices are kept, so that a broad custom pattern does not break cost calculation.
+
+## Add custom redaction patterns
+
+Custom patterns redact values that are specific to your application, such as customer or account IDs.
+
+<Steps>
+  <Step title="Open privacy settings">
+    In the project, select **Settings**, then the **Privacy** tab.
+  </Step>
+  <Step title="Add the patterns">
+    Enter one regular expression per line in **Custom redaction regex**. For example, `customer-[0-9]+`.
+  </Step>
+  <Step title="Save">
+    Select **Save privacy settings**. telemetry.dev checks each pattern and reports the line number of a pattern that it cannot accept.
+  </Step>
+</Steps>
+
+telemetry.dev replaces each match with `[REDACTED]`. Custom patterns run after the built-in patterns, on each string value in spans, events, links, resource and scope attributes, metadata, logs, errors, and metric attributes. They also run on dashboard fields, with the exceptions in [Dashboard fields](#dashboard-fields). They do not apply to attribute keys.
+
+| Rule | Value |
 | --- | --- |
-| Pattern engine | RE2 linear-time expressions |
+| Syntax | RE2. Lookarounds and backreferences are not supported. |
 | Patterns per project | 20 |
-| Length per pattern | 500 characters |
-| Replacement | `[REDACTED]` |
+| Length of one pattern | 500 characters |
+| Total size | The patterns together must compile within a size limit. A save that exceeds it fails with "patterns are too complex overall". |
+| Empty matches | Not accepted. A pattern must match at least one character, so `x*`, `^`, and `\b` fail. |
+| Letter case | Patterns match case-sensitively. Start a pattern with `(?i)` to ignore case. |
 
-RE2 does not accept lookarounds or backreferences. telemetry.dev also rejects zero-width patterns and patterns that exceed the total complexity limit. Duplicate lines become one pattern.
-
-Custom patterns apply to the complete stored telemetry value. This includes span data, resource data, events, links, metadata, logs, errors, and metric attributes.
-
-## SDK-side controls
-
-Use SDK controls when data must not leave your application. The TypeScript SDK has `captureInput`, `captureOutput`, and `mask` controls.
-
-Read [TypeScript SDK privacy controls](/sdk/typescript) for configuration details. Server-side controls still apply after the SDK sends telemetry.
+telemetry.dev trims spaces from each line, skips blank lines, and saves duplicate lines once.
 
 ## Set retention
 
-Open **Settings → Privacy**, then select the retention period.
+Retention sets how long the project keeps telemetry. An organization owner or admin can change it.
+
+Open **Settings**, select the **Privacy** tab, and select a value in **Retention**. Then select **Save privacy settings**. The choices are 7, 14, 30, and 90 days. A choice above your plan's limit shows **(upgrade required)**.
 
 | Plan | Maximum retention |
 | --- | ---: |
-| Free | 7 days |
+| Free | 14 days |
 | Pro | 30 days |
 | Team | 90 days |
 
-A new project starts at the maximum retention for its plan. The permitted values are 7, 30, and 90 days.
+A new project starts at the maximum retention for its plan. After a plan downgrade, a project keeps its saved retention, but you cannot raise it above the new plan's limit.
 
-After a plan downgrade, a project keeps its saved retention value. You cannot increase retention beyond the new plan limit.
+Dashboard views show only telemetry inside the retention window, so a shorter retention hides older data right away. A cleanup job then deletes telemetry older than the project's retention. It runs about once a day.
 
-The ingest service removes data past the project retention period. A hard 90-day TTL applies to all stored telemetry, regardless of the plan.
+The storage layer also deletes all telemetry after 90 days, whatever the project setting.

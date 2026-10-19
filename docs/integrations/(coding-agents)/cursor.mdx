@@ -1,38 +1,65 @@
 ---
 title: Cursor
-description: Trace Cursor agent turns, responses, thinking, tools, subagents, and lifecycle events.
-lastModified: 2026-09-05
+description: Trace Cursor agent turns, responses, thinking, tools, subagents, and lifecycle events through Cursor hooks.
+lastModified: 2026-10-18
 seo:
   title: "Cursor Telemetry: Trace the Cursor Agent"
   description: "Trace the Cursor agent through Cursor hooks. Record agent turns, responses, thinking, tool calls, subagents, and lifecycle events with no change to the agent."
 ---
 
-`@telemetry-dev/cursor` observes Cursor's agent loop through Cursor hooks. It does not change agent behavior.
+`@telemetry-dev/cursor` traces Cursor's agent through [Cursor hooks](https://cursor.com/docs/hooks). You install a small CLI, it adds hooks to your user-level Cursor settings, and each agent turn appears in telemetry.dev as a span with its tool calls and subagents. It doesn't change what the agent does.
 
-## Install
+This integration sends your prompts, the agent's responses and thinking text, tool arguments, and tool results, including file contents and command output. Version 0.1.8 has no setting to turn that off on your machine. Read [What leaves your machine](#what-leaves-your-machine) before you install it.
 
-Create a project at [telemetry.dev](https://telemetry.dev) and copy its API key. Then install the CLI globally and configure Cursor:
+## Before you start
+
+- Node.js 22 or later.
+- A telemetry.dev project and its API key. Keys start with `td_live_`.
+
+## Set up
+
+<Steps>
+  <Step title="Install the CLI">
 
 ```sh
 npm install -g @telemetry-dev/cursor
+```
+
+  </Step>
+
+  <Step title="Add the hooks">
+
+```sh
 telemetry-dev-cursor install --api-key td_live_...
 ```
 
-Restart Cursor. The Hooks tab in **Customize** shows the installed hooks and any execution errors.
+The command does two things:
 
-The installer preserves unrelated entries in `~/.cursor/hooks.json` and replaces only earlier telemetry.dev entries. It stores the API key in `~/.cursor/telemetry-dev.json` because Cursor started from the macOS Dock may not inherit shell environment variables. The file is written with owner-only permissions.
+- Adds a telemetry.dev entry for each hook it uses to `~/.cursor/hooks.json`. It keeps your other hooks and replaces only earlier telemetry.dev entries.
+- Saves the API key in `~/.cursor/telemetry-dev.json`, readable only by your user. Cursor started from the macOS Dock doesn't see your shell's environment variables, so the key has to live in a file.
 
-To remove the hooks:
+Add `--environment development` to label the data with an environment other than `production`, or `--base-url` to send it somewhere other than `https://ingest.telemetry.dev`.
 
-```sh
-telemetry-dev-cursor uninstall
-```
+  </Step>
 
-Uninstalling preserves `~/.cursor/telemetry-dev.json`. Delete that file separately to remove the saved API key.
+  <Step title="Restart Cursor">
 
-## What it captures
+Cursor loads the new hooks when it restarts.
 
-All turns in one Cursor conversation share a trace. A typical turn looks like:
+  </Step>
+</Steps>
+
+## Check that data arrives
+
+1. In Cursor, open **Customize** and select the **Hooks** tab. It lists the installed hooks and any errors. The **Hooks** output channel shows each run.
+2. Send a prompt to the agent and wait for the turn to finish.
+3. Open the [trace explorer](/platform/traces). The turn appears when it ends, because the integration sends a turn's spans after Cursor's `stop` hook.
+
+If the hooks stop working after you change Node.js versions, run `telemetry-dev-cursor install` again. Each hook entry contains the full path of the Node.js binary that ran the install.
+
+## What is recorded
+
+All turns in one Cursor conversation share one trace. Each turn is a span named after the Cursor chat title, or after the first line of the prompt when Cursor has no title yet:
 
 ```text
 invoke_agent cursor
@@ -44,35 +71,70 @@ invoke_agent cursor
 └── chat {model}
 ```
 
-The integration records prompt turns, assistant responses, thinking blocks, tool arguments and results, subagents, model names, errors, and lifecycle events. Cursor does not report token usage or cost through these hooks.
+- The turn span records the prompt, the final assistant text, and how the turn ended (`completed`, `aborted`, or `error`).
+- `thought` spans record thinking text and its duration.
+- `execute_tool` spans record the tool's arguments, its result, and any error.
+- Subagent spans record the subagent's task, summary, and status.
+- `chat` spans record the model name and the assistant text.
+- `sessionStart`, `sessionEnd`, `afterFileEdit`, `subagentStart`, and `preCompact` become logs.
 
-Prompt input, assistant and thinking text, tool arguments, and tool results follow the core SDK's `captureInput` and `captureOutput` settings. Both default to `true` in this CLI integration, and the installer does not expose flags to change them. Turning off content capture for the telemetry.dev environment discards received content at ingest before storage, but does not prevent the Cursor integration from transmitting it.
+Every span and log also carries the Cursor conversation and generation IDs, your workspace path, and the email address of your Cursor account.
+
+Cursor hooks don't report token usage or cost, so these traces have neither.
+
+## What leaves your machine
+
+By default the integration sends this content to telemetry.dev:
+
+- Your prompts and the tasks given to subagents.
+- The agent's responses and thinking text.
+- Tool arguments and tool results, which include file contents, shell commands, and their output.
+
+The SDK settings that control this, `captureInput` and `captureOutput`, are both on. Version 0.1.8 of the CLI has no flag, config key, or environment variable to change them.
+
+These are sent whatever the settings:
+
+- Your Cursor account email, your workspace path, and the paths of files the agent edits.
+- The chat title, or the first 60 characters of the prompt, as the turn span's name.
+- Conversation, generation, subagent, and tool call IDs; model, tool, and subagent names; statuses, durations, and compaction counts.
+- Error messages from Cursor, including the error text of failed tools.
+
+You can stop telemetry.dev from storing prompt and response content: turn off **Store prompts and responses** for the environment in the project's [privacy settings](/platform/privacy). telemetry.dev then drops recognized content and replaces span names with `[REDACTED]` before storage. The content still leaves your machine, and identifiers, paths, and error text are still stored after built-in redaction.
+
+To stop sending anything, run `telemetry-dev-cursor uninstall` and delete `~/.cursor/telemetry-dev.json`.
 
 ## How it runs
 
-Cursor starts a process for every hook event. The hook command forwards each event over a local socket to a daemon. The daemon keeps spans open across events, batches OTLP exports, and stops after 15 minutes without activity.
+Cursor starts a new process for every hook event. The hook command passes the event to a background daemon over a local socket and returns right away. The daemon keeps spans open between events, sends them in batches, and stops after 15 minutes without events.
 
-Hook delivery is fail-open: the hook command returns `{}` with exit code 0 so an instrumentation problem does not stop the agent. Starting the daemon for the first event can add up to 10 seconds to that hook.
+Hooks fail open: the hook command always returns `{}` with exit code 0, so a telemetry problem never blocks the agent. Starting the daemon on the first event can add up to 10 seconds to that hook.
 
 ## Configuration
 
 Environment variables take precedence over `~/.cursor/telemetry-dev.json`:
 
-| Variable | Required | Default | Description |
-| --- | ---: | --- | --- |
-| `TELEMETRY_DEV_API_KEY` | Yes | None | Ingest key. Without it, the integration is a no-op. |
-| `TELEMETRY_DEV_BASE_URL` | No | `https://ingest.telemetry.dev` | OTLP ingest base URL. |
-| `TELEMETRY_DEV_ENVIRONMENT` | No | `production` | Environment on traces and logs. |
-| `OTEL_SERVICE_NAME` | No | `cursor` | OpenTelemetry service name. |
+| Variable | File key | Default | Description |
+| --- | --- | --- | --- |
+| `TELEMETRY_DEV_API_KEY` | `apiKey` | None | Ingest API key. Without one, the integration sends nothing. |
+| `TELEMETRY_DEV_BASE_URL` | `baseUrl` | `https://ingest.telemetry.dev` | OTLP ingest base URL. |
+| `TELEMETRY_DEV_ENVIRONMENT` | `environment` | `production` | Environment on traces and logs. |
+| `OTEL_SERVICE_NAME` | `serviceName` | `cursor` | OpenTelemetry service name. |
 
-The install command also accepts `--base-url` and `--environment` and stores those values in the config file.
+`install` writes `apiKey`, and `baseUrl` and `environment` when you pass them. If you omit `--api-key`, it reads `TELEMETRY_DEV_API_KEY`. Running `install` again rewrites the file and stops the daemon, so the next hook starts it with the new settings.
+
+To remove the hooks:
+
+```sh
+telemetry-dev-cursor uninstall
+```
+
+`uninstall` keeps `~/.cursor/telemetry-dev.json`. Delete that file to remove the saved API key.
 
 ## Limitations
 
-- Cursor hooks do not report token usage or cost. Chat start times are approximated from the end of the preceding assistant message.
-- `cursor-agent` emits only a subset of hooks. As of CLI 2026.08, it does not emit `beforeSubmitPrompt`, `afterAgentResponse`, or `stop`; CLI traces therefore omit prompt and response text.
-- Cloud agents load project-level `.cursor/hooks.json`, while the installer writes user-level hooks. Add equivalent project hooks and provide the API key in the cloud environment for cloud coverage.
-- The integration traces agent sessions, not Tab inline completions.
-- Cursor hook payloads do not always identify a subagent's parent. The integration associates an otherwise unknown conversation with the oldest pending Task call, so concurrent subagent relationships can be approximate.
-
-Open the [trace explorer](/platform/traces) after a turn completes.
+- **Windows machines shared with other users:** on Windows, the daemon listens on a named pipe whose name is based on your username, and version 0.1.8 doesn't check who created the pipe. Another user signed in to the same machine could create it first and receive your hook events. Don't use 0.1.8 on a Windows machine shared with people who shouldn't see your prompts and code.
+- **Agent CLI:** `cursor-agent` sends only some hooks. As of CLI 2026.08 it doesn't send `beforeSubmitPrompt`, `afterAgentResponse`, or `stop`, so CLI traces have tool and thinking spans but no prompt or response text.
+- **Cloud agents:** cloud agents run only project hooks from `.cursor/hooks.json` in the repository, not the user-level hooks this installer writes. To trace them, add equivalent project hooks and provide the API key in the cloud environment.
+- **Tab:** the integration traces agent sessions, not Tab completions.
+- **Subagent parents:** Cursor hook events don't always say which conversation started a subagent. The integration assigns an unknown conversation to the oldest pending Task call, so parents can be wrong when several subagents start at once.
+- **Timing:** a `chat` span starts at the end of the previous assistant message, which approximates when the model call began.

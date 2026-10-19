@@ -2,19 +2,24 @@
 title: Integrations
 description: Choose a telemetry.dev integration for your framework, model provider, coding agent, SDK, or OpenTelemetry setup.
 sidebar: { label: "Overview" }
-lastModified: 2026-10-14
+lastModified: 2026-10-18
 seo:
   title: "LLM and AI Agent Integrations"
   description: "Connect telemetry.dev to the Vercel AI SDK, LangChain, OpenAI, Anthropic, LiteLLM, Claude Code, Cursor, opencode, and more through SDKs or native OpenTelemetry."
 ---
 
-Choose the guide that matches the layer you control. First-party wrappers provide the deepest model-call detail; native OpenTelemetry integrations keep your existing instrumentation and export path.
+Pick the guide for the code that makes your model calls:
+
+- **You call a provider's SDK directly**, such as `openai` or `@anthropic-ai/sdk`: use the [model provider](#model-providers) guide. The wrapper records each call with its tokens, input, and output.
+- **You use a framework**, such as the Vercel AI SDK or LangChain: use the [framework](#frameworks-and-protocols) guide. It records the framework's agent loop and tool calls along with its model calls.
+- **You use a coding agent** on your machine: use the [coding agent](#coding-agents) guide. These run on your machine, so each guide starts with what leaves it by default: prompts, file contents, and commands.
+- **None of these fit**: record spans yourself with the [TypeScript](/sdk/typescript) or [Python](/sdk/python) SDK, or send from any [OpenTelemetry](/sdk/opentelemetry) exporter.
 
 ## Frameworks and protocols
 
 <CardGroup cols={2}>
   <IntegrationCard title="Vercel AI SDK" href="/integrations/vercel-ai-sdk" mark="vercel-ai-sdk">Trace AI SDK generations, streams, agent loops, and tool calls.</IntegrationCard>
-  <IntegrationCard title="TanStack AI" href="/integrations/tanstack-ai" mark="tanstack-ai">Add tracing as TanStack AI chat middleware.</IntegrationCard>
+  <IntegrationCard title="TanStack AI" href="/integrations/tanstack-ai" mark="tanstack-ai">Add tracing as TanStack AI middleware for chat and generation activities.</IntegrationCard>
   <IntegrationCard title="LangChain and LangGraph" href="/integrations/langchain-langgraph" mark="langchain">Trace chains, model calls, and tools through OpenTelemetry.</IntegrationCard>
   <IntegrationCard title="CrewAI" href="/integrations/crewai" mark="crewai">Export CrewAI and model spans with OpenLIT.</IntegrationCard>
   <IntegrationCard title="Pydantic AI" href="/integrations/pydantic-ai" mark="pydantic-ai">Use Pydantic AI's native OpenTelemetry instrumentation.</IntegrationCard>

@@ -1,29 +1,26 @@
 ---
 title: Amazon Bedrock
 description: Trace Amazon Bedrock Runtime and Agent Runtime calls from TypeScript or Python.
-lastModified: 2026-08-03
+lastModified: 2026-10-18
 seo:
   title: "Amazon Bedrock Tracing and Observability"
   description: "Trace Amazon Bedrock Runtime and Agent Runtime calls from TypeScript or Python, with Converse messages, guardrails, knowledge bases, token usage, and errors."
 ---
 
-The integration records Amazon Bedrock Runtime and Agent Runtime calls. Make a project at telemetry.dev. Copy an API key from the project setup page. Keys use the `td_live_...` format.
+Wrap your Bedrock Runtime or Agent Runtime client, and each supported call you make with it becomes a span in telemetry.dev. The integration never changes request objects, so AWS SigV4 signatures stay valid.
 
-## What it captures
+## What you get
 
-The integration records:
+- Converse messages, system instructions, inference parameters, guardrail data, native `InvokeModel` bodies, and agent input
+- Model output, agent output, citations, return-control data, the AWS request ID, HTTP status, retry counts, and errors
+- Token usage from responses, native model bodies, AWS headers, and agent trace events
+- Spans for embedding, guardrail, knowledge-base retrieval, rerank, and flow calls, and time to first chunk for streams
 
-- Converse messages, system instructions, inference parameters, guardrail data, native model input, and agent input
-- Model output, agent output, citations, return-control data, response IDs, AWS status, retries, and errors
-- Token usage from responses, native model bodies, AWS headers, and agent trace trees
-- Embedding calls, guardrail calls, knowledge-base calls, rerank calls, flow calls, and time to first chunk
-- Bedrock calls with provider `amazon-bedrock`.
-
-Inline media bytes are not part of normalized span input. Non-JSON `InvokeModel` bodies are not part of span input or output.
+Images, documents, video, and audio sent inline appear in span input as parts without their bytes. `InvokeModel` bodies that aren't JSON aren't recorded.
 
 ## Install
 
-Install the Runtime client and the telemetry packages:
+Install the telemetry packages and the Bedrock Runtime client:
 
 <CodeGroup>
 
@@ -32,39 +29,35 @@ npm i @telemetry-dev/sdk @telemetry-dev/bedrock @aws-sdk/client-bedrock-runtime
 ```
 
 ```sh Python
-pip install telemetry-dev telemetry-dev-bedrock boto3
+pip install telemetry-dev-bedrock
 ```
 
 </CodeGroup>
 
-For Agent Runtime with TypeScript, also install the Agent Runtime client:
+The Python package also installs `telemetry-dev` and `boto3`. For Agent Runtime in TypeScript, also install the Agent Runtime client:
 
 ```sh
 npm i @aws-sdk/client-bedrock-agent-runtime
 ```
 
 :::warning[Peer dependency]
-`@aws-sdk/client-bedrock-runtime` is a necessary peer for all installations. Install it for an agents-only application too.
+The TypeScript package needs `@aws-sdk/client-bedrock-runtime` even if you only use Agent Runtime.
 :::
 
-**TypeScript**
-
-| Requirement | Version |
+| Language | Requirements |
 | --- | --- |
-| `@telemetry-dev/sdk` peer | `^0.1.0` |
-| `@aws-sdk/client-bedrock-runtime` peer | `>=3.600.0 <4` |
-| Optional `@aws-sdk/client-bedrock-agent-runtime` peer | `>=3.600.0 <4` |
-| Node.js from `@telemetry-dev/sdk` | `>=20.19.0` |
+| TypeScript | Node.js `>=20.19.0`, `@telemetry-dev/sdk` `^0.1.8`, `@aws-sdk/client-bedrock-runtime` `>=3.600.0 <4`, and optionally `@aws-sdk/client-bedrock-agent-runtime` `>=3.600.0 <4` |
+| Python | Python `>=3.10`, `telemetry-dev` `>=0.2.6`, `boto3` `>=1.36` |
 
-**Python**
+## Trace a call
 
-| Requirement | Version |
-| --- | --- |
-| Python | `>=3.10` |
-| `telemetry-dev` | `>=0.2.6` |
-| `boto3` | `>=1.36` |
+Set your telemetry.dev project API key, and make sure your AWS credentials are available to the AWS SDK. Copy the telemetry.dev key from the project setup page; it starts with `td_live_`.
 
-## Quickstart
+```sh
+export TELEMETRY_DEV_API_KEY=td_live_...
+```
+
+Call `init()`, wrap the client, and use it as usual:
 
 <CodeGroup>
 
@@ -73,16 +66,13 @@ import {
   BedrockRuntimeClient,
   ConverseCommand,
 } from "@aws-sdk/client-bedrock-runtime";
-import { init, shutdown } from "@telemetry-dev/sdk";
+import { flush, init, shutdown } from "@telemetry-dev/sdk";
 import { wrapBedrock } from "@telemetry-dev/bedrock";
 
+init({ serviceName: "bedrock-app" });
 const client = wrapBedrock(
   new BedrockRuntimeClient({ region: "us-east-1" }),
 );
-init({
-  serviceName: "bedrock-app",
-  exportMode: "immediate",
-});
 
 try {
   const response = await client.send(
@@ -99,6 +89,7 @@ try {
     response.output?.message?.content?.find((part) => "text" in part)?.text,
   );
 } finally {
+  await flush();
   await shutdown();
 }
 ```
@@ -108,21 +99,21 @@ import boto3
 import telemetry_dev
 from telemetry_dev_bedrock import wrap_bedrock
 
-telemetry_dev.init(
-    service_name="bedrock-app",
-    environment="production",
-)
+telemetry_dev.init(service_name="bedrock-app")
 bedrock = wrap_bedrock(
     boto3.client("bedrock-runtime", region_name="us-east-1"),
 )
 
 try:
-    bedrock.converse(
+    response = bedrock.converse(
         modelId="anthropic.claude-3-5-haiku-20241022-v1:0",
+        system=[{"text": "You are concise."}],
         messages=[
-            {"role": "user", "content": [{"text": "Hello"}]},
+            {"role": "user", "content": [{"text": "Say hello from Bedrock."}]},
         ],
+        inferenceConfig={"maxTokens": 128, "temperature": 0.2},
     )
+    print(response["output"]["message"]["content"][0]["text"])
 finally:
     telemetry_dev.flush()
     telemetry_dev.shutdown()
@@ -130,9 +121,15 @@ finally:
 
 </CodeGroup>
 
-## Agent Runtime
+Run the script, then open the [trace explorer](/platform/traces). The trace has one `chat anthropic.claude-3-5-haiku-20241022-v1:0` generation span with the messages, the reply, and token usage.
 
-TypeScript imports Agent Runtime functions from the `/agents` entry. Python uses the same wrapper for a `boto3.client("bedrock-agent-runtime")` client:
+Without an API key, `init()` turns telemetry off and the wrapped client works as before.
+
+## Trace Agent Runtime calls
+
+In TypeScript, import the Agent Runtime functions from `@telemetry-dev/bedrock/agents`. In Python, `wrap_bedrock()` also accepts a `bedrock-agent-runtime` client.
+
+Pass `enableTrace: true` (`enableTrace=True` in Python) to `InvokeAgent` so AWS sends the trace events that carry the agent's token usage.
 
 <CodeGroup>
 
@@ -143,15 +140,14 @@ import {
 } from "@aws-sdk/client-bedrock-agent-runtime";
 import { wrapBedrockAgents } from "@telemetry-dev/bedrock/agents";
 
-const client = wrapBedrockAgents(
+const agent = wrapBedrockAgents(
   new BedrockAgentRuntimeClient({ region: "us-east-1" }),
-  { captureAgentTrace: true },
 );
 
-const response = await client.send(
+const response = await agent.send(
   new InvokeAgentCommand({
-    agentId,
-    agentAliasId,
+    agentId: process.env.BEDROCK_AGENT_ID!,
+    agentAliasId: process.env.BEDROCK_AGENT_ALIAS_ID!,
     sessionId: crypto.randomUUID(),
     inputText: "Say hello",
     enableTrace: true,
@@ -166,85 +162,122 @@ for await (const event of response.completion ?? []) {
 ```
 
 ```python Python
+import os
+import uuid
+
+import boto3
+from telemetry_dev_bedrock import wrap_bedrock
+
 agent = wrap_bedrock(
     boto3.client("bedrock-agent-runtime", region_name="us-east-1"),
-    capture_agent_trace=True,
 )
+
+response = agent.invoke_agent(
+    agentId=os.environ["BEDROCK_AGENT_ID"],
+    agentAliasId=os.environ["BEDROCK_AGENT_ALIAS_ID"],
+    sessionId=str(uuid.uuid4()),
+    inputText="Say hello",
+    enableTrace=True,
+)
+
+for event in response["completion"]:
+    if "chunk" in event:
+        print(event["chunk"]["bytes"].decode(), end="")
 ```
 
 </CodeGroup>
 
+The agent span finishes when you read the completion stream to the end. Call `init()` and flush as in the first example.
+
+## Instrument all clients
+
+To trace every client without wrapping each one, call the global function once at startup:
+
+<CodeGroup>
+
+```ts TypeScript
+import { instrumentBedrock } from "@telemetry-dev/bedrock";
+import { instrumentBedrockAgents } from "@telemetry-dev/bedrock/agents";
+
+instrumentBedrock();
+instrumentBedrockAgents();
+```
+
+```python Python
+from telemetry_dev_bedrock import instrument_bedrock
+
+instrument_bedrock()
+```
+
+</CodeGroup>
+
+In TypeScript, global instrumentation patches `send()` on the `BedrockRuntimeClient` and `BedrockAgentRuntimeClient` prototypes, so other AWS clients aren't affected. Use either global instrumentation or `wrapBedrock()` for a client, not both.
+
+In Python, global instrumentation wraps Botocore's API call method and acts only on `bedrock-runtime` and `bedrock-agent-runtime` clients. It skips clients you wrapped with `wrap_bedrock()`, so they don't get a second span.
+
 ## API
 
-### TypeScript
+| TypeScript | Python | What it does |
+| --- | --- | --- |
+| `wrapBedrock(client, options?)` from `@telemetry-dev/bedrock` | `wrap_bedrock(client, *, capture_agent_trace=False)` | Instruments one client and returns it. Wrapping the same client again has no effect. Python accepts Runtime and Agent Runtime clients. |
+| `wrapBedrockAgents(client, options?)` from `@telemetry-dev/bedrock/agents` | Use `wrap_bedrock()` | Instruments one Agent Runtime client. |
+| `instrumentBedrock(options?)` and `instrumentBedrockAgents(options?)` | `instrument_bedrock(*, capture_agent_trace=False)` | Instruments every matching client. |
+| `uninstrumentBedrock()` and `uninstrumentBedrockAgents()` | `uninstrument_bedrock()` | Removes global instrumentation. |
 
-| Entry | Functions |
-| --- | --- |
-| `@telemetry-dev/bedrock` | `wrapBedrock`, `instrumentBedrock`, `uninstrumentBedrock` |
-| `@telemetry-dev/bedrock/agents` | `wrapBedrockAgents`, `instrumentBedrockAgents`, `uninstrumentBedrockAgents` |
+`boto3` has no asynchronous client, and the Python package doesn't instrument `aiobotocore`.
 
-The `wrap*` functions instrument one client. The `instrument*` functions instrument new clients through each AWS client prototype.
+### Options
 
-### Python
+<TypeTable type={{ captureAgentTrace: { type: "boolean", description: "TypeScript name. Attach the agent's trace events to the span as td.metadata.agent_trace. Token usage totals and the event count are recorded either way.", default: "false" }, capture_agent_trace: { type: "bool", description: "Python name for the same option.", default: "False" } }} />
 
-| Function | Purpose |
-| --- | --- |
-| `wrap_bedrock(client, *, capture_agent_trace=False)` | Instruments one Runtime or Agent Runtime client. |
-| `instrument_bedrock(*, capture_agent_trace=False)` | Instruments matching Botocore clients. |
-| `uninstrument_bedrock()` | Restores the original Botocore call method. |
+:::warning[Agent trace content]
+Agent trace events can contain prompts, model output, tool input, and retrieved text. In the current releases (TypeScript 0.1.10, Python 0.1.5), `td.metadata.agent_trace` holds the raw events, truncated to the attribute length limit. Your `mask` doesn't see them, and `captureInput` and `captureOutput` don't remove them. Turn this option on only if that content can be stored. An unreleased change filters the events by your capture settings.
+:::
 
-Python uses one API for the Runtime and Agent Runtime clients. `boto3` has no asynchronous client, and this package does not instrument `aiobotocore`.
+## Traced calls
 
-## Options
+| Operation | Span name | Span type |
+| --- | --- | --- |
+| `Converse`, `ConverseStream` | `chat {modelId}` | generation |
+| `InvokeModel`, `InvokeModelWithResponseStream` | `chat {modelId}`, or `embeddings {modelId}` for embedding models | generation or embedding |
+| `ApplyGuardrail` | `apply_guardrail {guardrailIdentifier}` | span |
+| `InvokeAgent` | `invoke_agent {agentId}` | agent |
+| `InvokeInlineAgent` | `invoke_agent {agentName}` | agent |
+| `Retrieve` | `retrieve {knowledgeBaseId}` | span |
+| `RetrieveAndGenerate`, `RetrieveAndGenerateStream` | `retrieve_and_generate {model}` | generation |
+| `Rerank` | `rerank {model}` with operation `rerank` | span |
+| `InvokeFlow` | `invoke_flow {flowIdentifier}` | agent |
 
-**TypeScript**
+In TypeScript these are the `...Command` classes, such as `ConverseCommand`. In Python they are the snake_case client methods, such as `converse()` and `invoke_agent()`. For `RetrieveAndGenerate` and `Rerank`, `{model}` is the last segment of the model ARN.
 
-<TypeTable type={{ captureAgentTrace: { type: "boolean", description: "Add raw agent trace events to td.metadata.agent_trace. Usage totals and event counts remain available when this option is false.", default: "false" } }} />
+The TypeScript integration recognizes a command by its class name. If your bundler minifies class names, commands pass through without a span; keep class names in the build (for example, with esbuild's `keepNames`).
 
-**Python**
+A rerank span records the queries, inline sources, model request fields, ranked results and scores, result counts, and pagination metadata.
 
-<TypeTable type={{ capture_agent_trace: { type: "bool", description: "Add raw agent trace events to td.metadata.agent_trace. Usage totals and event counts remain available when this option is false.", default: "False" } }} />
+`InvokeModel` token usage depends on the model. Anthropic Claude, Amazon Titan and Nova, Meta Llama, and Titan embedding models return known token fields. Cohere and Mistral text models don't always include usage in the response body, but their spans still record the bodies and finish reasons.
 
-## Calls
-
-### TypeScript
-
-| Client | Instrumented operations |
-| --- | --- |
-| Bedrock Runtime | `ConverseCommand`, `ConverseStreamCommand`, `InvokeModelCommand`, `InvokeModelWithResponseStreamCommand`, `ApplyGuardrailCommand` |
-| Bedrock Agent Runtime | `InvokeAgentCommand`, `InvokeInlineAgentCommand`, `RerankCommand`, `RetrieveCommand`, `RetrieveAndGenerateCommand`, `RetrieveAndGenerateStreamCommand`, `InvokeFlowCommand` |
-
-Unknown commands pass to the AWS client without instrumentation. The integration does not change request objects, which keeps AWS SigV4 signatures valid.
-
-### Python
-
-| Service | Instrumented operations |
-| --- | --- |
-| `bedrock-runtime` | `converse`, `converse_stream`, `invoke_model`, `invoke_model_with_response_stream`, `apply_guardrail` |
-| `bedrock-agent-runtime` | `invoke_agent`, `invoke_inline_agent`, `rerank`, `retrieve`, `retrieve_and_generate`, `retrieve_and_generate_stream`, `invoke_flow` |
-
-### Rerank
-
-In both languages, a rerank call makes a `rerank {model}` span with operation `rerank`. The model name is the last segment of the reranking model ARN. The span records the queries, inline sources, model request fields, ranked results and scores, result counts, pagination metadata, and request ID.
+Other operations pass through without a span, including `CountTokens`, `InvokeModelWithBidirectionalStream`, the async invoke operations, Agent Runtime session management, `GenerateQuery`, and `OptimizePrompt`.
 
 ## Streaming
 
-### TypeScript
+A stream span stays open until your code reads the stream to the end, stops early, or the stream fails. The wrapper reads events only as you consume them, so backpressure is kept. On an early stop or an error, the span records the partial output and is marked as incomplete with `telemetry.dev.capture.truncated`.
 
-The wrapper reads each stream on demand and keeps backpressure. It records partial output after an early close and records modeled AWS stream errors.
+In TypeScript, a stream that is garbage-collected before it finishes also ends its span, on runtimes that support `FinalizationRegistry`.
 
-The wrapper closes a span one time after completion, close, error, or garbage collection. Garbage-collection closure depends on runtime `FinalizationRegistry` support.
+In Python, the integration reads an `InvokeModel` response's `StreamingBody` once, then replaces it with a new body over the same bytes, so `response["body"].read()` still works. Event streams pass through lazily. Closing one early, or a `GeneratorExit`, ends the span with the partial output.
 
-### Python
+## Provider names
 
-The wrapper reads a `StreamingBody` for telemetry and replaces it with an equivalent body. Caller reads still return the same bytes.
+Every span uses the provider `amazon-bedrock`. The model is the `modelId`, `modelArn`, or `foundationModel` you sent.
 
-Event streams stay lazy and keep backpressure. Early close, `GeneratorExit`, and stream errors close the span with partial output.
+Calls through Anthropic's `AnthropicBedrock` client are traced by the [Anthropic integration](/integrations/anthropic) and use the provider `aws.bedrock` instead.
 
-## Flush
+## Captured content
 
-**TypeScript:** For a short or serverless call, `exportMode: "immediate"` sends spans and logs without a batch delay. Call `await flush()` before return when metrics must leave before freeze. Call `await shutdown()` before process exit.
+Prompts and responses follow the core SDK's `captureInput`, `captureOutput`, and `mask` settings (`capture_input`, `capture_output`, and `mask` in Python). With output capture off, request IDs, models, finish reasons, usage, timing, and errors are still recorded. AWS error messages are recorded on the span whatever the capture settings. For agent trace events, see the warning under [Options](#options).
 
-**Python:** For serverless code, use `export_mode="immediate"` and call `telemetry_dev.flush()` before freeze. Immediate mode does not send metrics immediately. Call `telemetry_dev.shutdown()` before process exit.
+## Send telemetry before exit
 
-Open the [trace explorer](/platform/traces) to examine the spans. Refer to the [quickstart](/quickstart) for API-key setup.
+In a short script, call `flush()` and then `shutdown()` before the process exits, as in the example above.
+
+In serverless code, initialize with `exportMode: "immediate"` (`export_mode="immediate"` in Python) so each span is sent when it ends, and still call `flush()` before the handler returns: immediate mode doesn't send metrics right away. See the [TypeScript SDK](/sdk/typescript) and [Python SDK](/sdk/python) guides for details.

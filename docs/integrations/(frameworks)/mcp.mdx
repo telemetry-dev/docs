@@ -1,25 +1,19 @@
 ---
 title: Model Context Protocol
 description: Trace requests across official TypeScript MCP SDK v2 client and server transports.
-lastModified: 2026-09-05
+lastModified: 2026-10-18
 seo:
   title: "Model Context Protocol (MCP) Tracing"
   description: "Trace Model Context Protocol requests across client and server transports of the official TypeScript MCP SDK v2, with tool names, errors, and trace context."
 ---
 
-`@telemetry-dev/mcp` instruments transports from the official TypeScript MCP SDK v2. It traces MCP requests sent by a client or handled by a server; it is not an MCP server for querying telemetry.dev.
+Wrap an MCP transport with `instrumentMcpTransport()` to trace every MCP request it sends or handles. When you instrument both the client and the server, a tool call shows up as one trace that spans both processes.
 
-## What it captures
-
-Each JSON-RPC request produces a client span on the sending side and a server span on the receiving side. The integration records the MCP method, request ID, protocol version, session ID when available, errors, and method-specific fields such as tool name, prompt name, or resource URI.
-
-`tools/call` requests use the `execute_tool` operation. Other MCP requests use the `mcp` operation. Notifications do not produce processing spans, and the integration does not emit metrics.
-
-Trace context propagates through MCP request metadata by default, so an instrumented server span can continue the client trace. OpenTelemetry baggage remains local unless you opt in with `propagateBaggage: true`.
+`@telemetry-dev/mcp` works with transports from the official TypeScript MCP SDK v2. It is not an MCP server for querying telemetry.dev.
 
 ## Install
 
-Install the core SDK, this integration, and the official package for your side of the connection:
+Install the core SDK, this integration, and the official MCP package for your side of the connection:
 
 <CodeGroup>
 
@@ -33,11 +27,17 @@ npm i @telemetry-dev/sdk @telemetry-dev/mcp @modelcontextprotocol/server
 
 </CodeGroup>
 
-The integration requires MCP SDK v2 (`@modelcontextprotocol/client` or `@modelcontextprotocol/server` version 2.x). MCP v1 is not supported.
+The integration requires `@modelcontextprotocol/client` or `@modelcontextprotocol/server` version 2.x. MCP SDK v1 (`@modelcontextprotocol/sdk`) is not supported.
+
+Set your API key in each process you instrument:
+
+```sh
+export TELEMETRY_DEV_API_KEY=td_live_...
+```
 
 ## Instrument a client
 
-Initialize telemetry.dev, then instrument the transport before connecting it:
+Start the telemetry.dev SDK, then wrap the transport before you connect it:
 
 ```ts
 import { Client } from "@modelcontextprotocol/client";
@@ -69,13 +69,50 @@ const transport = instrumentMcpTransport(new StdioServerTransport());
 await server.connect(transport);
 ```
 
-`instrumentMcpTransport()` mutates and returns the same transport. Calling it again for that transport has no effect.
+`instrumentMcpTransport()` changes the transport in place and returns it. Calling it again on the same transport has no effect.
 
-The same wrapper supports Streamable HTTP transports. Instrument each transport before passing it to `client.connect()` or `server.connect()`; both sides need instrumentation to record both client and server spans.
+The wrapper works the same way with Streamable HTTP transports: wrap each transport before you pass it to `client.connect()` or `server.connect()`. If `createMcpHandler()` creates server transports for you, wrap them in your server factory:
+
+```ts
+import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
+import { instrumentMcpTransport } from "@telemetry-dev/mcp";
+
+const handler = createMcpHandler(() => {
+  const server = new McpServer({ name: "example-server", version: "1.0.0" });
+  const connect = server.connect.bind(server);
+  server.connect = (transport) => connect(instrumentMcpTransport(transport));
+  return server;
+});
+```
+
+## Check the trace
+
+Make one request, such as a tool call, then open [Traces](/platform/traces) in your project. With both sides instrumented, the trace has a client span from the client process and a server span from the server process under it. With one side instrumented, you see only that side's span.
+
+## What is traced
+
+Each JSON-RPC request makes a client span on the side that sends it and a server span on the side that handles it. Each span records:
+
+- The MCP method (`mcp.method.name`) and JSON-RPC request ID
+- The protocol version, and the session ID when the transport has one
+- The tool name for `tools/call`, the prompt name for `prompts/get`, and the resource URI for `resources/read`, `resources/subscribe`, and `resources/unsubscribe`
+- Errors: JSON-RPC error responses and tool results marked `isError`
+
+Both spans record the JSON-RPC error code. The client span is always marked as an error. The server span is not marked as an error when the code means the caller sent a bad request, such as a parse error, an unknown method, or invalid params.
+
+`tools/call` requests use the `execute_tool` operation. Other requests use the `mcp` operation.
+
+Trace context travels in MCP request metadata by default, so the server span continues the client's trace. OpenTelemetry baggage stays local unless you set `propagateBaggage: true`.
+
+### What is not traced
+
+- Notifications. They do not produce spans.
+- Metrics. The integration does not emit any.
+- Tool arguments and results, unless you turn on payload capture.
 
 ## Control payload capture
 
-Tool arguments and successful tool results are not captured by default. Enable them for a transport only when that content is safe to send:
+Tool arguments and successful tool results are not captured by default. Turn them on for a transport only when that content is safe to send:
 
 ```ts
 const transport = instrumentMcpTransport(mcpTransport, {
@@ -83,8 +120,28 @@ const transport = instrumentMcpTransport(mcpTransport, {
 });
 ```
 
-The core SDK's `captureInput`, `captureOutput`, masking, and maximum attribute length settings still apply. Enabling `capturePayloads` permits tool content to reach those controls; it does not override them. Failed tool results are marked as errors but are not captured as output.
+The core SDK's `captureInput`, `captureOutput`, `mask`, and `maxAttributeLength` settings still apply. `capturePayloads` lets tool content reach those controls; it does not override them. A failed tool result is marked as an error, but its content is not captured as output.
 
-With payload capture off, method names, tool and prompt names, resource URIs, request and session IDs, and error metadata are still recorded. Avoid placing secrets in those fields.
+With payload capture off, method names, tool and prompt names, resource URIs, request and session IDs, and error details are still recorded. Keep secrets out of those fields.
 
-MCP semantic conventions are in Development status and may change. Open the [trace explorer](/platform/traces) after a request completes. Refer to the [quickstart](/quickstart) for API-key setup and SDK configuration.
+## Options
+
+`instrumentMcpTransport(transport, options)` accepts:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `capturePayloads` | `boolean` | `false` | Capture tool arguments and successful tool results |
+| `propagateBaggage` | `boolean` | `false` | Send and accept OpenTelemetry baggage in MCP request metadata |
+
+Configure the API key, service name, environment, and content controls with [`init()` options](/sdk/typescript#configure-init).
+
+The OpenTelemetry MCP semantic conventions are in Development status, so attribute names may change in future releases.
+
+<CardGroup cols={2}>
+  <Card title="View traces" href="/platform/traces" icon="activity">
+    Open the trace explorer and examine the span waterfall.
+  </Card>
+  <Card title="API key setup" href="/quickstart" icon="key">
+    Set the telemetry.dev API key and service name.
+  </Card>
+</CardGroup>

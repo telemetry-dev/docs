@@ -1,75 +1,97 @@
 ---
-title: Traces and logs
-description: Search traces and spans, inspect a span waterfall, and read correlated logs.
-lastModified: 2026-08-03
+title: Traces, sessions, and logs
+description: Find a request, inspect its spans, follow a conversation, and read related logs.
+lastModified: 2026-10-18
 ---
 
-The trace explorer shows each request as a trace and each operation as a span. Use it to find errors, slow operations, model calls, tools, and agent steps.
+A trace is one request through your application. Each step inside it, such as a model call, a tool call, or an agent step, is a span. Use the trace explorer to find failed or slow requests and to see what each model call received and returned.
 
-## Explore traces and spans
+## Find a trace or span
 
-Open **Traces** in a project. Select **Traces** or **Spans** above the table.
+Select **Traces** in the project sidebar. Use the **Traces** and **Spans** switch above the table to list whole requests or single operations.
 
-The two views use the same filters:
+Both lists have the same filters:
 
-| Filter | Behavior |
+| Filter | What it does |
 | --- | --- |
-| Search | Searches trace or span names after a 250 ms delay |
-| Status | Shows all statuses, successes, or errors |
-| Environment | Uses environment values from telemetry |
-| Framework | Uses the detected framework |
-| Session | Limits results to a selected session or conversation |
-| User | Limits results to a selected user |
+| Search | Matches trace names or span names. It does not search prompt or response content. |
+| Status | Shows **All statuses**, `success`, or `error`. |
+| Environment | Lists up to 100 environment names from your telemetry. |
+| Framework | Lists the frameworks detected in your telemetry. |
+| Conversation | Select a value in the **Session** or **Conversation** column. A chip shows the filter; select it to clear the filter. |
+| User | Select a value in the **User** column. A chip shows the filter; select it to clear the filter. |
 
-Search does not examine prompt or response content. The filters stay in the page URL, so you can bookmark or share the filtered view.
+The filters are part of the page URL, so you can bookmark or share a filtered view.
 
-### Trace table
+The lists cover the project's whole retention period. They have no date-range control. Scroll to the end of the table or select **Load More** to load the next page.
 
-The trace table can show these columns:
+### Trace columns
 
-`Date · Trace · Input · Output · Duration · Tokens · Cost · Spans · Models · Session · User · Environment`
+The trace list shows **Date** and **Trace**, plus these columns: **Input**, **Output**, **Duration**, **Tokens**, **Cost**, **Spans**, **Models**, **Session**, **User**, and **Environment**.
 
-Select a session or user value to apply that filter. The token cell separates input and output tokens and provides cache and reasoning details. The duration cell shows time to first token when the trace has that value.
+- **Input** and **Output** show the start of the request's prompt and reply.
+- **Duration** shows the time to first token when you hover over it, if the trace has that value.
+- **Tokens** shows input and output tokens. Hover over it for cache-read and reasoning tokens.
+- **Spans** shows the span count and the number of spans with errors.
 
-### Span table
+### Span columns
 
-The span table can show these columns:
-
-`Date · Type · Name · Model · Tool / Agent · Conversation · Service · Environment · Status · Duration · Tokens · Cost`
+The span list shows **Date**, **Type**, and **Name**, plus these columns: **Model**, **Tool / Agent**, **Conversation**, **Service**, **Environment**, **Status**, **Duration**, **Tokens**, and **Cost**.
 
 Select a span row to open its trace with that span selected.
 
-Open **Columns** to select table columns. The browser keeps the column selection in local storage. Select **Load more** to add the next result page.
+### Choose columns
 
-The trace explorer uses the full retention period for the project. It does not have a separate date-range control.
+Select **Columns** to show or hide columns. **Environment** is hidden by default in both lists, and **Service** is hidden by default in the span list. Your browser keeps the choice for later visits.
 
 ## Inspect a trace
 
-Select a trace row to open the trace detail. The header shows status, duration, first-token time, span count, tokens, cost, service, environment, framework, user, conversation, and trace ID.
+Select a trace row to open the trace. The header shows **Status**, **Duration**, **First token**, **Spans**, **Tokens**, **Cost**, **Started**, **Service**, **Environment**, **Framework**, **User**, **Conversation**, and **Trace ID**. Some fields appear only when the trace has a value for them.
 
-The span waterfall shows the operation tree against a shared time axis. You can resize the span and operation columns. Use **Expand all** or **Collapse all** to control the tree.
+The span waterfall shows each span on a shared time axis, nested under its parent. Drag the column edges to resize the span and operation columns. Select **Expand all** or **Collapse all** to open or close the tree.
 
-### Keyboard controls
+### Move through spans with the keyboard
 
-Focus the waterfall tree, then use these keys:
+Focus the span tree, then use these keys:
 
 | Key | Action |
 | --- | --- |
 | `↓` or `j` | Select the next span |
-| `↑` or `k` | Select the prior span |
-| `PageDown` or `PageUp` | Move eight spans |
+| `↑` or `k` | Select the previous span |
+| `PageDown` or `PageUp` | Move eight spans down or up |
 | `Home` or `End` | Select the first or last span |
-| `→` or `l` | Expand a span or select its first child |
-| `←` or `h` | Collapse a span or select its parent |
+| `→` or `l` | Expand a span, or select its first child |
+| `←` or `h` | Collapse a span, or select its parent |
 
-The selected-span panel shows model, provider, tool or agent, duration, tokens, cost, operation, IDs, and finish data. Content tabs can include **Input / Output**, **Attributes**, **Events**, and **Error**.
+### Read a span
 
-Use **Pretty** for parsed chat messages. Use **JSON** for the stored value. The detail view shows a **Truncated** badge when a payload exceeds its preview limit.
+The span panel shows fields such as **Model**, **Provider**, **Agent**, **Tool**, **Duration**, **First token**, **Tokens**, **Cost**, **Finish**, **Operation**, **Conversation**, **Response ID**, and **Span ID**, plus the span's **Metadata**.
+
+Below the fields, tabs show the span's data when it has any:
+
+- **Input / Output**: the prompt and the reply. Select **Pretty** for formatted chat messages or **JSON** for the stored value.
+- **Attributes**: the span attributes.
+- **Events**: the span events and their attributes.
+- **Error**: the error message and details.
+
+A **Truncated** badge means that the dashboard shows a preview of a long value, not the full value. A **Truncated at source** badge next to the span name means that the sender cut the content before export, so telemetry.dev never received the rest.
+
+If prompt and response capture is off for the environment, the **Input / Output** tab does not appear and the span name is `[REDACTED]`. Read [What capture-off removes](/platform/privacy#what-capture-off-removes).
+
+## Follow a conversation
+
+Select **Sessions** in the project sidebar to list conversations. A session groups the traces that share a session ID. To set one, read [Add user, session, and metadata](/sdk/typescript#add-user-session-and-metadata) for TypeScript or [Python](/sdk/python#add-user-session-and-metadata).
+
+Select **24h**, **3d**, **7d**, or **30d** to set the time range. You can search by session ID or trace name and filter by agent, user, or model. The list shows each session's **Agent**, **Model**, **Customer**, **Turns**, **Tokens**, **Cost**, and **Last active** time.
+
+Select a session to see a timeline of its model calls, tool calls, errors, and idle time, followed by each turn of the conversation. Select **Open in Traces** to list the session's traces, or **Open trace** if the session has one trace.
 
 ## Read logs
 
-Open **Logs** in the project sidebar. The table shows `Date · Level · Entity · Message · Data`.
+Select **Logs** in the project sidebar. The table shows **Date**, **Level**, **Entity**, **Message**, and **Data**.
 
-The level filter starts at `error`. You can select `warn`, `info`, `debug`, or all levels. Message search examines the 100 rows in the loaded page.
+The level filter starts at `error`. You can also select `warn`, `info`, `debug`, or **All levels**.
 
-The logs view uses a fixed 30-day window and has no pagination. Select a row to open its full message and attributes. If the log has trace context, select the trace button to open its parent span.
+The table loads the newest 100 matching log records from the last 30 days, or from the retention period if that is shorter. It has no further pages. The search box filters only the message previews in those loaded records.
+
+Select a row to open the log details, with the full message, level, service, environment, the related trace, and the log's data. If the log has trace context, select **Trace** to open the trace with the log's span selected.

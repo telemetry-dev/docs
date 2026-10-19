@@ -1,58 +1,114 @@
 ---
 title: CrewAI
 description: Trace CrewAI agent and model spans with OpenLIT and standard OTLP/HTTP.
-lastModified: 2026-09-30
+lastModified: 2026-10-18
 seo:
   title: "CrewAI Tracing with OpenTelemetry"
   description: "Trace CrewAI agents and LLM calls with OpenLIT and OTLP/HTTP. Monitor the model, token usage, latency, and cost of each crew run, with no change to your agents."
 ---
 
-## About the CrewAI integration
+[OpenLIT](https://docs.openlit.io/latest/sdk/integrations/crewai) instruments CrewAI with OpenTelemetry. Initialize it once and point its OTLP/HTTP exporter at telemetry.dev to trace each crew run, with its agents, tasks, tools, and model calls, without changing your agents or tasks.
 
-OpenLIT auto-instruments CrewAI with OpenTelemetry. Point its OTLP/HTTP exporter at telemetry.dev to trace CrewAI runs without changing your agents or tasks. telemetry.dev normalizes the emitted GenAI attributes into model, provider, token, latency, and cost fields.
+This guide was checked with `crewai` 1.15.28 and `openlit` 1.45.0. OpenLIT's CrewAI instrumentation supports CrewAI 1.10.0 and later.
 
-## Key features
+## Install
 
-- **Automatic CrewAI instrumentation:** Initialize OpenLIT once before creating your crew.
-- **Agent and model spans in one trace:** Follow a run across CrewAI execution and its LLM calls.
-- **Cost on LLM spans:** When OpenLIT attaches `gen_ai.usage.cost` to an LLM span, telemetry.dev uses that value directly; spans without it get cost computed server-side from emitted token counts and model pricing. Crew orchestration spans without token usage carry no cost.
-- **Group by model, provider, and environment:** Compare latency and spend across the dimensions your app emits. One caveat: OpenLIT also copies the crew's aggregate token usage onto the Crew span while child LLM spans emit the same usage, and telemetry.dev sums usage and cost across every span in a trace — so trace-level token and spend totals can count Crew runs twice. Per-span LLM data is unaffected.
-- **Standard OTLP, no lock-in:** Export portable OpenTelemetry data over OTLP/HTTP.
+CrewAI needs Python 3.10 to 3.13. Install CrewAI and OpenLIT in a virtual environment:
 
-## Get started
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install crewai openlit
+```
 
-1. Install OpenLIT alongside CrewAI:
+## Set the API key and exporter
 
-   ```sh
-   pip install crewai openlit
-   ```
+Get a project API key from telemetry.dev. Then configure the OpenTelemetry exporter that OpenLIT uses:
 
-2. Configure the OTLP/HTTP exporter:
+```sh
+export TELEMETRY_DEV_API_KEY="td_live_..."
+export OTEL_EXPORTER_OTLP_ENDPOINT="https://ingest.telemetry.dev"
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer%20$TELEMETRY_DEV_API_KEY"
+export OTEL_SERVICE_NAME="your-crewai-service"
+export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
+```
 
-   ```sh
-   export TELEMETRY_DEV_API_KEY="td_live_..."
-   export OTEL_EXPORTER_OTLP_ENDPOINT="https://ingest.telemetry.dev"
-   export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer%20$TELEMETRY_DEV_API_KEY"
-   export OTEL_SERVICE_NAME="your-crewai-service"
-   export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
-   ```
+OpenLIT sends traces to `https://ingest.telemetry.dev/v1/traces`, plus logs and metrics to `/v1/logs` and `/v1/metrics`. Without `OTEL_EXPORTER_OTLP_ENDPOINT`, OpenLIT prints spans to the console instead of sending them.
 
-3. Initialize OpenLIT before creating your crew:
+## Trace a crew
 
-   ```python
-   import openlit
+Call `openlit.init()` before you create the crew. This example uses an OpenAI model, so set `OPENAI_API_KEY` as well; OpenAI charges apply.
 
-   openlit.init()
-   ```
+```python crew_trace.py
+import openlit
 
-   By default (`capture_message_content=True`, `max_content_length=None`), OpenLIT exports agent backstories, task descriptions, tool arguments and results, and full model request and response content with no length cap. To reduce captured content:
+openlit.init(disable_batch=True)
 
-   ```python
-   openlit.init(capture_message_content=False)
-   # or cap captured content length instead:
-   openlit.init(max_content_length=2000)
-   ```
+from crewai import Agent, Crew, Task
 
-   Both opt-outs are partial: `capture_message_content=False` suppresses backstories, task and model messages, tool payloads, and summaries, but agent roles, goals, and tool definitions or descriptions can still be exported. `max_content_length` truncates only selected content attributes rather than bounding every attribute.
+researcher = Agent(
+    role="Researcher",
+    goal="Explain observability terms",
+    backstory="You write short, accurate definitions.",
+    llm="gpt-4o-mini",
+)
+task = Task(
+    description="Define OTLP in one sentence.",
+    expected_output="One sentence.",
+    agent=researcher,
+)
+print(Crew(agents=[researcher], tasks=[task]).kickoff())
+```
 
-4. Run your crew. CrewAI traces appear in telemetry.dev with model, token, latency, error, and cost data on the LLM spans that emit them.
+`disable_batch=True` sends each span as it ends, so a short script does not exit before its spans are sent. In a long-running app, call `openlit.init()` without it.
+
+## Check the trace
+
+Run the script and open [Traces](/platform/traces) in your project. A crew run contains:
+
+- An `invoke_workflow crew` span for the crew run
+- A `create_agent` span and an `invoke_agent` span for each agent, plus `invoke_agent` spans for CrewAI's internal steps
+- An `execute_tool` span for each tool run
+- A model span, such as `chat gpt-4o-mini`, for each LLM call, with the model, token usage, and cost
+
+OpenLIT calculates cost on model spans from its own price list and records it in `gen_ai.usage.cost`. telemetry.dev uses that value as-is. For a model that is not in OpenLIT's price list, OpenLIT records a cost of `0`, and telemetry.dev keeps that `0` rather than computing its own estimate. For model spans without `gen_ai.usage.cost`, telemetry.dev computes cost from the token counts and the model's price.
+
+### Trace totals count tokens twice
+
+OpenLIT copies the crew's total token usage onto the `invoke_workflow crew` span, while the model spans under it report the same usage. telemetry.dev adds up usage across every span in a trace, so a crew trace's token totals count the crew's usage twice. The crew span also names the model, so telemetry.dev prices its copy of the tokens and the trace's cost total is counted twice too.
+
+Per-span data on model spans is correct. When you compare spend across crews, use the model spans rather than trace totals.
+
+## Control captured content
+
+By default, OpenLIT exports agent backstories, task descriptions, tool arguments and results, and full model requests and responses, with no length limit. To capture less, pass one of these options to `openlit.init()`:
+
+```python
+openlit.init(capture_message_content=False)
+# or cap the length of captured content instead:
+openlit.init(max_content_length=2000)
+```
+
+Both options are partial:
+
+- `capture_message_content=False` leaves out backstories, task and model messages, tool payloads, and summaries. Agent roles, goals, and tool definitions and descriptions are still exported.
+- `max_content_length` truncates only some content attributes. It does not limit every attribute.
+
+You can also set them with the `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` and `OPENLIT_MAX_CONTENT_LENGTH` environment variables.
+
+## What telemetry.dev reads
+
+OpenLIT emits OpenTelemetry GenAI attributes, which telemetry.dev reads directly:
+
+- Tokens from `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, and the cache token attributes
+- Cost from `gen_ai.usage.cost`
+- Model and provider from `gen_ai.request.model`, `gen_ai.response.model`, and `gen_ai.provider.name`
+- The environment from `deployment.environment.name`. OpenLIT also sets `deployment.environment` (to `default` unless you set `OTEL_DEPLOYMENT_ENVIRONMENT`); telemetry.dev uses `deployment.environment.name` first.
+
+CrewAI orchestration spans carry `gen_ai.provider.name: crewai`, and model spans carry the model provider, such as `openai`.
+
+## Troubleshooting
+
+- **Spans print to the terminal.** `OTEL_EXPORTER_OTLP_ENDPOINT` is not set in the process.
+- **No trace appears.** Check that `OTEL_EXPORTER_OTLP_HEADERS` contains your key, and that `openlit.init()` runs before the crew starts. A short script without `disable_batch=True` can exit before its spans are sent.
+- **Trace totals look doubled.** See [trace totals count tokens twice](#trace-totals-count-tokens-twice).

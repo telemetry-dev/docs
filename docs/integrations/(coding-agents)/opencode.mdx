@@ -1,18 +1,103 @@
 ---
 title: opencode
 description: Trace opencode agent turns, model calls, tools, subagents, usage, cost, and session events.
-lastModified: 2026-08-26
+lastModified: 2026-10-18
 seo:
   title: "opencode Telemetry: OpenTelemetry Plugin"
   description: "Trace opencode with an OpenTelemetry plugin. Record agent turns, model calls, tool calls, subagents, token usage, cost, and session events in telemetry.dev."
 ---
 
-`@telemetry-dev/opencode` connects the opencode plugin API to telemetry.dev. It requires opencode 1.15.11 or later.
+`@telemetry-dev/opencode` is an opencode plugin. Add it to your opencode config, set an API key, and each prompt appears in telemetry.dev as a trace with its model calls, tool calls, subagents, token usage, and cost.
 
+By default the plugin sends the text of your prompts and every tool call's arguments and results, which include file contents and command output. It doesn't send the model's response text. You can turn content off with two options; see [What leaves your machine](#what-leaves-your-machine).
 
-## What it captures
+## Before you start
 
-A prompt produces one trace with this shape:
+- opencode 1.15.11 or later, on its standard plugin API. opencode's beta V2 plugin API doesn't run this plugin.
+- A telemetry.dev project and its API key. Keys start with `td_live_`.
+
+## Set up
+
+<Steps>
+  <Step title="Set the API key">
+
+Set the key in the environment that starts opencode:
+
+```sh
+export TELEMETRY_DEV_API_KEY=td_live_...
+export TELEMETRY_DEV_ENVIRONMENT=development
+```
+
+Keep the key out of `opencode.json`, which is often committed to a repository.
+
+  </Step>
+
+  <Step title="Add the plugin">
+
+Add the package to the `plugin` list in `opencode.json`. Use the project's `opencode.json` for one project, or `~/.config/opencode/opencode.json` for all of them:
+
+```json opencode.json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["@telemetry-dev/opencode"]
+}
+```
+
+opencode installs npm plugins with Bun when it starts, so you don't need to install the package yourself.
+
+  </Step>
+
+  <Step title="Start opencode">
+
+Restart opencode so it loads the plugin.
+
+  </Step>
+</Steps>
+
+To pass options, use a `[name, options]` pair instead of the plain name. Options in `opencode.json` must be JSON values:
+
+```json opencode.json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    ["@telemetry-dev/opencode", { "captureInput": false, "captureOutput": false }]
+  ]
+}
+```
+
+### Load the plugin from a file instead
+
+Use a plugin file when you need an option that is a function, such as `mask`. Don't also list the package in `opencode.json`: opencode would load it twice and record every span twice.
+
+Add the package as a dependency of the opencode config directory. opencode runs `bun install` there when it starts:
+
+```json .opencode/package.json
+{
+  "dependencies": {
+    "@telemetry-dev/opencode": "^0.1.9"
+  }
+}
+```
+
+Then create the plugin file. opencode loads every file in `.opencode/plugins/`, or in `~/.config/opencode/plugins/` for all projects:
+
+```ts .opencode/plugins/telemetry-dev.ts
+import { telemetryDevPlugin } from "@telemetry-dev/opencode";
+
+export const TelemetryDev = telemetryDevPlugin({
+  mask: (value, { key }) => (key === "password" ? "[REDACTED]" : value),
+});
+```
+
+## Check that data arrives
+
+Send a prompt and wait until opencode finishes it. Then open the [trace explorer](/platform/traces). The plugin sends each prompt's spans when the session goes idle.
+
+If no trace appears, check that `TELEMETRY_DEV_API_KEY` is set in the shell that started opencode. Without a key the plugin does nothing and reports no error.
+
+## What is recorded
+
+Each prompt produces one trace:
 
 ```text
 invoke_agent
@@ -23,124 +108,71 @@ invoke_agent
 └── chat {model}
 ```
 
-- `invoke_agent` records the prompt, agent name, and opencode session ID.
-- `chat {model}` records provider, model, finish reason, usage, host-reported cost, and errors.
-- `execute_tool {tool}` records the tool-call ID, arguments, result, duration, and error state.
-- Task subagents nest under the open span from the parent session.
-- Session creation, compaction, and error events become logs.
+- `invoke_agent` records the text of the prompt, the agent name, and the opencode session ID.
+- `chat {model}` records the provider, model, finish reason, token usage, the cost opencode reports, and errors. Reasoning tokens count as output tokens; the span also keeps separate reasoning, cache-read, and cache-write counts.
+- `execute_tool {tool}` records the tool call ID, arguments, result, duration, and error.
+- Task subagents appear as an `invoke_agent` span under the tool call that started them.
+- Session creation, compaction, and errors become logs.
 
-Assistant output text is not captured. The completed assistant event supplies metadata and usage, but it does not supply final text.
+The plugin doesn't record the model's response text: the opencode event for a finished message carries usage and metadata but not the final text.
 
-Reasoning tokens count as output tokens. The span also keeps separate reasoning, cache-read, and cache-write token values.
+## What leaves your machine
 
-## Set up the integration
+By default the plugin sends:
 
-Make a project at [telemetry.dev](https://telemetry.dev). Then copy an API key from the project's setup page.
+- The text of your prompts (`captureInput`).
+- Tool arguments (`captureInput`), such as shell commands and file paths.
+- Tool results (`captureOutput`): the tool's title, output, and metadata, such as file contents and command output.
 
-Set the API key in the environment that starts opencode:
+Set both options to `false` to stop sending this content, either in `opencode.json` as shown above or in a plugin file. In a plugin file, `mask` can also change or drop individual values before they are sent.
 
-```sh
-export TELEMETRY_DEV_API_KEY=td_live_...
-export TELEMETRY_DEV_ENVIRONMENT=development
-export OTEL_SERVICE_NAME=opencode
-```
+These are sent whatever the options:
 
-Select one plugin setup after the package becomes public.
+- Session IDs, the agent name, provider and model names, token counts, cost, finish reasons, and timings.
+- The error text of failed tools. This is what opencode returns to the model, so it can contain file or command content.
+- The message of `session.error` events, on spans and as the `opencode.error.message` log attribute, and provider error messages on `chat` spans.
 
-### Project plugin file
+`mask` doesn't apply to these error messages in version 0.1.9.
 
-Install the package:
+telemetry.dev's [privacy settings](/platform/privacy) can also drop recognized prompt and response content before storage, but only after it has left your machine.
 
-```package-install
-npm i @telemetry-dev/opencode
-```
+## How it runs
 
-Add `.opencode/plugin/telemetry-dev.ts`:
+A `chat.message` event starts the `invoke_agent` span. The span ends when the session goes idle (a `session.status` event with type `idle`, or the older `session.idle` event) or when opencode disposes the plugin.
 
-```ts .opencode/plugin/telemetry-dev.ts
-import { telemetryDevPlugin } from "@telemetry-dev/opencode";
+A `session.error` event doesn't end the trace, because opencode can compact the context and continue the same prompt. If compaction follows, the plugin drops the error. Otherwise it applies the error when the session goes idle.
 
-export const TelemetryDev = telemetryDevPlugin();
-```
+When opencode disposes the plugin, it closes open spans, marks those without an error as incomplete, and waits for the last export.
 
-opencode finds project plugin files in this directory.
+## Configuration
 
-### opencode configuration
+| Variable | Default | Description |
+| --- | --- | --- |
+| `TELEMETRY_DEV_API_KEY` | None | Ingest API key. Without one, the plugin does nothing. |
+| `TELEMETRY_DEV_BASE_URL` | `https://ingest.telemetry.dev` | OTLP ingest base URL. |
+| `TELEMETRY_DEV_ENVIRONMENT` | `production` | Environment on exported telemetry. |
+| `OTEL_SERVICE_NAME` | `opencode` | OpenTelemetry service name. |
 
-The `/server` export supplies opencode's `PluginModule` shape. Add it to `opencode.json`:
-
-```json opencode.json
-{
-  "plugin": [
-    ["@telemetry-dev/opencode/server", { "environment": "production" }]
-  ]
-}
-```
-
-Keep the API key out of `opencode.json`. Configuration tuple options take precedence over factory options.
-
-## Session lifecycle
-
-A `chat.message` event starts `invoke_agent`. The span closes on one of these signals:
-
-- A modern `session.status` event with `status.type` set to `idle`
-- A legacy `session.idle` event
-- Plugin disposal
-
-:::warning[session.error is not terminal]
-A `session.error` event records a pending error, but it does not close the trace. opencode can compact context and continue the same prompt.
-:::
-
-If `session.compacted` follows the error, the integration removes the stale error. Otherwise, the integration applies the error when the session settles.
-
-Plugin disposal closes open tool, chat, and agent spans. It marks spans without an error as incomplete and waits for a flush.
-
-## Environment variables
-
-| Variable | Required | Default | Description |
-|---|---:|---|---|
-| `TELEMETRY_DEV_API_KEY` | Yes | None | Ingest API key. Without a key, the integration is a no-op. |
-| `TELEMETRY_DEV_BASE_URL` | No | `https://ingest.telemetry.dev` | OTLP ingest base URL. |
-| `TELEMETRY_DEV_ENVIRONMENT` | No | `production` | Environment on exported telemetry. |
-| `OTEL_SERVICE_NAME` | No | `opencode` | OpenTelemetry service name. |
-
-## Options
-
-`telemetryDevPlugin()` accepts `TelemetryDevPluginOptions`. The type contains SDK options except `registerGlobal`, plus `agentName`.
+Options override the environment variables. Options in `opencode.json` override options passed to `telemetryDevPlugin()`.
 
 | Option | Type | Default | Description |
-|---|---|---|---|
-| `agentName` | `string` | `opencode` | Value for `gen_ai.agent.name`. |
+| --- | --- | --- | --- |
+| `captureInput` | `boolean` | `true` | Send prompt text and tool arguments. |
+| `captureOutput` | `boolean` | `true` | Send tool results. |
+| `mask` | `(value, { key }) => unknown` | None | Change or drop captured content before it is sent. Plugin file only. |
+| `maxAttributeLength` | `number` | `65536` | Maximum length of a content attribute. |
+| `agentName` | `string` | `opencode` | Value of `gen_ai.agent.name`. |
 | `apiKey` | `string` | `TELEMETRY_DEV_API_KEY` | Ingest API key. |
-| `baseUrl` | `string` | `TELEMETRY_DEV_BASE_URL` or production ingest | Ingest base URL. |
-| `environment` | `string` | `TELEMETRY_DEV_ENVIRONMENT` or `production` | Deployment environment. |
-| `serviceName` | `string` | `OTEL_SERVICE_NAME` or `opencode` | Service name on each trace. |
-| `enabled` | `boolean` | `true` | Set to `false` for a complete no-op. |
-| `exportMode` | `"batched" \| "immediate"` | `batched` | Span export mode. |
-| `captureInput` | `boolean` | `true` | Capture prompts and tool arguments. |
-| `captureOutput` | `boolean` | `true` | Capture tool results. |
-| `mask` | `(value, context) => unknown` | None | Change captured values before serialization. |
-| `maxAttributeLength` | `number` | `65536` | Maximum content attribute length. |
-| `batch` | `BatchOptions` | SDK defaults | Batch size, delay, queue, and timeout settings. |
-| `spanFilter` | `(span) => boolean` | None | Select spans for export. |
-| `resourceAttributes` | `Record<string, AttributeValue>` | None | Add OpenTelemetry resource attributes. |
-| `logLevel` | `"debug" \| "info" \| "warn" \| "error" \| "silent"` | `warn` | SDK diagnostic level. |
-| `fetch` | `typeof fetch` | `globalThis.fetch` | Custom fetch implementation. |
-| `waitUntil` | `(promise) => void` | None | Extend serverless work for export. |
-| `onError` | `(error) => void` | None | Receive integration errors. The plugin does not throw them into opencode. |
+| `baseUrl` | `string` | `TELEMETRY_DEV_BASE_URL` | Ingest base URL. |
+| `environment` | `string` | `TELEMETRY_DEV_ENVIRONMENT` | Deployment environment. |
+| `serviceName` | `string` | `OTEL_SERVICE_NAME` | Service name. |
+| `enabled` | `boolean` | `true` | `false` turns the plugin off completely. |
+| `onError` | `(error) => void` | None | Receive plugin errors. The plugin never throws them into opencode. |
 
-The integration forces `registerGlobal` to `false`. The first initialization in a process supplies the SDK options.
+The plugin also accepts the other [TypeScript SDK `init()` options](/sdk/typescript#configure-init), except `registerGlobal`, which it always sets to `false`. The first plugin instance to start in a process sets the options for that process.
 
-Use `captureInput`, `captureOutput`, and `mask` to control content:
+## Limitations
 
-```ts .opencode/plugin/telemetry-dev.ts
-import { telemetryDevPlugin } from "@telemetry-dev/opencode";
-
-export const TelemetryDev = telemetryDevPlugin({
-  captureInput: false,
-  captureOutput: false,
-  mask: (value, { key }) => key === "password" ? "[REDACTED]" : value,
-});
-```
-
-Open the [trace explorer](/platform/traces) after a prompt completes. For API key setup, refer to the [quickstart](/quickstart).
+- When `opencode serve` receives `SIGTERM`, opencode doesn't dispose plugins, so the last batch of spans can be lost.
+- opencode reports token usage as totals on each finished message, not per step.
+- Tool errors don't reach the `tool.execute.after` hook. The plugin rebuilds failed tool spans from `message.part.updated` events.

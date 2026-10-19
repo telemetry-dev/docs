@@ -1,94 +1,80 @@
 ---
 title: LiteLLM
-description: Trace LiteLLM chat, embedding, stream, and Router calls from Python.
-lastModified: 2026-08-03
+description: Trace LiteLLM completion, Responses API, embedding, rerank, stream, and Router calls from Python.
+lastModified: 2026-10-18
 seo:
   title: "LiteLLM Telemetry and Observability"
   description: "Trace LiteLLM chat, embedding, stream, and Router calls from Python. Record token usage, request cost, errors, and time to first chunk across model providers."
 ---
 
-The integration records LiteLLM calls across model providers. Make a project at telemetry.dev. Copy an API key from the project setup page. Keys use the `td_live_...` format.
+Call `instrument_litellm()` once, and each LiteLLM call becomes a span in telemetry.dev, whichever model provider LiteLLM sends it to. Your calls and their return values don't change. The integration is for Python.
 
-## What it captures
+## What you get
 
-The integration records:
+- Chat messages, Responses API input, models, sampling parameters, response formats, embedding input, and rerank queries and documents
+- Output messages, finish reasons, ranked results, errors, and time to first chunk
+- Input, output, total, cache-read, cache-write, and reasoning token counts
+- Request cost, from LiteLLM's own cost calculation
+- Router calls as parent spans, with each deployment attempt as a child span, when you use [`wrap_router()`](#router-calls)
 
-- Chat messages, models, sampling parameters, response formats, LiteLLM metadata, and embedding input
-- Output messages, finish reasons, errors, time to first chunk, and calculated request cost
-- Input, output, total, cache-read, cache-creation, and reasoning token usage
-- Embedding token usage without embedding vectors
-- Router calls as parent spans, with each deployment attempt as a child span.
+The integration never records embedding vectors.
 
 ## Install
 
 ```sh
-pip install telemetry-dev telemetry-dev-litellm
+pip install telemetry-dev-litellm
 ```
 
-| Requirement | Version |
+The package also installs `telemetry-dev` and `litellm`.
+
+| Language | Requirements |
 | --- | --- |
-| Python | `>=3.10,<3.14` |
-| `telemetry-dev` | `>=0.2.0` |
-| `litellm` | `>=1.90.2,<2.0` |
-| `opentelemetry-api` | `>=1.35.0,<2` |
+| Python | Python `>=3.10,<3.14`, `telemetry-dev` `>=0.2.9`, `litellm` `>=1.90.2,<2.0`, `opentelemetry-api` `>=1.39.0,<2` |
 
-Python 3.14 does not match the package requirement.
+Python 3.14 isn't supported.
 
-## Quickstart
+## Trace a call
+
+Set your telemetry.dev project API key and the key for the provider LiteLLM calls. Copy the telemetry.dev key from the project setup page; it starts with `td_live_`.
+
+```sh
+export TELEMETRY_DEV_API_KEY=td_live_...
+export OPENAI_API_KEY=sk-...
+```
+
+Call `init()` and `instrument_litellm()`, then use LiteLLM as usual:
 
 ```python app.py
-import os
-
 import litellm
 import telemetry_dev
-from telemetry_dev import propagate_attributes
 from telemetry_dev_litellm import instrument_litellm
 
-instrument_litellm()
 telemetry_dev.init(service_name="litellm-app")
+instrument_litellm()
 
 try:
-    with propagate_attributes(
-        user_id="example-user",
-        session_id="litellm-01",
-    ):
-        response = litellm.completion(
-            model=os.getenv("MODEL", "gpt-4o-mini"),
-            messages=[
-                {
-                    "role": "user",
-                    "content": "Explain telemetry.dev in one sentence.",
-                },
-            ],
-            max_tokens=200,
-        )
-        print(response.choices[0].message.content)
+    response = litellm.completion(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "user", "content": "Explain telemetry.dev in one sentence."},
+        ],
+        max_tokens=200,
+    )
+    print(response.choices[0].message.content)
 finally:
     telemetry_dev.flush()
     telemetry_dev.shutdown()
 ```
 
-## API
+Run the script, then open the [trace explorer](/platform/traces). The trace has one `chat gpt-4o-mini` generation span with the messages, the reply, token usage, and cost.
 
-| Function | Purpose |
-| --- | --- |
-| `instrument_litellm()` | Instruments LiteLLM module functions. |
-| `uninstrument_litellm()` | Restores the original module functions. |
-| `wrap_router(router)` | Instruments one LiteLLM Router instance. |
-| `completion(*args, **kwargs)` | Instrumented drop-in for `litellm.completion`. |
-| `acompletion(*args, **kwargs)` | Instrumented drop-in for `litellm.acompletion`. |
-| `embedding(*args, **kwargs)` | Instrumented drop-in for `litellm.embedding`. |
-| `aembedding(*args, **kwargs)` | Instrumented drop-in for `litellm.aembedding`. |
-
-The integration API has no options.
-
-`instrument_litellm()` instruments `completion`, `acompletion`, `embedding`, and `aembedding`. More calls to `instrument_litellm()` have no more effect.
+Without an API key, `init()` turns telemetry off and LiteLLM works as before.
 
 :::warning[Import order]
-Call `instrument_litellm()` before a direct import such as `from litellm import completion`. An earlier direct import keeps the original function and has no span.
+Call `instrument_litellm()` before any direct import such as `from litellm import completion`. A name imported earlier keeps the original function, and its calls get no span.
 :::
 
-You can use the package drop-ins when import order is difficult to control:
+If you can't control import order, call the package's drop-in functions instead. They behave like the LiteLLM functions of the same name and produce exactly one span, with or without global instrumentation:
 
 ```python
 from telemetry_dev_litellm import completion
@@ -99,9 +85,62 @@ response = completion(
 )
 ```
 
+## API
+
+| Function | What it does |
+| --- | --- |
+| `instrument_litellm()` | Instruments the LiteLLM module functions listed below. Calling it again has no effect. |
+| `uninstrument_litellm()` | Restores the original module functions. |
+| `wrap_router(router)` | Instruments one `litellm.Router` and returns it. |
+| `completion`, `acompletion`, `responses`, `aresponses`, `embedding`, `aembedding`, `rerank`, `arerank` | Drop-ins for the LiteLLM functions of the same name. |
+
+These functions take no options.
+
+## Traced calls
+
+| LiteLLM function | Span type | Operation |
+| --- | --- | --- |
+| `completion()`, `acompletion()` | generation | `chat` |
+| `responses()`, `aresponses()` | generation | `chat` |
+| `embedding()`, `aembedding()` | embedding | `embeddings` |
+| `rerank()`, `arerank()` | span | `rerank` |
+
+The integration doesn't trace `text_completion()`, image, audio, batch, or video functions such as `video_generation()`, or provider-specific APIs.
+
+LiteLLM's own retries from `num_retries` happen inside one call, so they appear as one span that covers every attempt.
+
+## Router calls
+
+A LiteLLM Router dispatches each deployment attempt through the module functions. With `instrument_litellm()` active, each attempt gets a span. Router retries and fallbacks are separate attempts, so they get separate spans.
+
+To group the attempts, wrap the Router. The Router span becomes the parent of each attempt's span:
+
+```python
+import litellm
+from telemetry_dev_litellm import instrument_litellm, wrap_router
+
+instrument_litellm()
+router = wrap_router(litellm.Router(model_list=[...]))
+router.completion(model="my-group", messages=[...])
+```
+
+`wrap_router()` instruments the Router's completion, Responses, embedding, and rerank methods, synchronous and asynchronous.
+
+## Streaming
+
+`stream=True` calls return a wrapper around LiteLLM's stream. It supports synchronous and asynchronous iteration, context managers, `close()`, `aclose()`, and the stream's own attributes.
+
+A stream span stays open until your code reads the stream to the end, closes it, or the stream fails. When it ends, the integration rebuilds the response with `litellm.stream_chunk_builder()`. The span records the time to the first chunk.
+
+The integration doesn't add `stream_options`, so streamed usage is whatever LiteLLM reports: the provider's counts when the provider sends them, and otherwise LiteLLM's estimate. If a stream produced output but LiteLLM reports zero input and zero output tokens, the span records no usage or cost instead of zeros. To get the provider's own counts, pass `stream_options={"include_usage": True}` to providers that support it.
+
+## Cost
+
+The span records `gen_ai.usage.cost` from LiteLLM's `response_cost`. If the response doesn't have one, the integration calls `litellm.completion_cost()`. If LiteLLM can't price the model, the span has no cost.
+
 ## Provider names
 
-The integration maps common LiteLLM provider names to OpenTelemetry provider names:
+The integration maps LiteLLM provider names to OpenTelemetry provider names:
 
 | LiteLLM provider | Span provider |
 | --- | --- |
@@ -116,22 +155,22 @@ The integration maps common LiteLLM provider names to OpenTelemetry provider nam
 | `xai` | `x_ai` |
 | `watsonx`, `watsonx_text` | `ibm.watsonx.ai` |
 | `cohere`, `cohere_chat` | `cohere` |
-| `groq`, `deepseek`, `perplexity` | The matching provider name |
+| `groq`, `deepseek`, `perplexity` | The same name |
 
-An unknown provider keeps the LiteLLM provider string.
+Any other provider keeps its LiteLLM name, such as `ollama`, `openrouter`, `together_ai`, or `fireworks_ai`.
 
-## Router spans
+## Captured content
 
-`wrap_router()` instruments the Router instance methods for chat and embeddings. If global instrumentation is active, the Router span becomes the parent of each deployment-attempt span.
+Prompts and responses follow the core SDK's `capture_input`, `capture_output`, and `mask` settings. With capture off, models, finish reasons, usage, cost, timing, and errors are still recorded.
 
-## Streaming
+Metadata is stored outside those settings. The integration exports each key of a call's `litellm_metadata` argument, or of `metadata` when `litellm_metadata` is absent or empty, as `td.metadata.<key>`. The capture settings don't remove these values and the mask doesn't see them, so don't put credentials or personal data in metadata. For user and session IDs, use `propagate_attributes(user_id=..., session_id=...)` from the [Python SDK](/sdk/python) instead.
 
-The stream proxy keeps synchronous and asynchronous iteration, context managers, attributes, `close()`, and `aclose()`. It does not change request arguments or add `stream_options.include_usage`.
+:::warning[LiteLLM proxy]
+The LiteLLM proxy server adds its own data to call metadata, including request headers, the client IP address, and details of the authenticated key and user. In the current release (0.1.5), the integration exports that data too when it runs inside the proxy. An unreleased change drops it and exports only the requester's metadata and the Router's routing fields.
+:::
 
-The integration rebuilds the final response with `litellm.stream_chunk_builder()`. Completion, early close, and stream errors close the span one time.
+See [privacy](/platform/privacy) for server-side redaction.
 
-## Flush
+## Send telemetry before exit
 
-For a short script, call `telemetry_dev.flush()` and `telemetry_dev.shutdown()` before exit. In serverless code, call `flush()` before the runtime freezes.
-
-Open the [trace explorer](/platform/traces) to examine the spans. Refer to the [quickstart](/quickstart) for API-key setup.
+In a short script, call `telemetry_dev.flush()` and then `telemetry_dev.shutdown()` before the process exits, as in the example above. In serverless code, call `flush()` before the handler returns. See the [Python SDK](/sdk/python) guide for details.

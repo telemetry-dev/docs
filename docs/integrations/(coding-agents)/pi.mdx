@@ -1,18 +1,80 @@
 ---
 title: Pi coding agent
-description: Trace pi agent loops, model calls, tool executions, usage, cost, and lifecycle events.
-lastModified: 2026-09-05
+description: Trace pi sessions, prompts, model calls, tool executions, usage, cost, and lifecycle events.
+lastModified: 2026-10-18
 seo:
   title: "Pi Coding Agent Telemetry and Tracing"
   description: "Trace the pi coding agent with @telemetry-dev/pi. Record agent loops, model calls, tool executions, token usage, cost, and lifecycle events for each session."
 ---
 
-`@telemetry-dev/pi` adds telemetry.dev to `@earendil-works/pi-coding-agent`. It targets pi 0.82.1 and accepts pi 0.80.4 or later.
+`@telemetry-dev/pi` is a pi package for the [pi coding agent](https://pi.dev) (`@earendil-works/pi-coding-agent`). Install it, set an API key, and each pi session appears in telemetry.dev as a trace with its prompts, model calls, tool calls, token usage, and cost.
 
+By default the package sends a lot of content: the full request pi sends to the model provider on every model call (system prompt, conversation so far, and tool results), the model's complete responses including thinking, and every tool call's arguments and results. You can turn content off with two options; see [What leaves your machine](#what-leaves-your-machine).
 
-## What it captures
+## Before you start
 
-A session shares one trace across prompts:
+- pi 0.80.4 or later. Version 0.1.9 of the package is built and tested against pi 0.82.1.
+- A telemetry.dev project and its API key. Keys start with `td_live_`.
+
+## Set up
+
+<Steps>
+  <Step title="Set the API key">
+
+Set the key in the environment that starts pi:
+
+```sh
+export TELEMETRY_DEV_API_KEY=td_live_...
+export TELEMETRY_DEV_ENVIRONMENT=development
+```
+
+The package reads its settings from these variables when pi loads it.
+
+  </Step>
+
+  <Step title="Install the package">
+
+```sh
+pi install npm:@telemetry-dev/pi
+```
+
+This adds `npm:@telemetry-dev/pi` to the `packages` list in `~/.pi/agent/settings.json` and installs it. pi then loads the extension listed in the package's `pi.extensions` manifest.
+
+  </Step>
+
+  <Step title="Start pi">
+
+Start a new pi session so it loads the package.
+
+  </Step>
+</Steps>
+
+### Load the extension from a file instead
+
+Use an extension file when you want to set options in code, such as turning off content capture or adding a `mask`. Don't also keep the package in `settings.json`: pi would load the extension twice and record every span twice.
+
+Create `~/.pi/agent/extensions/telemetry-dev.ts`:
+
+```ts ~/.pi/agent/extensions/telemetry-dev.ts
+import { telemetryDevExtension } from "@telemetry-dev/pi";
+
+export default telemetryDevExtension({
+  captureInput: false,
+  captureOutput: false,
+});
+```
+
+The file must be able to import `@telemetry-dev/pi`, so install the package in a `node_modules` directory that Node.js module resolution finds from the file's location, such as `~/.pi/agent`.
+
+## Check that data arrives
+
+Send a prompt and wait for pi to finish it. Then open the [trace explorer](/platform/traces). The extension starts sending a prompt's spans when the agent loop ends, and sends the rest when the prompt settles.
+
+If no trace appears, check that `TELEMETRY_DEV_API_KEY` is set in the shell that started pi. Without a key the extension does nothing and reports no error.
+
+## What is recorded
+
+All prompts in one pi session share one trace:
 
 ```text
 session
@@ -23,118 +85,83 @@ session
     └── chat {model}
 ```
 
-- `session` wraps the full pi session; each prompt adds an `invoke_agent` child.
-- `invoke_agent` records the prompt, final assistant content, result, and session ID.
-- `chat {model}` records provider, models, response ID, finish reason, token usage, pi's estimated USD cost, the provider-formatted request, and all returned content blocks.
-- `execute_tool {toolName}` records the tool-call ID, arguments, result, and error state.
+- `session` covers the whole pi session. Each prompt adds an `invoke_agent` child.
+- `invoke_agent` records the prompt, including image blocks, the final assistant content, the result, and the session ID.
+- `chat {model}` records the provider, models, response ID, finish reason, token usage, and pi's cost estimate. It also records the request pi sent to the provider, the system prompt, and every content block the model returned.
+- `execute_tool {toolName}` records the tool call ID, arguments, result, and error. It sits under the `chat` span that issued the call, or under `invoke_agent` when no message matches.
 - Session, turn, compaction, model-change, and shutdown events become logs.
 
-Tool spans nest under the chat span that issued the tool call. A tool without a matching chat span nests under `invoke_agent`.
+The cost is pi's own estimate from its bundled model prices, sent as `gen_ai.usage.cost`. It isn't a charge from your provider.
 
-Each event reads the current pi session ID and records it as `gen_ai.conversation.id`, so session changes keep their own telemetry.
+Every span and log reads the current pi session ID and records it as `gen_ai.conversation.id`, so `/new`, `/resume`, and `/fork` keep each session's telemetry separate.
 
-## Content capture
+### How model requests are captured
 
-Prompt input includes image blocks. Chat input comes from `before_provider_request`, after pi's context handlers and model-message conversion. System instructions come from the effective `ctx.getSystemPrompt()` at that request boundary.
+The extension captures each model request at pi's `before_provider_request` event, after pi's context handlers and its conversion to the provider's message format. That conversion removes `!!` shell output and custom-message details. The system prompt is the effective one pi reports at that point.
 
-Assistant output includes text, thinking, tool-call blocks, and provider signatures. Tool arguments and results are also captured. `captureInput` and `captureOutput` default to `true`; use them to disable the corresponding content, or use `mask` to remove selected values before serialization. Model names, usage, cost, session IDs, and lifecycle metadata are still recorded when content capture is off.
+The captured request isn't guaranteed to be the exact payload on the wire, because a later `before_provider_request` handler can replace it. Custom providers must call pi's `onPayload` callback for the request and system prompt to be captured; without it, those two fields are missing, and prompts, responses, and tool calls are still captured.
 
-The request is not necessarily the final wire payload: a later handler can replace it. Custom providers must call pi's `onPayload` callback for request and system-instruction capture. Without it, those fields are absent; prompt, output, and tool capture still work.
+## What leaves your machine
 
-## Set up the integration
+By default the extension sends:
 
-Make a project at [telemetry.dev](https://telemetry.dev). Then copy an API key from the project's setup page.
+- Your prompts, including attached images (`captureInput`).
+- The full provider request on every `chat` span, which contains the system prompt and the conversation so far, including earlier tool results (`captureInput`).
+- Tool arguments (`captureInput`), such as shell commands and file paths.
+- Every content block the model returns: text, thinking, tool calls, and provider signatures (`captureOutput`).
+- Tool results (`captureOutput`), such as file contents and command output.
 
-Set these variables in the environment that starts pi:
+Because each `chat` span carries the conversation so far, the same content is sent again on every model call in a session.
 
-```sh
-export TELEMETRY_DEV_API_KEY=td_live_...
-export TELEMETRY_DEV_ENVIRONMENT=development
-export OTEL_SERVICE_NAME=pi
-```
+Set `captureInput` and `captureOutput` to `false` in an [extension file](#load-the-extension-from-a-file-instead) to stop sending this content. `mask` can change or drop individual values before they are sent. The package installed with `pi install` reads only environment variables, so it always uses the defaults.
 
-The integration reads all setup values from the environment when pi loads the package entry.
+These are sent whatever the options:
 
-### Pi package
+- Session IDs, the working directory (on the session start log), provider and model names, token counts, cost, and lifecycle metadata.
+- The result text of a failed tool, as the span's error message. In version 0.1.9 this ignores `captureOutput` and `mask`.
+- Provider error messages on failed model calls.
 
-Add the package to `~/.pi/agent/settings.json`:
+telemetry.dev's [privacy settings](/platform/privacy) can also drop recognized prompt and response content before storage, but only after it has left your machine.
 
-```json ~/.pi/agent/settings.json
-{
-  "packages": ["npm:@telemetry-dev/pi"]
-}
-```
+## How it runs
 
-The package manifest points to `./dist/register.mjs`. The public `@telemetry-dev/pi/register` entry exports `telemetryDevExtension()` with environment setup.
+`agent_start` opens the `invoke_agent` span. Retries and compaction can start the agent loop again, but they stay in the same span.
 
-### Extension file
+`agent_end` records the current result and starts an export. `agent_settled` closes `invoke_agent` and any unfinished tool spans, then exports again. This order lets a retry replace a retryable result before the prompt settles.
 
-If pi can resolve the package, add `~/.pi/agent/extensions/telemetry-dev.ts`:
+`session_shutdown` closes an unfinished prompt and the `session` span, then waits for the last export. Switching sessions doesn't shut the extension down.
 
-```ts ~/.pi/agent/extensions/telemetry-dev.ts
-import { telemetryDevExtension } from "@telemetry-dev/pi";
+Pi doesn't report time to first token or request duration. The extension measures each `chat` span from `message_start` to `message_end` with the local clock and records no time to first token.
 
-export default telemetryDevExtension();
-```
+The extension uses pi's `tool_execution_start` and `tool_execution_end` events, not `tool_call` and `tool_result`. In pi, an error in a `tool_call` handler blocks the tool, and telemetry should never do that.
 
-Use the factory form when you must set options in code:
+## Configuration
 
-```ts ~/.pi/agent/extensions/telemetry-dev.ts
-import { telemetryDevExtension } from "@telemetry-dev/pi";
+| Variable | Default | Description |
+| --- | --- | --- |
+| `TELEMETRY_DEV_API_KEY` | None | Ingest API key. Without one, the extension does nothing. |
+| `TELEMETRY_DEV_BASE_URL` | `https://ingest.telemetry.dev` | OTLP ingest base URL. |
+| `TELEMETRY_DEV_ENVIRONMENT` | `production` | Environment on exported telemetry. |
+| `OTEL_SERVICE_NAME` | `pi` | OpenTelemetry service name. |
 
-export default telemetryDevExtension({
-  agentName: "pair-programmer",
-  captureInput: false,
-  captureOutput: true,
-});
-```
-
-## Span lifecycle
-
-`agent_start` opens the `invoke_agent` span. Retries and compaction can start the agent loop again, but they keep the same span.
-
-:::info[Source behavior]
-`agent_end` records the current run result and starts a flush. `agent_settled` closes `invoke_agent` and unfinished tool spans, then starts another flush.
-:::
-
-This behavior lets a later retry replace a retryable result before the prompt settles. `session_shutdown` closes an unfinished prompt and the session span, then waits for the final flush. A session change does not shut down the SDK.
-
-Pi does not supply TTFT or request-duration values. The integration measures chat duration from `message_start` to `message_end` with the local clock.
-
-## Environment variables
-
-| Variable | Required | Default | Description |
-|---|---:|---|---|
-| `TELEMETRY_DEV_API_KEY` | Yes | None | Ingest API key. Without a key, the integration is a no-op. |
-| `TELEMETRY_DEV_BASE_URL` | No | `https://ingest.telemetry.dev` | OTLP ingest base URL. |
-| `TELEMETRY_DEV_ENVIRONMENT` | No | `production` | Environment on exported telemetry. |
-| `OTEL_SERVICE_NAME` | No | `pi` | OpenTelemetry service name. |
-
-## Options
-
-`telemetryDevExtension()` accepts `TelemetryDevExtensionOptions`. The type contains SDK options except `registerGlobal`, plus `agentName`.
+In an extension file, `telemetryDevExtension()` accepts these options, which override the environment variables:
 
 | Option | Type | Default | Description |
-|---|---|---|---|
-| `agentName` | `string` | `pi` | Value for `gen_ai.agent.name`. |
+| --- | --- | --- | --- |
+| `captureInput` | `boolean` | `true` | Send prompts, images, provider requests, system prompts, and tool arguments. |
+| `captureOutput` | `boolean` | `true` | Send the model's content blocks and tool results. |
+| `mask` | `(value, { key }) => unknown` | None | Change or drop captured content before it is sent. |
+| `maxAttributeLength` | `number` | `65536` | Maximum length of a content attribute. |
+| `agentName` | `string` | `pi` | Value of `gen_ai.agent.name`. |
 | `apiKey` | `string` | `TELEMETRY_DEV_API_KEY` | Ingest API key. |
-| `baseUrl` | `string` | `TELEMETRY_DEV_BASE_URL` or production ingest | Ingest base URL. |
-| `environment` | `string` | `TELEMETRY_DEV_ENVIRONMENT` or `production` | Deployment environment. |
-| `serviceName` | `string` | `OTEL_SERVICE_NAME` or `pi` | Service name on each trace. |
-| `enabled` | `boolean` | `true` | Set to `false` for a complete no-op. |
-| `exportMode` | `"batched" \| "immediate"` | `batched` | Span export mode. |
-| `captureInput` | `boolean` | `true` | Capture prompts, images, provider requests, system instructions, and tool arguments. |
-| `captureOutput` | `boolean` | `true` | Capture assistant content blocks and tool results. |
-| `mask` | `(value, context) => unknown` | None | Change captured values before serialization. |
-| `maxAttributeLength` | `number` | `65536` | Maximum content attribute length. |
-| `batch` | `BatchOptions` | SDK defaults | Batch size, delay, queue, and timeout settings. |
-| `spanFilter` | `(span) => boolean` | None | Select spans for export. |
-| `resourceAttributes` | `Record<string, AttributeValue>` | None | Add OpenTelemetry resource attributes. |
-| `logLevel` | `"debug" \| "info" \| "warn" \| "error" \| "silent"` | `warn` | SDK diagnostic level. |
-| `fetch` | `typeof fetch` | `globalThis.fetch` | Custom fetch implementation. |
-| `waitUntil` | `(promise) => void` | None | Extend serverless work for export. |
-| `onError` | `(error) => void` | None | Receive integration errors. The extension does not throw them into pi. |
+| `baseUrl` | `string` | `TELEMETRY_DEV_BASE_URL` | Ingest base URL. |
+| `environment` | `string` | `TELEMETRY_DEV_ENVIRONMENT` | Deployment environment. |
+| `serviceName` | `string` | `OTEL_SERVICE_NAME` | Service name. |
+| `enabled` | `boolean` | `true` | `false` turns the extension off completely. |
+| `onError` | `(error) => void` | None | Receive extension errors. The extension never throws them into pi. |
 
-The integration forces `registerGlobal` to `false`. The first initialization in a process supplies the SDK options.
+The extension also accepts the other [TypeScript SDK `init()` options](/sdk/typescript#configure-init), except `registerGlobal`, which it always sets to `false`. The first extension instance to start in a process sets the options for that process.
 
-Open the [trace explorer](/platform/traces) after a prompt settles. For API key setup, refer to the [quickstart](/quickstart).
+## Limitations
+
+- An assistant message with `stopReason: "aborted"` gets the finish reason `aborted`, not an error. Only `stopReason: "error"` marks spans as errors.

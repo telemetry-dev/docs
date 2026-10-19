@@ -1,61 +1,65 @@
 ---
 title: API keys
-description: Create project keys, limit them to environments, and revoke them from the dashboard.
-lastModified: 2026-08-03
+description: Create a project key, limit it to one environment, and revoke it.
+lastModified: 2026-10-18
 ---
 
-An API key authorizes OTLP data for one project. Keys start with `td_live_`.
+An API key lets an application send traces, logs, and metrics to one project. Each key starts with `td_live_`.
+
+An organization owner or admin can create and revoke keys. Members can see the key list.
 
 ## Create a key
 
-An organization owner or admin can create and revoke keys. Organization members can view the key list.
-
 <Steps>
   <Step title="Open API keys">
-    Select the project. Then select **API keys** in the sidebar.
+    In the project, select **API keys** in the sidebar.
   </Step>
-  <Step title="Add the key">
-    Select **Create key**. Add an optional name and an optional environment.
+  <Step title="Describe the key">
+    Select **Create key**. Enter an optional **Name** of up to 50 characters and an optional **Environment**.
   </Step>
-  <Step title="Copy the key">
-    Copy the full key from the result dialog. telemetry.dev shows the full value one time.
+  <Step title="Create and copy the key">
+    Select **Create key**. In the **API key created** dialog, select **Copy**, then **Done**.
   </Step>
 </Steps>
 
-A new project also has a key named `default`. The project dialog shows this key one time.
-
-The key list shows only the first 16 characters and an ellipsis. telemetry.dev stores a SHA-256 hash of the full key, not the secret value.
-
 :::warning[Copy the key now]
-Copy the full key before you close the result dialog. You cannot get the full value again.
+telemetry.dev shows the full key one time. It stores only a SHA-256 hash of the key, so it cannot show the key again. If you lose a key, create a new one and revoke the old one.
 :::
 
-## Use the key
+A new project also gets a key named `default`. The **Project created** dialog shows it one time.
 
-Send the key in the OTLP authorization header:
+The key list shows each key's **Name**, the first 16 characters of the **Key**, its **Environment** (or **All environments**), its **Status** (**Active** or **Revoked**), and when it was **Created**.
+
+## Send telemetry with the key
+
+Send the key as a bearer token in the `Authorization` header of each OTLP request:
 
 ```http
 Authorization: Bearer td_live_your_key
 ```
 
-For a telemetry.dev SDK, set the environment variable:
+The telemetry.dev SDKs read the key from an environment variable:
 
 ```bash
 export TELEMETRY_DEV_API_KEY="td_live_your_key"
 ```
 
-Read [OpenTelemetry setup](/sdk/opentelemetry) for exporter settings.
+A missing, malformed, unknown, or revoked key gets `401 invalid_api_key`. For exporter settings, read [Send OTLP/HTTP from any language](/sdk/opentelemetry#send-otlphttp-from-any-language). For all error codes, read [OTLP error responses](/reference/otlp#error-responses).
 
 ## Limit a key to one environment
 
-Set **Environment** when you create the key. Leave the field empty if the key must accept all environments.
+Enter an **Environment** when you create the key, such as `production`. Leave it empty to accept every environment. You cannot change the environment of an existing key.
 
-An environment-scoped key accepts only data with the same environment name. The ingest service compares environment names after it trims whitespace and changes letters to lowercase.
+An environment-limited key accepts a request only if every resource block in it has that environment. The comparison ignores letter case and spaces at either end. The key also rejects spans for a trace that is already stored under another environment.
 
-If one resource block has a different environment, the ingest service rejects the full request with `403 environment_mismatch`. Read [Environments](/platform/environments) for environment setup.
+In both cases, the ingest service rejects the request with `403 environment_mismatch`. A mismatch in one resource block rejects the whole request, including blocks that match.
+
+Telemetry without an environment attribute is accepted and gets the key's environment. Read [Set the environment](/platform/environments#set-the-environment).
 
 ## Revoke a key
 
-Open the action menu for the key. Select **Revoke**, and confirm the action.
+Select **Revoke** in the key's row, then select **Revoke key** to confirm.
 
-The key stops authorization immediately. The key stays in the list with the **Revoked** status. You cannot activate it again.
+The ingest service checks the key on every request, so the key stops working right away. The key stays in the list as **Revoked**. You cannot turn it back on.
+
+Deleting a project also deletes all of its keys.

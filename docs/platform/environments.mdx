@@ -1,45 +1,44 @@
 ---
 title: Environments
-description: Separate telemetry, API keys, filters, and capture settings by deployment environment.
-lastModified: 2026-08-03
+description: Label telemetry by deployment, then filter by it, limit API keys to it, and set capture for it.
+lastModified: 2026-10-18
 ---
 
-An environment identifies the deployment that sent telemetry. Typical names include `production`, `staging`, and `development`.
+An environment names the deployment that sent telemetry, such as `production`, `staging`, or `development`. Use environments to keep one project's deployments apart: you can filter and group by environment, limit an API key to one environment, and turn off prompt and response capture for one environment.
 
-telemetry.dev reads the environment from the OpenTelemetry resource attribute `deployment.environment.name`. The project setup page uses `production` by default.
+## Set the environment
 
-```text
-OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
+telemetry.dev reads the environment from the OpenTelemetry resource attribute `deployment.environment.name`:
+
+```bash
+export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=staging"
 ```
 
-Use a clear environment name on each deployment. This value becomes a dimension on traces, spans, and metrics.
+The telemetry.dev SDKs set this attribute from the `environment` option or the `TELEMETRY_DEV_ENVIRONMENT` variable. They use `production` when you set neither. Read [Configure `init()` in TypeScript](/sdk/typescript#configure-init) or [Configure `init()` in Python](/sdk/python#configure-init).
+
+If `deployment.environment.name` is absent, telemetry.dev reads the older `deployment.environment` attribute. If both are absent, the telemetry gets the environment of its API key when the key is [limited to one environment](#limit-an-api-key-to-one-environment), and the environment `default` otherwise. This lets senders that cannot set resource attributes, such as the Claude API, still report an environment.
+
+Set the same environment name on every service in a deployment. The dashboard shows names as sent, so `Production` and `production` appear as two filter values. API key limits and capture settings treat them as one environment.
 
 ## Use environments in the dashboard
 
-The environment value appears in these dashboard areas:
-
-| Area | Behavior |
+| Where | What you can do |
 | --- | --- |
-| Traces and spans | Select an environment filter to limit the table |
-| Trace detail | Read the environment in the trace field grid |
-| Analytics | Group requests by environment |
-| API keys | Limit a key to one environment |
-| Privacy | Control prompt and response capture for each environment |
+| **Traces** | Filter traces and spans by environment. The filter lists up to 100 environment names. The **Environment** column is hidden by default; turn it on in **Columns**. |
+| Trace detail | Read the trace's environment in the header fields. |
+| **Logs** | Read a log's environment in the log details. |
+| **Overview** | Select **By Environment** to break traces down by environment. |
+| **API keys** | Limit a key to one environment. |
+| **Settings** → **Privacy** | Turn prompt and response capture on or off for each environment. |
 
-The trace filter can show the first 100 environment values. The environment column is hidden by default. Use **Columns** to show it.
+## Limit an API key to one environment
 
-## Limit an API key
+Enter an **Environment** when you create a key. The key then accepts only telemetry with that environment and rejects other requests with `403 environment_mismatch`. Read [Limit a key to one environment](/platform/api-keys#limit-a-key-to-one-environment).
 
-Open **API keys**, then set **Environment** when you create a key. A blank value gives the key access to all environments.
+## Turn off capture for an environment
 
-For an environment-scoped key, each resource block must have the same environment. The ingest service trims whitespace and changes the name to lowercase before the comparison.
+Open **Settings**, then the **Privacy** tab. Clear **Store prompts and responses** in the row for the environment, and select **Save privacy settings**.
 
-A mismatch rejects the full OTLP request with `403 environment_mismatch`. Read [API keys](/platform/api-keys) for the key procedure.
+Capture is on for an environment that has no saved row. The `production` and `development` rows are always present; select **Add environment** for other names. To cover telemetry that has no environment attribute and uses a key without an environment, add a row named `default`.
 
-## Control content capture
-
-Open **Settings → Privacy**. Each environment row has a **Store prompts and responses** checkbox.
-
-Capture is on if an environment has no saved setting. The settings page always includes `production` and `development`. You can add more environment rows.
-
-The settings service trims each name, changes it to lowercase, and removes duplicate names. Read [Privacy and retention](/platform/privacy) for redaction and retention controls.
+Read [Turn off prompt and response capture for an environment](/platform/privacy#turn-off-prompt-and-response-capture-for-an-environment) for what this setting removes and what it keeps.

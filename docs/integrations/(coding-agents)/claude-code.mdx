@@ -7,59 +7,84 @@ seo:
   description: "Monitor Claude Code for one developer or a team with built-in OpenTelemetry. Track token usage, cost, sessions, tool activity, and traces."
 ---
 
-## About the Claude Code integration
+Claude Code has OpenTelemetry export built in. You turn it on with environment variables, and Claude Code sends metrics, events, and (optionally) traces straight to `https://ingest.telemetry.dev` over OTLP/HTTP. There is nothing to install.
 
-Claude Code ships with OpenTelemetry instrumentation built in. Set a few environment variables and it exports metrics — token usage, cost, session counts, lines of code, commits — plus structured log events for API requests, tool executions, and permission decisions straight to `https://ingest.telemetry.dev` over OTLP/HTTP. No SDK, no collector, no code changes. With the tracing beta turned on, it also sends a trace for each prompt, with token usage and cost on every model request.
+By default Claude Code does not send your prompts, Claude's responses, tool arguments, file contents, or command output. It does send metadata such as token counts, tool names, and your account email. See [What leaves your machine](#what-leaves-your-machine).
 
-## Key features
+## What you get
 
-- **Zero-code setup:** Telemetry is enabled entirely through environment variables; nothing to install or wrap.
-- **Token and cost metrics:** `claude_code.token.usage` and `claude_code.cost.usage` arrive as time series for dashboard inspection and analysis.
-- **Traces (beta):** Each prompt arrives as a trace with a span for every model request and tool call, and telemetry.dev adds up the trace's token usage and cost.
-- **Session and productivity metrics:** Session counts, active time, lines of code changed, and commits created surface aggregate adoption and productivity trends.
-- **Structured events:** Recent API request, tool result, and permission decision records can be inspected individually in the Logs view.
-- **Privacy by default:** Prompt, assistant-response, and tool-detail content is redacted by default, with separate controls for each category.
+- **Metrics:** token usage, cost, session count, active time, lines of code changed, commits, and pull requests. telemetry.dev charts each metric series under **Metric series** on the project **Overview**.
+- **Events:** one log record per prompt, API request, API error, tool result, and permission decision. They appear in **Logs**.
+- **Traces (beta, off by default):** one trace per prompt, with a span for each model request and tool call. telemetry.dev reads the token usage on each model request and calculates its cost.
 
-## Get started
+## Set up
 
-1. Create a telemetry.dev project API key.
-2. Set the telemetry environment variables in your shell before launching Claude Code:
+<Steps>
+  <Step title="Create an API key">
 
-   ```sh
-   export TELEMETRY_DEV_API_KEY="td_live_..."
-   export CLAUDE_CODE_ENABLE_TELEMETRY=1
-   export OTEL_METRICS_EXPORTER=otlp
-   export OTEL_LOGS_EXPORTER=otlp
-   export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-   export OTEL_EXPORTER_OTLP_ENDPOINT="https://ingest.telemetry.dev"
-   export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer $TELEMETRY_DEV_API_KEY"
-   export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
-   ```
+Create a project at [telemetry.dev](https://telemetry.dev) and copy its API key. Keys start with `td_live_`.
 
-   Use a literal space between `Bearer` and the API key, not `%20`. Claude Code sends `Bearer%20` unchanged, so telemetry.dev rejects the export with `401 Unauthorized`.
+  </Step>
 
-   To turn on telemetry for every developer on a team, refer to [Roll out to a team](#roll-out-to-a-team).
+  <Step title="Set the environment variables">
 
-3. Run `claude`. Metrics flush every 60 seconds and events every 5 seconds; telemetry.dev shows aggregate metric charts and recent log events that you can inspect individually.
+Set the variables in your shell, or save them in the `env` object of `~/.claude/settings.json` so they apply however you start Claude Code:
 
-Environment variables must be set before Claude Code starts — exporting them in an already-running session has no effect. For faster feedback while testing, set `OTEL_METRIC_EXPORT_INTERVAL=10000`.
+<CodeGroup>
 
-## Add traces (beta)
-
-Claude Code's tracing is a beta and is off by default. To turn it on, set two more variables along with the ones above:
-
-```sh
-export CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1
-export OTEL_TRACES_EXPORTER=otlp
+```sh Shell
+TELEMETRY_DEV_API_KEY="td_live_..."
+export CLAUDE_CODE_ENABLE_TELEMETRY=1
+export OTEL_METRICS_EXPORTER=otlp
+export OTEL_LOGS_EXPORTER=otlp
+export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+export OTEL_EXPORTER_OTLP_ENDPOINT="https://ingest.telemetry.dev"
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer $TELEMETRY_DEV_API_KEY"
+unset TELEMETRY_DEV_API_KEY
+export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=development"
 ```
 
-In `managed-settings.json`, add `"CLAUDE_CODE_ENHANCED_TELEMETRY_BETA": "1"` and `"OTEL_TRACES_EXPORTER": "otlp"` to the `env` object. Traces use the same endpoint and headers as metrics and logs.
+```json ~/.claude/settings.json
+{
+  "env": {
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "OTEL_METRICS_EXPORTER": "otlp",
+    "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "https://ingest.telemetry.dev",
+    "OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer td_live_...",
+    "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment.name=development"
+  }
+}
+```
 
-Each prompt arrives as a trace that starts with a `claude_code.interaction` span. Under it, each model request has a `claude_code.llm_request` span and each tool call has a `claude_code.tool` span. A subagent's spans sit under the tool call that started it.
+</CodeGroup>
 
-telemetry.dev reads the input, output, and prompt-cache tokens on each `claude_code.llm_request` span, along with its time to first token, and calculates the request's cost from the model's standard prices. A request in fast mode, where the span's `speed` attribute is `fast`, costs more than telemetry.dev shows. The trace's usage and cost totals come from these spans. The `claude_code.token.usage` and `claude_code.cost.usage` metrics stay separate charts, so turning on traces doesn't count a request twice.
+- The header variable holds the key, so the last line removes `TELEMETRY_DEV_API_KEY` from the shell. Programs that Claude Code starts then can't inherit your key.
+- Put a literal space between `Bearer` and the key, not `%20`. Claude Code sends `%20` unchanged, and telemetry.dev rejects the export with `401 Unauthorized`.
+- `OTEL_EXPORTER_OTLP_PROTOCOL` is required because Claude Code has no default protocol. Keep it at `http/protobuf`; telemetry.dev doesn't accept `grpc`.
+- `OTEL_RESOURCE_ATTRIBUTES` sets the telemetry.dev environment. Use any name you like.
+- Your shell doesn't read `settings.json`, so write the key itself into the header there. The file then holds your API key in plain text.
 
-If your organization also sends [Claude Platform traces](/integrations/claude-platform) to the same telemetry.dev project, each model request also has an API span from Anthropic. telemetry.dev counts the request's usage once, on the API span. It matches the API span to the `claude_code.llm_request` span when the API span is its child, or by the request ID in any trace. Claude Code sends the trace context that makes the API span a child only when it calls the Anthropic API directly. If you go through a proxy set in `ANTHROPIC_BASE_URL`, set `CLAUDE_CODE_PROPAGATE_TRACEPARENT=1` to keep that link.
+To turn on telemetry for every developer on a team, see [Roll out to a team](#roll-out-to-a-team).
+
+  </Step>
+
+  <Step title="Start Claude Code">
+
+Run `claude` in the terminal where you set the variables. If you used `settings.json`, any terminal works. Claude Code reads the variables when it starts, so changing them in a running session has no effect.
+
+  </Step>
+</Steps>
+
+## Check that data arrives
+
+Claude Code sends metrics every 60 seconds and events every 5 seconds. Set `OTEL_METRIC_EXPORT_INTERVAL=10000` while testing to get metrics every 10 seconds.
+
+1. Open the project **Overview**. Claude Code sends `claude_code.session.count` when a session starts, and it appears under **Metric series** after the first export. Select **View all metrics** if it isn't among the first charts.
+2. Submit a prompt, then open **Logs**. The level filter starts at `error`, so select **All levels** to see the `claude_code.user_prompt` and `claude_code.api_request` events.
+
+If nothing arrives, start Claude Code with `claude --debug-file /tmp/claude-debug.log` and search the file for `[3P telemetry]` errors. Lines that start with `[Anthropic telemetry]` are about Anthropic's own operational telemetry, not your export.
 
 ## What you can track
 
@@ -93,6 +118,38 @@ Claude Code exports eight metrics and a set of events. telemetry.dev shows each 
 | `claude_code.permission_mode_changed` | The permission mode changes | When do developers change the permission mode? |
 
 Claude Code also sends inventory and maintenance events: `managed_settings_resolved`, `plugin_loaded`, `plugin_installed`, `hook_registered`, `hook_execution_start`, `hook_execution_complete`, `hook_plugin_metrics`, `at_mention`, `auth`, `internal_error`, `feedback_survey`, and `retention_sweep`. Each name starts with `claude_code.`. For the attributes of each event, refer to the [Claude Code monitoring reference](https://code.claude.com/docs/en/monitoring-usage).
+
+Claude Code calculates `claude_code.cost.usage` itself, and Anthropic describes it as an approximation. telemetry.dev charts the metric as Claude Code reports it.
+
+The **Overview** summary cards and cost chart are built from traces. Without [traces](#add-traces-beta), Claude Code's usage appears only under **Metric series**.
+
+## Add traces (beta)
+
+Claude Code's tracing is a beta and is off by default. To turn it on, add two variables to the ones above:
+
+```sh
+export CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1
+export OTEL_TRACES_EXPORTER=otlp
+```
+
+In `settings.json`, add `"CLAUDE_CODE_ENHANCED_TELEMETRY_BETA": "1"` and `"OTEL_TRACES_EXPORTER": "otlp"` to the `env` object. Traces use the same endpoint and headers as metrics and events.
+
+Each prompt becomes one trace:
+
+```text
+claude_code.interaction
+├── claude_code.llm_request
+└── claude_code.tool
+    ├── claude_code.tool.blocked_on_user
+    ├── claude_code.tool.execution
+    └── subagent claude_code.llm_request and claude_code.tool spans
+```
+
+A subagent's spans sit under the tool call that started it.
+
+On each `claude_code.llm_request` span, telemetry.dev reads the input, output, cache-read, and cache-write tokens and the time to first token, and calculates the request's cost from the model's prices. When the span's `speed` attribute is `fast`, telemetry.dev multiplies the rates by the model's fast-mode multiplier if its price catalog has one, and uses standard rates otherwise. The trace's usage and cost totals come from these spans. The `claude_code.token.usage` and `claude_code.cost.usage` metrics stay separate charts, so turning on traces doesn't count a request twice.
+
+If your organization also sends [Claude Platform traces](/integrations/claude-platform) to the same project, each model request also has an API span from Anthropic. telemetry.dev counts the request once, on the API span. It links the two spans when the API span is a child of the `claude_code.llm_request` span, or when both carry the same request ID. Claude Code sends the trace context that creates the parent link only when it calls the Anthropic API directly; behind a proxy set in `ANTHROPIC_BASE_URL`, set `CLAUDE_CODE_PROPAGATE_TRACEPARENT=1` to send it.
 
 ## Roll out to a team
 
@@ -193,8 +250,26 @@ A developer who only sends telemetry does not use a seat. Seats are for the memb
 
 To use fewer units, keep traces off, or set `OTEL_METRIC_EXPORT_INTERVAL` to a longer interval, for example `300000` for 5 minutes. Each export sends one data point for each changed series, so fewer exports send fewer data points. To see the real count, open **Organization settings → Usage**.
 
-## Good to know
+## What leaves your machine
 
-`OTEL_LOG_USER_PROMPTS=1` includes prompt content and also enables assistant-response content unless you explicitly set `OTEL_LOG_ASSISTANT_RESPONSES=0`. Tool parameters and input arguments have a separate opt-in, `OTEL_LOG_TOOL_DETAILS=1`. With these content flags disabled, Claude Code still exports operational metadata including prompt lengths, tool names and outcomes, permission decisions, and session and user identity attributes. Apply filtering or redaction in your telemetry pipeline if those fields are sensitive in your environment.
+With the setup above, Claude Code sends no prompt text, response text, tool arguments, file contents, or command output. Each kind of content has its own opt-in variable, and all of them are off by default:
 
-With tracing on, the same flags apply to spans. `OTEL_LOG_USER_PROMPTS=1` puts the prompt text on the `claude_code.interaction` span, and `OTEL_LOG_TOOL_DETAILS=1` adds file paths and Bash commands to tool spans. A third flag, `OTEL_LOG_TOOL_CONTENT=1`, adds file contents and command output to tool spans.
+| Variable | What it adds |
+| --- | --- |
+| `OTEL_LOG_USER_PROMPTS=1` | Prompt text on `user_prompt` events and on the `claude_code.interaction` span. Also turns on assistant response text unless you set `OTEL_LOG_ASSISTANT_RESPONSES=0`. |
+| `OTEL_LOG_ASSISTANT_RESPONSES=1` | Claude's response text on `assistant_response` events. |
+| `OTEL_LOG_TOOL_DETAILS=1` | Tool arguments: Bash commands, file paths, URLs, search patterns, and MCP server and tool names, on events and tool spans. |
+| `OTEL_LOG_TOOL_CONTENT=1` | File contents, command output, and web results, on a `tool.output` event of each tool span. Needs tracing. |
+| `OTEL_LOG_RAW_API_BODIES=1` | API request and response bodies, on `api_request_body` and `api_response_body` events. They contain the conversation so far, including the system prompt and tool results, so they reveal what the other variables would. Each body is cut at about 60 KB by default, and Claude Code always redacts extended-thinking content. |
+
+Even with all of these unset, Claude Code sends:
+
+- Prompt and response lengths, model names, token counts, costs, durations, and success or failure.
+- Tool names and permission decisions. On events, Claude Code replaces the names of tools from your own MCP servers with `mcp_tool`.
+- Error messages from failed API requests.
+- `session.id`, an installation ID (`user.id`), and the host's OS and architecture.
+- When you sign in with a Claude account: `user.email`, `user.account_uuid`, and `organization.id`.
+
+telemetry.dev's [built-in redaction](/platform/privacy) replaces email addresses and common secret formats before it stores data, but that happens after the data leaves your machine. To keep account UUIDs off metrics, set `OTEL_METRICS_INCLUDE_ACCOUNT_UUID=false`. To filter any other attribute before it is sent, route Claude Code through your own OpenTelemetry Collector.
+
+Claude Code doesn't pass `OTEL_*` variables to the commands, hooks, or MCP servers it starts, so they don't inherit the exporter endpoint or the header that holds your key. Other variables are inherited: if you export `TELEMETRY_DEV_API_KEY` in the same shell, a program that uses a telemetry.dev SDK can send telemetry with it.
