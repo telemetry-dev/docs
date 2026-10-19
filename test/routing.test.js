@@ -282,8 +282,8 @@ test("the integration catalog and guide-title markup reference available branded
 
 test("cross-references in Markdown resolve inside the docs site", async () => {
   for (const [page, label, destination] of [
-    ["platform/billing", "**Quota runway** alert", "platform/alerts#quota-runway"],
-    ["reference/otlp", "Ingestion error alerts", "platform/alerts#ingestion-error-cluster"],
+    ["platform/billing", "**Quota running out** alert", "platform/alerts#quota-running-out"],
+    ["reference/otlp", "Ingestion error alerts", "platform/alerts#ingestion-errors"],
     ["platform/alerts", "diagnostic code", "reference/otlp#error-responses"],
     ["platform/alerts", "Plans and billing", "platform/billing"],
     ["reference/cost", "modality usage attributes", "reference/span-attributes#modality-token-usage"],
