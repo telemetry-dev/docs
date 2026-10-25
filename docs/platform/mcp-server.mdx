@@ -64,7 +64,7 @@ If the page says **telemetry.dev has not verified this app**, the app's name was
 | `get_trace` | One trace's spans with models, tools, timing, tokens, cost, and error text, plus its first logs. |
 | `get_span_payload` | The captured input, output, or error of one span, in pages. Needs the extra permission below. |
 | `list_logs` | Up to 50 of the most recent log records, filtered by level, with counts per level. |
-| `get_usage_summary` | Requests, errors, latency, tokens, and cost for 7, 30, or 90 days, compared with the period before, broken down by model, provider, environment, user, or framework. |
+| `get_usage_summary` | Requests, errors, latency, tokens, cost, and active users for 7, 30, or 90 days, compared with the period before, broken down by model, provider, end user, or operation. The breakdown lists the top 6 groups by requests. |
 
 Every tool reads only within the project's retention period. Search tools return pages with a cursor for the next one, and a single result is cut at 40,000 characters.
 
