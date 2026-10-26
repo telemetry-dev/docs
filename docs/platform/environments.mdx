@@ -1,10 +1,10 @@
 ---
 title: Environments
 description: Label telemetry by deployment, then filter by it, limit API keys to it, and set capture for it.
-lastModified: 2026-10-18
+lastModified: 2026-10-26
 ---
 
-An environment names the deployment that sent telemetry, such as `production`, `staging`, or `development`. Use environments to keep one project's deployments apart: you can filter and group by environment, limit an API key to one environment, and turn off prompt and response capture for one environment.
+An environment names the deployment that sent telemetry, such as `production`, `staging`, or `development`. Use environments to keep one project's deployments apart: you can filter by environment, limit an API key to one environment, and turn off prompt and response capture for one environment.
 
 ## Set the environment
 
@@ -25,9 +25,8 @@ Set the same environment name on every service in a deployment. The dashboard sh
 | Where | What you can do |
 | --- | --- |
 | **Traces** | Filter traces and spans by environment. The filter lists up to 100 environment names. The **Environment** column is hidden by default; turn it on in **Columns**. |
-| Trace detail | Read the trace's environment in the header fields. |
+| Trace detail | Read the trace's environment on the **Metadata** tab. |
 | **Logs** | Read a log's environment in the log details. |
-| **Overview** | Select **By Environment** to break traces down by environment. |
 | **API keys** | Limit a key to one environment. |
 | **Settings** → **Privacy** | Turn prompt and response capture on or off for each environment. |
 
@@ -37,8 +36,8 @@ Enter an **Environment** when you create a key. The key then accepts only teleme
 
 ## Turn off capture for an environment
 
-Open **Settings**, then the **Privacy** tab. Clear **Store prompts and responses** in the row for the environment, and select **Save privacy settings**.
+Open **Settings**, then select **Privacy** under the project in the settings sidebar. Under **Prompt capture**, turn off the switch in the environment's row. The change saves at once.
 
-Capture is on for an environment that has no saved row. The `production` and `development` rows are always present; select **Add environment** for other names. To cover telemetry that has no environment attribute and uses a key without an environment, add a row named `default`.
+An environment that has no row of its own follows the project's **Capture by default** switch. The `production` and `development` rows are always present; select **Add environment** for other names. To cover telemetry that has no environment attribute and uses a key without an environment, add a row named `default`.
 
 Read [Turn off prompt and response capture for an environment](/platform/privacy#turn-off-prompt-and-response-capture-for-an-environment) for what this setting removes and what it keeps.

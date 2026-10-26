@@ -1,13 +1,17 @@
 // Shared by the figure components and their Markdown serializers in blume.config.ts,
 // so the rendered figure and the llms.txt / .md text cannot disagree.
 
+// The span types of the dashboard's span tree (apps/web/src/components/trace/span-kind.ts in the
+// product repository), keyed by their kind, with the label the Filters menu shows.
 export const SPAN_TYPES = {
   agent: "Agent",
-  generation: "Chat",
+  model: "Chat",
   tool: "Tool",
-  span: "Function",
-  embedding: "Embeddings",
+  mcp: "MCP",
+  embeddings: "Embeddings",
   retrieval: "Retrieval",
+  http: "HTTP",
+  function: "Function",
 };
 
 const integer = new Intl.NumberFormat("en-US");
@@ -20,22 +24,40 @@ export const formatUsd = (value) =>
 export const formatPrice = (value) =>
   `$${value.toLocaleString("en-US", { maximumFractionDigits: 4, minimumFractionDigits: 2 })}`;
 
-// Same unit and rounding as the dashboard waterfall, so figure labels read like the product.
-export const formatMs = (value) => {
-  const digits = value < 1 ? 2 : value < 10 ? 1 : 0;
-  return `${Number.parseFloat(value.toFixed(digits))}ms`;
+// The duration and axis labels of the dashboard's span tree (trace-format.ts), so the figure reads
+// like the product.
+export const formatSpanDuration = (ms) => {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${Number((ms / 1000).toPrecision(3))}s`;
 };
 
-/** The dashboard's "nice" tick steps (1/2/5 × 10^n ms) for a timeline of about `widthPx`. */
-export const buildTicks = (totalMs, widthPx = 244) => {
-  const fits = Math.floor((widthPx - 48) / 80);
-  const target = fits >= 6 ? 6 : fits >= 4 ? 4 : 2;
-  const raw = totalMs / target;
-  const power = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 5, 10].map((m) => m * power).find((s) => s >= raw) ?? raw;
-  const ticks = [];
-  for (let value = 0; value <= totalMs * 0.999 && ticks.length <= 12; value += step)
-    ticks.push({ percent: (value / totalMs) * 100, label: formatMs(value) });
+const formatAxisTime = (ms) => {
+  if (ms === 0) return "0";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${Number((ms / 1000).toFixed(2))}s`;
+};
+
+// Steps of 1, 2, and 5 times a power of ten, from 1ms to 1,000,000s.
+const NICE_STEPS = Array.from({ length: 10 }, (_, power) => [1, 2, 5].map((factor) => factor * 10 ** power)).flat();
+
+/**
+ * The time axis of the dashboard's span tree (timeline.ts) for a timeline column `columnWidth` px
+ * wide: the smallest nice step that keeps labels 44px apart in at most five steps. `share` is the
+ * tick's place on the axis, from 0 to 1.
+ */
+export const buildTicks = (durationMs, columnWidth = 420) => {
+  const plot = (columnWidth - 24) / durationMs;
+  const labelWidth = (label) => label.length * 7.3;
+  const step =
+    NICE_STEPS.find((candidate) => candidate * plot >= 44 && durationMs / candidate <= 5) ?? NICE_STEPS.at(-1);
+  const ticks = [{ share: 0, label: formatAxisTime(0) }];
+  const clear = labelWidth(formatAxisTime(0)) + 8;
+  for (let at = step; at < durationMs; at += step) {
+    const x = 8 + at * plot;
+    const label = formatAxisTime(at);
+    if (x - 8 < clear || x + 4 + labelWidth(label) > columnWidth) continue;
+    ticks.push({ share: at / durationMs, label });
+  }
   return ticks;
 };
 
@@ -84,9 +106,8 @@ export const costMarkdown = ({ lossy, props }) => {
 export const traceMarkdown = ({ lossy, props }) => {
   if (lossy || !Array.isArray(props.spans)) return null;
   const lines = props.spans.map((span) => {
-    const operation = span.operation ? `, ${span.operation}` : "";
     const status = span.error ? ", error" : "";
-    return `${"  ".repeat(span.depth ?? 0)}- \`${span.name}\` (${SPAN_TYPES[span.type]}${operation}, ${formatMs(span.end - span.start)}${status})`;
+    return `${"  ".repeat(span.depth ?? 0)}- \`${span.name}\` (${SPAN_TYPES[span.type]}, ${formatSpanDuration(span.end - span.start)}${status})`;
   });
   return [props.title ? `${props.title}:` : "", "", ...lines].join("\n").trim();
 };

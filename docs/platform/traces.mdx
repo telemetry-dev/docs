@@ -1,7 +1,7 @@
 ---
 title: Traces, sessions, and logs
 description: Find a request, inspect its spans, follow a conversation, and read related logs.
-lastModified: 2026-10-18
+lastModified: 2026-10-26
 ---
 
 A trace is one request through your application. Each step inside it, such as a model call, a tool call, or an agent step, is a span. Use the trace explorer to find failed or slow requests and to see what each model call received and returned.
@@ -10,7 +10,7 @@ A trace is one request through your application. Each step inside it, such as a 
 
 Select **Traces** in the project sidebar. Use the **Traces** and **Spans** switch above the table to list whole requests or single operations.
 
-Both lists have the same filters:
+Both lists have these filters:
 
 | Filter | What it does |
 | --- | --- |
@@ -18,12 +18,15 @@ Both lists have the same filters:
 | Status | Shows **All statuses**, `success`, or `error`. |
 | Environment | Lists up to 100 environment names from your telemetry. |
 | Framework | Lists the frameworks detected in your telemetry. |
-| Conversation | Select a value in the **Session** or **Conversation** column. A chip shows the filter; select it to clear the filter. |
-| User | Select a value in the **User** column. A chip shows the filter; select it to clear the filter. |
+| Date range | Shows **Last 7 days**, **Last 30 days**, or **Last 90 days**. The default is 30 days. |
+| Session | Select a value in the **Session** column. A chip shows the filter; select it to clear the filter. |
+| User | In the trace list, select a value in the **User** column. A chip shows the filter; select it to clear the filter. |
+
+A row of the **Breakdown** table on the [Overview](/platform/analytics#break-traces-down-by-a-dimension) can also open the span list filtered by **Model**, **Provider**, or **Operation**, with a chip for that filter.
 
 The filters are part of the page URL, so you can bookmark or share a filtered view.
 
-The lists cover the project's whole retention period. They have no date-range control. Scroll to the end of the table or select **Load More** to load the next page.
+The table shows one page at a time. Use the pager below it to move between pages, and **Rows per page** to show 25, 50, or 100 rows.
 
 ### Trace columns
 
@@ -36,7 +39,7 @@ The trace list shows **Date** and **Trace**, plus these columns: **Input**, **Ou
 
 ### Span columns
 
-The span list shows **Date**, **Type**, and **Name**, plus these columns: **Model**, **Tool / Agent**, **Conversation**, **Service**, **Environment**, **Status**, **Duration**, **Tokens**, and **Cost**.
+The span list shows **Date**, **Type**, and **Name**, plus these columns: **Model**, **Tool / Agent**, **Session**, **Service**, **Environment**, **Status**, **Duration**, **Tokens**, and **Cost**.
 
 Select a span row to open its trace with that span selected.
 
@@ -46,9 +49,12 @@ Select **Columns** to show or hide columns. **Environment** is hidden by default
 
 ## Inspect a trace
 
-Select a trace row to open the trace. The header shows **Status**, **Duration**, **First token**, **Spans**, **Tokens**, **Cost**, **Started**, **Service**, **Environment**, **Framework**, **User**, **Conversation**, and **Trace ID**. Some fields appear only when the trace has a value for them.
+Select a trace row to open the trace. The header shows the trace's name, its status, and its ID, with a button to copy the ID. Below the header are two tabs:
 
-The span waterfall shows each span on a shared time axis, nested under its parent. Drag the column edges to resize the span and operation columns. Select **Expand all** or **Collapse all** to open or close the tree.
+- **Trace**: the span tree, with a bar for each span on a shared time axis, nested under its parent.
+- **Metadata**: the trace's details. **Trace** lists the **Trace ID**, **Started**, **Duration**, **Turns**, **Spans**, and **Errors**. **Usage** lists the **Models**, the token counts, and the **Cost**. **Source** lists the **Agent**, **Service**, **Environment**, **Framework**, **Session**, and **User**. The trace's metadata follows, if it has any.
+
+Above the span tree, **Find spans** searches span names; press `Enter` for the next match. **Filters** hides span types or shows **Errors only**. Select **Expand all** or **Collapse all** to open or close the tree.
 
 ### Move through spans with the keyboard
 
@@ -56,27 +62,26 @@ Focus the span tree, then use these keys:
 
 | Key | Action |
 | --- | --- |
-| `↓` or `j` | Select the next span |
-| `↑` or `k` | Select the previous span |
-| `PageDown` or `PageUp` | Move eight spans down or up |
+| `↓` | Select the next span |
+| `↑` | Select the previous span |
 | `Home` or `End` | Select the first or last span |
-| `→` or `l` | Expand a span, or select its first child |
-| `←` or `h` | Collapse a span, or select its parent |
+| `→` | Expand a span, or select its first child |
+| `←` | Collapse a span, or select its parent |
 
 ### Read a span
 
-The span panel shows fields such as **Model**, **Provider**, **Agent**, **Tool**, **Duration**, **First token**, **Tokens**, **Cost**, **Finish**, **Operation**, **Conversation**, **Response ID**, and **Span ID**, plus the span's **Metadata**.
+Select a span to open its panel. The panel header shows the span's type and name, with **Previous span** and **Next span** buttons. Below it, the panel shows these sections when the span has data for them:
 
-Below the fields, tabs show the span's data when it has any:
-
-- **Input / Output**: the prompt and the reply. Select **Pretty** for formatted chat messages or **JSON** for the stored value.
-- **Attributes**: the span attributes.
+- **Error**: the error message and details, for a failed span.
+- **Metrics**: when the span started, its duration, and its offset from the start of the trace. Model calls also show **First token**, **Output speed**, **Cost**, and their tokens.
+- A section for the kind of span, such as **Model call** with the **Requested model**, **Response model**, **Provider**, **Finish reason**, and **Response ID**, or **Tool call**, **Agent**, or **MCP**.
+- **Input** and **Output**: the prompt and the reply. A tool call shows **Arguments** and **Result** instead. Where a section offers them, select **Pretty** for a formatted view or **JSON** for the stored value.
 - **Events**: the span events and their attributes.
-- **Error**: the error message and details.
+- **Attributes**: the span attributes.
 
-A **Truncated** badge means that the dashboard shows a preview of a long value, not the full value. A **Truncated at source** badge next to the span name means that the sender cut the content before export, so telemetry.dev never received the rest.
+A **Truncated** badge marks a value that the panel shows only in part.
 
-If prompt and response capture is off for the environment, the **Input / Output** tab does not appear and the span name is `[REDACTED]`. Read [What capture-off removes](/platform/privacy#what-capture-off-removes).
+If prompt and response capture is off for the environment, the **Input** and **Output** sections say that capture is off, and the span name is `[REDACTED]`. Read [What capture-off removes](/platform/privacy#what-capture-off-removes).
 
 ## Follow a conversation
 
@@ -84,7 +89,7 @@ Select **Sessions** in the project sidebar to list conversations. A session grou
 
 Select **24h**, **3d**, **7d**, or **30d** to set the time range. You can search by session ID or trace name and filter by agent, user, or model. The list shows each session's **Agent**, **Model**, **Customer**, **Turns**, **Tokens**, **Cost**, and **Last active** time.
 
-Select a session to see a timeline of its model calls, tool calls, errors, and idle time, followed by each turn of the conversation. Select **Open in Traces** to list the session's traces, or **Open trace** if the session has one trace.
+Select a session to see its **Customer**, **Agent**, **Models**, **Started** time, **Duration**, **Tokens**, and **Cost**, a list of its **Turns**, and each turn of the conversation. Select **Open in Traces** to list the session's traces, or **Open trace** if the session has one trace.
 
 ## Read logs
 

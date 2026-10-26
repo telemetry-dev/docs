@@ -1,7 +1,7 @@
 ---
 title: Claude Platform
 description: Send OpenTelemetry traces of Messages API requests and Managed Agents sessions from the Claude Console to telemetry.dev.
-lastModified: 2026-10-18
+lastModified: 2026-10-26
 seo:
   title: "Claude Platform OpenTelemetry Traces"
   description: "Add telemetry.dev as an OpenTelemetry destination in the Claude Console. Trace Messages API requests and Managed Agents sessions with no code changes."
@@ -22,9 +22,9 @@ Add telemetry.dev as an OpenTelemetry destination in the Claude Console, and the
 You need the admin role in the Claude Console organization.
 
 <Steps>
-  <Step title="Copy a telemetry.dev API key">
+  <Step title="Create a telemetry.dev API key">
 
-Open your project in telemetry.dev and copy an API key from the project setup page. Keys start with `td_live_`.
+Open your project's **Setup** page in telemetry.dev, select **Claude Platform**, and select **Create API key**. Keys start with `td_live_`.
 
   </Step>
 
@@ -93,5 +93,4 @@ With **Full content**, keep **Maximum content size in MB** at 0.75 or lower. Tha
 - With **Full content**, prompts and responses go through your project's [capture and redaction settings](/platform/privacy) like any other telemetry.
 - Anthropic delivers spans on a best-effort basis, so a span can occasionally be missing. A delivery can also repeat a span; telemetry.dev keeps one copy.
 - The traces have the `claude` framework. telemetry.dev uses `anthropic.session.id` as the session, so all traces of one Managed Agents session are grouped together.
-- When Anthropic shortens content, the span detail shows a **Truncated at source** badge.
 - If your organization has a HIPAA, FERPA, or K-12 data-handling restriction with Anthropic, destinations send metadata only, whatever their content mode.

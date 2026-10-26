@@ -2,7 +2,7 @@
 title: Quickstart
 description: Send a trace to telemetry.dev with TypeScript or Python in five minutes.
 sidebar: { label: "Quickstart", order: 1 }
-lastModified: 2026-10-18
+lastModified: 2026-10-26
 seo:
   title: "Quickstart: Send Your First LLM Trace"
   description: "Send your first LLM trace to telemetry.dev in five minutes with the TypeScript or Python SDK. The sample runs offline, so a model provider key is not necessary."
@@ -15,9 +15,9 @@ You need Node.js 22.18 or later, which runs TypeScript files directly, or Python
 <Steps>
   <Step title="Create a project and copy its API key">
 
-Sign in at [telemetry.dev](https://telemetry.dev) and create a project. The **Project created** dialog shows the project's first API key, named `default`. Copy it now: telemetry.dev shows the full key only once. Keys start with `td_live_`.
+Sign in at [telemetry.dev](https://telemetry.dev) and create a project. telemetry.dev opens the project's **Setup** page. Under **Choose what to trace**, select **TypeScript SDK** or **Python SDK**, then select **Create API key**. Creating a key needs the owner or admin role. Copy the key now: telemetry.dev shows the full key only once. Keys start with `td_live_`.
 
-If you closed the dialog, create another key on the project's **API keys** page.
+If you lose the key, create another one on the project's **API keys** page.
 
   </Step>
 
@@ -148,10 +148,10 @@ In the dashboard, open your project and select **Traces**. The new trace is at t
 
 <TraceFigure
   title="The quickstart trace"
-  caption="Timings are from one run of the TypeScript sample and vary from run to run. In Python, the agent span and its Operation are both named plan_trip."
+  caption="Timings are from one run of the TypeScript sample and vary from run to run. The sample returns a fixed answer instead of calling a model, so the model span takes under a millisecond and the dashboard rounds it to 0ms. In Python, the agent span is named plan_trip."
   spans={[
-    { name: "planTrip", type: "agent", operation: "trip-planner", depth: 0, start: 0, end: 0.51 },
-    { name: "chat gpt-5-mini", type: "generation", operation: "gpt-5-mini", depth: 1, start: 0, end: 0.13 },
+    { name: "planTrip", type: "agent", depth: 0, start: 0, end: 0.51 },
+    { name: "chat gpt-5-mini", type: "model", depth: 1, start: 0, end: 0.13 },
   ]}
 />
 

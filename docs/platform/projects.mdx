@@ -1,7 +1,7 @@
 ---
 title: Projects
 description: Create a project, connect an application to it, and rename or delete it.
-lastModified: 2026-10-18
+lastModified: 2026-10-26
 seo:
   description: "Use projects to keep telemetry, API keys, environments, and privacy settings separate. Create, set up, rename, or delete a project in telemetry.dev."
 ---
@@ -29,11 +29,8 @@ Any member of the organization can create a project.
   <Step title="Name the project">
     Select **Create project**. Enter a **Project name** of 1 to 100 characters, then select **Create project**.
   </Step>
-  <Step title="Copy the API key">
-    The **Project created** dialog shows a new API key named `default`. Copy it now; telemetry.dev does not show it again.
-  </Step>
-  <Step title="Open setup">
-    Select **Go to setup** to connect an application.
+  <Step title="Connect an application">
+    telemetry.dev opens the project's **Setup** page, where you create the project's first API key. Read [Connect an application](#connect-an-application).
   </Step>
 </Steps>
 
@@ -45,36 +42,29 @@ Each plan limits the number of projects in an organization:
 | Pro | 5 |
 | Team | Unlimited |
 
-At the limit, the project list shows **Upgrade to add projects** instead of **Create project**. It opens the **Billing** tab of the organization settings. Read [Plans and billing](/platform/billing#compare-plans).
+At the limit, the project list shows **Upgrade to add projects** instead of **Create project**. It opens the organization's **Billing** settings. Read [Plans and billing](/platform/billing#compare-plans).
 
 ## Connect an application
 
-Select **Setup** in the project sidebar. Check the **Service name** and **Environment** fields, then select a tab and copy its snippet.
+Select **Setup** in the project sidebar. The page is a checklist titled **Send your first trace**:
 
-| Tab | What the snippet does |
-| --- | --- |
-| Vercel AI SDK | Installs `@telemetry-dev/ai-sdk` and turns on telemetry for `generateText` or `streamText` calls. |
-| TanStack AI | Adds the `@telemetry-dev/tanstack-ai` middleware to `chat()` calls. |
-| Claude SDK | Sends the Anthropic SDK's own OpenTelemetry spans through the telemetry.dev span processor. |
-| Claude Platform | Gives the endpoint and header to enter as an OpenTelemetry destination in the Claude Console. |
-| OpenTelemetry | Sets the OTLP/HTTP endpoint, the authorization header, the service name, and the environment resource attribute. |
+1. **Choose what to trace.** Select your integration. You can search by name or filter by language. Integrations are grouped as **Model providers**, **Frameworks**, **Coding agents**, and **SDKs and OpenTelemetry**.
+2. **Create an API key.** Select **Create API key**, or use a key you already have. Creating a key needs the owner or admin role. The new key goes into the code blocks of the next steps. You see it only once.
+3. Follow the integration's own steps, such as installing a package and wrapping your client.
+4. The last step waits for data. When the first trace arrives, the page shows it with **Open trace**.
 
-**Service name** starts as the project name in lowercase with dashes. **Environment** starts as `production`. The snippets read the API key from the `TELEMETRY_DEV_API_KEY` environment variable.
-
-The OpenTelemetry snippet shows `https://<your-ingest-host>` as the endpoint. For the hosted service, use `https://ingest.telemetry.dev`.
-
-Some tabs have a **Read the guide** link. For full instructions, read the [Vercel AI SDK](/integrations/vercel-ai-sdk), [TanStack AI](/integrations/tanstack-ai), [Claude Platform](/integrations/claude-platform), or [OpenTelemetry](/sdk/opentelemetry#send-otlphttp-from-any-language) guide.
+Where a code block sets `OTEL_SERVICE_NAME`, it uses the project name in lowercase with dashes. For the full instructions of each integration, read its guide under [Integrations](/integrations).
 
 ## Rename or delete a project
 
 An organization owner or admin can rename or delete a project.
 
-Select **Settings** in the project sidebar. On the **General** tab, change **Project name** and select **Save**, or select **Delete project** and confirm.
+Select **Settings** in the project sidebar to open the project's **General** settings. Change **Project name** and select **Save**, or select **Delete project** under **Danger zone** and confirm.
 
 Deleting a project removes the project and its API keys, so the keys stop working at once. It also deletes the project's stored telemetry. You cannot undo it.
 
 ## Rename the organization
 
-An organization owner or admin can rename the organization. Open the organization switcher, select **Organization settings**, and change **Organization name** on the **General** tab.
+An organization owner or admin can rename the organization. Open the organization switcher and select **Organization settings** to open the organization's **General** settings. Change **Organization name** and select **Save**.
 
-Only an owner can delete the organization. **Delete organization** on the same tab removes every project in it and all of their telemetry.
+Only an owner can delete the organization. **Delete organization**, under **Danger zone** on the same page, removes every project in it and all of their telemetry.
