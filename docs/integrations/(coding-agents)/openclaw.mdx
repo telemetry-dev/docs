@@ -1,7 +1,7 @@
 ---
 title: OpenClaw
 description: Export OpenClaw agent runs, model calls, tools, token usage, cost, metrics, and logs to telemetry.dev over OTLP.
-lastModified: 2026-10-18
+lastModified: 2026-10-26
 seo:
   title: "OpenClaw Telemetry with OpenTelemetry"
   description: "Send OpenClaw telemetry to telemetry.dev with the official diagnostics-otel plugin. Export agent runs, model calls, tools, token usage, cost, metrics, and logs."
@@ -87,7 +87,7 @@ Without `captureContent`, OpenClaw sends no prompt text, response text, tool inp
 To export content, set `captureContent: true` inside `diagnostics.otel`. OpenClaw then sends redacted, length-bounded prompts, responses, tool inputs and outputs, tool definitions, and log message bodies. It still excludes system prompts and thinking blocks.
 
 :::warning[captureContent sends content off your machine]
-telemetry.dev's [privacy settings](/platform/privacy) decide whether received content is stored, not whether OpenClaw sends it. With **Store prompts and responses** off for the environment, telemetry.dev drops recognized content before storage, but it has already left the Gateway.
+telemetry.dev's [privacy settings](/platform/privacy) decide whether received content is stored, not whether OpenClaw sends it. With prompt capture off for the environment, telemetry.dev drops recognized content before storage, but it has already left the Gateway.
 :::
 
 ## Choose an environment

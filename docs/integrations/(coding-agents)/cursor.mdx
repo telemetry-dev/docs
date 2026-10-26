@@ -1,7 +1,7 @@
 ---
 title: Cursor
 description: Trace Cursor agent turns, responses, thinking, tools, subagents, and lifecycle events through Cursor hooks.
-lastModified: 2026-10-18
+lastModified: 2026-10-26
 seo:
   title: "Cursor Telemetry: Trace the Cursor Agent"
   description: "Trace the Cursor agent through Cursor hooks. Record agent turns, responses, thinking, tool calls, subagents, and lifecycle events with no change to the agent."
@@ -99,7 +99,7 @@ These are sent whatever the settings:
 - Conversation, generation, subagent, and tool call IDs; model, tool, and subagent names; statuses, durations, and compaction counts.
 - Error messages from Cursor, including the error text of failed tools.
 
-You can stop telemetry.dev from storing prompt and response content: turn off **Store prompts and responses** for the environment in the project's [privacy settings](/platform/privacy). telemetry.dev then drops recognized content and replaces span names with `[REDACTED]` before storage. The content still leaves your machine, and identifiers, paths, and error text are still stored after built-in redaction.
+You can stop telemetry.dev from storing prompt and response content: turn off the environment's switch under **Prompt capture** in the project's [privacy settings](/platform/privacy). telemetry.dev then drops recognized content and replaces span names with `[REDACTED]` before storage. The content still leaves your machine, and identifiers, paths, and error text are still stored after built-in redaction.
 
 To stop sending anything, run `telemetry-dev-cursor uninstall` and delete `~/.cursor/telemetry-dev.json`.
 

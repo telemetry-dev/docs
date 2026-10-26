@@ -1,7 +1,7 @@
 ---
 title: API keys
 description: Create a project key, limit it to one environment, and revoke it.
-lastModified: 2026-10-18
+lastModified: 2026-10-26
 ---
 
 An API key lets an application send traces, logs, and metrics to one project. Each key starts with `td_live_`.
@@ -26,7 +26,7 @@ An organization owner or admin can create and revoke keys. Members can see the k
 telemetry.dev shows the full key one time. It stores only a SHA-256 hash of the key, so it cannot show the key again. If you lose a key, create a new one and revoke the old one.
 :::
 
-A new project also gets a key named `default`. The **Project created** dialog shows it one time.
+The project's **Setup** page can also create a key. That key is named after the integration you choose, such as `OpenAI`.
 
 The key list shows each key's **Name**, the first 16 characters of the **Key**, its **Environment** (or **All environments**), its **Status** (**Active** or **Revoked**), and when it was **Created**.
 

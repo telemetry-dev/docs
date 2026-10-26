@@ -1,45 +1,45 @@
 ---
 title: Alerts
 description: Get an email when model cost, traces, model failures, ingestion errors, or quota usage need attention.
-lastModified: 2026-10-19
+lastModified: 2026-10-26
 ---
 
 Alerts check your telemetry every 5 minutes and email you when something needs attention: model cost heading over budget, a trace that might be an agent loop, a burst of failed model calls, or ingestion that is failing or running out of quota.
 
 There are two places to set them up:
 
-- **Project alerts** cover cost, traces, model calls, and ingestion errors for one project. Select **Alerts** in the project sidebar.
-- **Organization alerts** cover quota and the mix of data the whole organization sends. Open the organization settings and select the **Alerts** tab.
+- **Project alerts** cover cost, traces, model calls, and ingestion errors for one project. Select **Alerts** in the project sidebar. The page has three tabs: **Rules**, **History**, and **Destinations**.
+- **Organization alerts** cover quota and the mix of data the whole organization sends. Open **Organization settings**, select **Usage** in the settings sidebar, and go to the **Alerts** section.
 
-Organization owners and admins can create and change alerts. Other members can see the rules and the alert history but cannot change them. Alerts are available on every plan.
+Organization owners and admins can create and change alerts. Other members can see the alerts but cannot change them. Alerts are available on every plan.
 
 ## Turn on an alert
 
-The page lists every kind of alert, grouped by what it protects: **Spend**, **Agents and models**, and **Data quality** for a project, and **Usage** for the organization. Each row says in one sentence when the alert opens.
+The **Rules** tab lists every kind of project alert, and the organization's **Alerts** section lists the organization alerts. Each row says in one sentence when the alert opens.
 
-To turn an alert on, select its switch. It starts with the defaults listed below and checks within 5 minutes. **Monthly budget** has no default budget, so its switch opens the settings instead; enter a budget and select **Turn on**.
+To turn an alert on, select its switch. It starts with the defaults listed below and checks within 5 minutes. **Monthly budget** has no default budget, so its switch opens the settings instead; enter a budget and select **Turn on**. A project with no alerts also shows **Turn on 5 alerts**, which turns on five recommended alerts with their default limits.
 
-To change an alert's settings, select **Customize**, edit the fields, and select **Save changes**. **Check current data** runs the alert against your current telemetry and shows whether it would open, with the same explanation an email would contain. It sends no email.
+To change an alert's settings, select its row on the **Rules** tab, or its name in the organization's **Alerts** section. Edit the fields under **Alert when** and select **Save changes**. **Current data** runs the alert against your current telemetry and says whether it would alert now (**Would alert now**, **All clear now**, or **Needs more data**), with the measurement an email would report. It sends no email.
 
-Turning the switch off stops checks and email but keeps the settings and history. **Remove**, under **Customize**, deletes the alert and its history.
+Turning the switch off stops checks and email but keeps the settings and history. To delete a project alert and its history, select **Remove** at the bottom of its panel, then **Remove alert**.
 
-Each row shows the alert's status:
+On the **Rules** tab, the **Status** column shows each alert's status:
 
 - **Off**: the alert is not checking.
-- **First check within 5 minutes**: the alert is on and has not been checked yet.
+- **Checking**: the alert is on and has not been checked yet.
 - **All clear**: nothing is wrong right now.
-- **Needs more data**: the alert does not have enough history to decide yet. The row says what it is waiting for. See [Needs more data](#needs-more-data).
-- **Alerting**: something is wrong right now. The 20 most recent ongoing alerts are also listed under **Happening now** at the top of the page, each with an **Investigate** link.
+- **Needs more data**: the alert does not have enough history to decide yet. See [Needs more data](#needs-more-data).
+- **Alerting**: something is wrong right now. Ongoing alerts also appear at the top of the project's **Alerts** page, each with a **View alert** button.
 
-A row also shows how many times the alert went off in the last 7 days.
+The **Last 7 days** column shows how many times the alert went off in the last 7 days.
 
 ## Email recipients
 
-Every alert on a page emails the same list of addresses, shown at the top of the page. Select **Edit** to change it, and enter addresses separated by commas. Saving updates every alert on the page. When the page has no alerts yet, the list starts with your own address. Leave it empty to record alerts on the page without sending email.
+Every alert on a page emails the same list of addresses. For a project, the list is on the **Destinations** tab. For the organization, owners and admins select **Destinations** in the **Alerts** section. Select **Add destination** and enter an **Email address** to add one, or select **Remove** in an address's row menu. A change updates every alert on the page. When the page has no alerts yet, the list starts with your own address. Leave it empty to record alerts on the page without sending email.
 
-Organization members with a verified email get alerts right away. Any other address has to confirm first. When you save the rule, each of those addresses gets an email titled "Confirm alert emails from telemetry.dev". The recipient selects **Review and confirm**, then **Confirm alert emails**. The link expires after 7 days.
+Organization members with a verified email get alerts right away. Any other address has to confirm first. When you add it, or when you turn on the page's first alert if none is on yet, it gets an email titled "Confirm alert emails from telemetry.dev". The recipient selects **Review and confirm**, then **Confirm alert emails**. The link expires after 7 days.
 
-Until an address confirms, it gets no alert email, and the top of the page lists it as waiting for confirmation. To ask again, for example after the link expired, select **Send confirmation emails**. Addresses outside the organization can unsubscribe from a link at the bottom of each alert email. To stop alerts for a member, remove their address from the list.
+Until an address confirms, it gets no alert email, and its row shows **Not confirmed**. To ask again, for example after the link expired, select **Resend email**. It sends the email again to every address that has not confirmed. Addresses outside the organization can unsubscribe from a link at the bottom of each alert email. To stop alerts for a member, remove their address from the list.
 
 When telemetry.dev sends an email, it checks each address again. An address stops getting alerts when its owner leaves the organization or unsubscribes.
 
@@ -63,16 +63,16 @@ Opens when model cost per successful trace in the last hour is at least 1.5 time
 
 ### Agent loop
 
-**Settings:** **Minimum trace cost** in USD (default $2), and **Use learned baseline** (on by default).
+**Settings:** **Cost limit per turn** in USD (default $2), and **Raise the limits when turns in this project are usually large** (on by default).
 
 A runaway trace is often an agent stuck in a loop, so the rule checks both cost and span count. It opens when a trace that finished in the last hour costs more than the cost limit or has more spans than the span limit. Traces are grouped by agent.
 
-| Limit | Learned baseline off | Learned baseline on |
+| Limit | Raising the limits off | Raising the limits on |
 | --- | --- | --- |
-| Cost | **Minimum trace cost** | The higher of **Minimum trace cost** and 3 times the project's 99th percentile trace cost |
+| Cost | **Cost limit per turn** | The higher of **Cost limit per turn** and 3 times the project's 99th percentile trace cost |
 | Spans | 30 | The higher of 30 and 2 times the project's 99th percentile span count |
 
-The learned baseline comes from the 6 hours before the last hour, or the 24 hours before it when the project had fewer than 100 traces. The baseline only raises the limits, for projects whose traces are usually large. It never adds alerts.
+The baseline that raises the limits comes from the 6 hours before the last hour, or the 24 hours before it when the project had fewer than 100 traces. The baseline only raises the limits, for projects whose traces are usually large. It never adds alerts.
 
 ### Model errors
 
@@ -98,12 +98,12 @@ Opens when fewer than the minimum share of model calls with token usage have a c
 
 ### Quota running out
 
-**Settings:** **Warning runway** in hours (default 72), and **Critical runway** in hours (default 24).
+**Settings:** **Warning: hours until the allowance is used** (default 72), and **Critical: hours until ingestion can stop** (default 24).
 
 The rule uses the organization's average ingestion rate over the last 6 hours. It opens when:
 
-- The organization is likely to use its monthly allowance within **Warning runway** hours.
-- On the Free plan, ingestion is likely to reach the hard stop within **Critical runway** hours.
+- The organization is likely to use its monthly allowance within the warning number of hours.
+- On the Free plan, ingestion is likely to reach the hard stop within the critical number of hours.
 - On a paid plan, projected usage for the month is over 125% of the allowance.
 
 It also emails once a month when usage passes 80% and 100% of the allowance, and right away when the ingest API rejects a batch because of the monthly cap or a gift budget. Rejection emails go out at most once every 5 minutes. For plan allowances and the hard stop, see [Plans and billing](https://telemetry.dev/docs/platform/billing).
@@ -149,11 +149,11 @@ Each email has these sections:
 - **Why it matters**: what the problem means for your application or bill.
 - **Likely cause**: the model, provider, agent, or error that contributed most, when telemetry.dev can tell.
 
-The **Investigate** button opens the page to start from: the project overview filtered to the environment, the trace itself for a runaway trace, the project's setup page for ingestion errors, or the organization's **Usage** or **Billing** tab for quota.
+The **Investigate** button opens the page to start from: the project overview, the trace itself for a runaway trace, the project's **Setup** page for ingestion errors, or the organization's **Usage** or **Billing** settings for quota.
 
 ## Alert history
 
-The **History** section at the bottom of the page lists alerts newest first, ongoing and resolved together. Each entry shows what the alert was about and when it opened and resolved. Expand **Measurements** to see the numbers behind it, and select **Load more** to see older alerts. The organization's **Alerts** tab shows the history of organization alerts only.
+The **History** tab of a project's **Alerts** page lists alerts newest first, 25 to a page. Select **All**, **Open**, or **Resolved** to filter them. Each row shows the alert, what happened, when it started, how long it lasted, and its status. Select **View alert** to open the alert's page, which shows **What happened**, the **Numbers** behind it, and a **Timeline**. Use the arrows below the table to see older alerts.
 
 ## Limits
 

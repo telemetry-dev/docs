@@ -2,7 +2,7 @@
 title: How it works
 description: How telemetry.dev turns OpenTelemetry spans into traces, costs, and dashboard views.
 sidebar: { label: "How it works", order: 2 }
-lastModified: 2026-10-18
+lastModified: 2026-10-26
 ---
 
 Your application records spans with an SDK or any OpenTelemetry exporter and sends them over OTLP/HTTP. The ingest service checks the API key, reads model, token, and content fields from each span, calculates cost, removes content your privacy settings exclude, and stores the result for the dashboard.
@@ -15,12 +15,12 @@ Spans form a tree. When code runs inside an active span, the spans it starts bec
 
 <TraceFigure
   title="One agent run, recorded as a trace"
-  caption="The agent span is the root; its two model calls and one tool call are children, in the order they ran. The Operation column shows each span's model, tool, or agent name. Select a span in the dashboard to read its tokens, cost, input, and output."
+  caption="The agent span is the root; its two model calls and one tool call are children, in the order they ran. The chip beside each name shows its span type. Select a span in the dashboard to read its tokens, cost, input, and output."
   spans={[
-    { name: "answerTicket", type: "agent", operation: "support-agent", depth: 0, start: 0, end: 2400 },
-    { name: "chat gpt-5-mini", type: "generation", operation: "gpt-5-mini", depth: 1, start: 60, end: 880 },
-    { name: "search_docs", type: "tool", operation: "search_docs", depth: 1, start: 900, end: 1460 },
-    { name: "chat gpt-5-mini", type: "generation", operation: "gpt-5-mini", depth: 1, start: 1480, end: 2360 },
+    { name: "answerTicket", type: "agent", depth: 0, start: 0, end: 2400 },
+    { name: "chat gpt-5-mini", type: "model", depth: 1, start: 60, end: 880 },
+    { name: "search_docs", type: "tool", depth: 1, start: 900, end: 1460 },
+    { name: "chat gpt-5-mini", type: "model", depth: 1, start: 1480, end: 2360 },
   ]}
 />
 
@@ -39,7 +39,7 @@ Provider and framework integrations set these attributes for you. Spans from oth
 ## Projects, environments, and API keys
 
 - A **project** holds telemetry from one application, along with its API keys, privacy settings, and retention period.
-- An **API key** sends data to exactly one project. Keys start with `td_live_`. Each new project gets a key named `default`, and the dashboard shows the full key only once.
+- An **API key** sends data to exactly one project. Keys start with `td_live_`. You create keys on the project's **Setup** or **API keys** page, and the dashboard shows the full key only once.
 - An **environment** is a name such as `production` or `development` that you set on your telemetry. It drives the dashboard's environment filter and selects which capture setting applies.
 
 The SDKs write the environment to the `deployment.environment.name` resource attribute, from `TELEMETRY_DEV_ENVIRONMENT`, and default to `production`. If a payload has no `deployment.environment.name`, the ingest service uses `deployment.environment`. If neither is set, it uses the key's environment, or `default` for a key that accepts all environments.
@@ -64,7 +64,7 @@ While it normalizes a span, the service:
 ## What you see in the dashboard
 
 - **Traces** lists runs with their input, output, duration, tokens, cost, and models. Open a trace to see its waterfall, then select a span to read its input, output, attributes, events, and errors. See [Traces, sessions, and logs](/platform/traces).
-- **Sessions** groups traces that share a session ID, such as the turns of one conversation, and shows a timeline of each session's model calls, tool calls, and errors.
+- **Sessions** groups traces that share a session ID, such as the turns of one conversation, and shows each turn with the session's tokens, cost, and errors.
 - **Overview** charts requests, cost, latency, tokens, and errors over time. See [Analytics](/platform/analytics).
 
 <CardGroup cols={2}>

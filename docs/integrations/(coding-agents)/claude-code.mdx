@@ -1,7 +1,7 @@
 ---
 title: Claude Code
 description: Monitor Claude Code token usage, cost, sessions, tool activity, and traces for one developer or a full team through built-in OpenTelemetry.
-lastModified: 2026-10-18
+lastModified: 2026-10-26
 seo:
   title: "Claude Code Monitoring & Telemetry with OpenTelemetry"
   description: "Monitor Claude Code for one developer or a team with built-in OpenTelemetry. Track token usage, cost, sessions, tool activity, and traces."
@@ -81,7 +81,7 @@ Run `claude` in the terminal where you set the variables. If you used `settings.
 
 Claude Code sends metrics every 60 seconds and events every 5 seconds. Set `OTEL_METRIC_EXPORT_INTERVAL=10000` while testing to get metrics every 10 seconds.
 
-1. Open the project **Overview**. Claude Code sends `claude_code.session.count` when a session starts, and it appears under **Metric series** after the first export. Select **View all metrics** if it isn't among the first charts.
+1. Open the project **Overview**. Claude Code sends `claude_code.session.count` when a session starts, and it appears under **Metric series** after the first export. Select **View all metrics (_n_)** if it isn't among the first charts.
 2. Submit a prompt, then open **Logs**. The level filter starts at `error`, so select **All levels** to see the `claude_code.user_prompt` and `claude_code.api_request` events.
 
 If nothing arrives, start Claude Code with `claude --debug-file /tmp/claude-debug.log` and search the file for `[3P telemetry]` errors. Lines that start with `[Anthropic telemetry]` are about Anthropic's own operational telemetry, not your export.
@@ -121,7 +121,7 @@ Claude Code also sends inventory and maintenance events: `managed_settings_resol
 
 Claude Code calculates `claude_code.cost.usage` itself, and Anthropic describes it as an approximation. telemetry.dev charts the metric as Claude Code reports it.
 
-The **Overview** summary cards and cost chart are built from traces. Without [traces](#add-traces-beta), Claude Code's usage appears only under **Metric series**.
+The **Overview** summary cards are built from traces. Without [traces](#add-traces-beta), Claude Code's usage appears only under **Metric series**.
 
 ## Add traces (beta)
 

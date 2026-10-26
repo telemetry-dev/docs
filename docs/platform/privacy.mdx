@@ -1,13 +1,13 @@
 ---
 title: Privacy and retention
 description: Choose what telemetry.dev stores, what it redacts, and how long it keeps telemetry.
-lastModified: 2026-10-18
+lastModified: 2026-10-26
 ---
 
 telemetry.dev stores prompts and responses by default. You can limit what it keeps in three places:
 
 1. **In your application.** SDK capture options and your exporter decide what leaves your process. This is the only place where you can guarantee that content is never sent.
-2. **Per environment.** The **Store prompts and responses** setting removes recognized prompt and response fields for one environment.
+2. **Per project and environment.** Prompt capture settings remove recognized prompt and response fields, for the whole project or for one environment.
 3. **Redaction.** Built-in patterns always replace common secrets and personal data. You can add your own patterns for each project.
 
 telemetry.dev applies the server-side controls before it writes telemetry. They apply to data received after you save a change. They do not change telemetry that is already stored.
@@ -41,32 +41,31 @@ The server-side controls below still apply to everything the SDK sends.
 
 ## Turn off prompt and response capture for an environment
 
-An organization owner or admin can change capture settings. Members can view them.
+An organization owner or admin can change capture settings. Members can view them. Each change saves as soon as you make it.
 
 <Steps>
   <Step title="Open privacy settings">
-    In the project, select **Settings** in the sidebar. Then select the **Privacy** tab.
+    In the project, select **Settings** in the sidebar. Then select **Privacy** under the project in the settings sidebar.
   </Step>
   <Step title="Find the environment">
-    The `production` and `development` rows are always present. For another environment, select **Add environment** and enter its name.
+    Under **Prompt capture**, the `production` and `development` rows are always present. For another environment, select **Add environment**, enter its **Name**, and select **Add environment**.
   </Step>
-  <Step title="Clear the checkbox">
-    Clear **Store prompts and responses** for that environment.
-  </Step>
-  <Step title="Save">
-    Select **Save privacy settings**.
+  <Step title="Turn off the switch">
+    Turn off the switch in the environment's row. The row then says "Prompts and responses are not stored."
   </Step>
 </Steps>
 
 Enter the environment name that your telemetry reports in `deployment.environment.name`. Letter case and spaces at either end do not matter: `Production ` and `production` are the same environment. Telemetry without an environment attribute uses the environment of its API key if the key is limited to one environment, and `default` otherwise. Add a `default` row to cover the second case.
 
-An environment without a saved row stores prompts and responses. A project can have at most 100 environment rows, and each name can have at most 100 characters. Select **Remove** to delete a row that you added.
+An environment without its own row follows **Capture by default**, at the top of **Prompt capture**. A new project copies it from **Prompt capture** under **Defaults for new projects** in the organization's **General** settings, which is on unless an owner or admin turned it off. Turn **Capture by default** off to stop storing prompts and responses for every environment that has no row of its own, including environments your app reports later.
+
+A project can have at most 100 environment rows, and each name can have at most 100 characters. To delete a row that you added, select its remove button.
 
 ### What capture-off removes
 
 When capture is off for an environment, telemetry.dev removes these items from that environment's telemetry:
 
-- The span input and output that appear in the **Input / Output** tab and in the trace table's **Input** and **Output** columns.
+- The span input and output that appear in the span's **Input** and **Output** sections and in the trace table's **Input** and **Output** columns.
 - Attributes with recognized prompt or response keys, at any depth. These include `gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions`, `gen_ai.prompt.*`, `gen_ai.completion.*`, the Vercel AI SDK `ai.prompt`, `ai.prompt.*`, `ai.response.*`, `ai.toolCall.args`, and `ai.toolCall.result` keys, `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result`, `llm.prompts`, `llm.completions`, `traceloop.entity.input`, `traceloop.entity.output`, `langchain.inputs`, `langchain.outputs`, and Anthropic tool-result content.
 - Attributes whose whole key is one of these words: `input`, `inputs`, `prompt`, `prompts`, `messages`, `request`, `request_body`, `question`, `output`, `outputs`, `response`, `responses`, `completion`, `completions`, `answer`, or `result`.
 - The span name. telemetry.dev stores `[REDACTED]` instead, so the trace name is also `[REDACTED]` and name search cannot find it.
@@ -134,13 +133,13 @@ Custom patterns redact values that are specific to your application, such as cus
 
 <Steps>
   <Step title="Open privacy settings">
-    In the project, select **Settings**, then the **Privacy** tab.
+    In the project, select **Settings**, then **Privacy** under the project in the settings sidebar.
   </Step>
   <Step title="Add the patterns">
-    Enter one regular expression per line in **Custom redaction regex**. For example, `customer-[0-9]+`.
+    Under **Redaction**, enter one regular expression per line in **Redaction patterns**. For example, `customer-[0-9]+`.
   </Step>
   <Step title="Save">
-    Select **Save privacy settings**. telemetry.dev checks each pattern and reports the line number of a pattern that it cannot accept.
+    Select **Save**. telemetry.dev checks each pattern and reports the line number of a pattern that it cannot accept.
   </Step>
 </Steps>
 
@@ -161,7 +160,7 @@ telemetry.dev trims spaces from each line, skips blank lines, and saves duplicat
 
 Retention sets how long the project keeps telemetry. An organization owner or admin can change it.
 
-Open **Settings**, select the **Privacy** tab, and select a value in **Retention**. Then select **Save privacy settings**. The choices are 7, 14, 30, and 90 days. A choice above your plan's limit shows **(upgrade required)**.
+Open **Settings**, select **Privacy** under the project in the settings sidebar, and select a value in **Keep telemetry for**, under **Retention**. A longer period saves at once. A shorter one asks you to confirm with **Shorten retention**. The choices are 7, 14, 30, and 90 days. A choice above your plan's limit shows **(upgrade required)**.
 
 | Plan | Maximum retention |
 | --- | ---: |
@@ -169,7 +168,7 @@ Open **Settings**, select the **Privacy** tab, and select a value in **Retention
 | Pro | 30 days |
 | Team | 90 days |
 
-A new project starts at the maximum retention for its plan. After a plan downgrade, a project keeps its saved retention, but you cannot raise it above the new plan's limit.
+A new project starts at **Data retention** under **Defaults for new projects** in the organization's **General** settings, capped at the plan's limit. Unless an owner or admin changed it, that is the plan's maximum. After a plan downgrade, a project keeps its saved retention, but you cannot raise it above the new plan's limit.
 
 Dashboard views show only telemetry inside the retention window, so a shorter retention hides older data right away. A cleanup job then deletes telemetry older than the project's retention. It runs about once a day.
 

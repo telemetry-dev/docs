@@ -1,7 +1,7 @@
 ---
 title: Claude SDK OpenTelemetry
 description: Send the native OpenTelemetry spans of the Claude SDK to telemetry.dev from TypeScript or Python.
-lastModified: 2026-10-18
+lastModified: 2026-10-26
 seo:
   title: "Claude SDK OpenTelemetry Tracing"
   description: "Send the native OpenTelemetry spans of the Claude SDK to telemetry.dev. Trace Messages API requests, tool runner tools, token usage, cache writes, and cost."
@@ -15,7 +15,7 @@ Claude OpenTelemetry is a beta feature. A new Claude SDK version can change span
 
 Native spans start in `@anthropic-ai/sdk` 0.134.0 and in the Python `anthropic` package 1.14.0. Pin the Claude SDK version to control when you get changes.
 
-Make a project at telemetry.dev. Then copy an API key from the project setup page. Keys look like `td_live_...`.
+Make a project at telemetry.dev. Then create an API key on the project's **Setup** page. Keys look like `td_live_...`.
 
 ## Install
 
@@ -164,7 +164,7 @@ Do not use the `content` mode for data that must stay in your application. In th
 
 telemetry.dev stores the content only when the capture setting of the environment is on. Read [Privacy and retention](/platform/privacy) for the capture controls.
 
-The SDK limits the content of each span to 0.75 MB by default. To change the limit, set `ANTHROPIC_OPEN_TELEMETRY_TRACES_MAX_CONTENT_BYTES`. When the SDK shortens content, it sets `anthropic.content.truncated` on the span. The span detail then shows a "Truncated at source" badge.
+The SDK limits the content of each span to 0.75 MB by default. To change the limit, set `ANTHROPIC_OPEN_TELEMETRY_TRACES_MAX_CONTENT_BYTES`. When the SDK shortens content, it sets `anthropic.content.truncated` on the span.
 
 ## Group calls into a conversation
 

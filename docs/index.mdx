@@ -2,7 +2,7 @@
 title: telemetry.dev documentation
 description: Send your first AI trace, then connect the provider, framework, or coding agent you already use.
 sidebar: { label: "Introduction", order: 0 }
-lastModified: 2026-10-18
+lastModified: 2026-10-26
 seo:
   title: "LLM Observability Documentation"
   description: "Docs for telemetry.dev, OpenTelemetry-native observability for AI apps. Send your first trace, then connect your model provider, framework, or coding agent."
@@ -11,7 +11,7 @@ seo:
 telemetry.dev records what your AI application does. Each run becomes one trace that shows every model call, tool call, and step in order, with the tokens, cost, latency, and errors of each one.
 
 <Frame caption="A trace in the dashboard. Each row is a span, nested under the span that started it, with a bar for when it ran.">
-  <Screenshot src="trace-waterfall.webp" alt="A telemetry.dev trace: the agent.workflow span at the top with its status, duration, tokens, and cost, and a waterfall of 18 child spans for retrieval, model calls, HTTP requests, tool calls, and embeddings." priority />
+  <Screenshot src="trace-waterfall.webp" alt="A telemetry.dev trace named support-agent with a success status: a tree of 13 spans beside a timeline, with HTTP calls that load the customer profile and session, model calls, a retrieval step with embeddings, the search_help_center tool, and a guardrail check, each with its duration." priority />
 </Frame>
 
 telemetry.dev is built on OpenTelemetry. The SDKs send standard OTLP/HTTP, and so can the OpenTelemetry setup you already run.
@@ -37,7 +37,7 @@ telemetry.dev is built on OpenTelemetry. The SDKs send standard OTLP/HTTP, and s
 
 - **Debug a single run.** Open a trace to read each model call's input and output, each tool's arguments and result, and the error that ended a failed run.
 - **Follow a conversation.** Traces that share a session ID are grouped into one session.
-- **Track cost and usage.** Tokens and cost are calculated per span and added up per trace, model, user, and environment.
+- **Track cost and usage.** Tokens and cost are calculated per span and added up per trace, session, model, and user.
 - **Keep sensitive data out.** Turn off prompt and response capture per environment, and redact secrets and personal data before storage.
 
 ## Platform

@@ -1,7 +1,7 @@
 ---
 title: OpenTelemetry
 description: Connect an existing OpenTelemetry setup to telemetry.dev with a span processor or a standard OTLP/HTTP exporter.
-lastModified: 2026-10-18
+lastModified: 2026-10-26
 seo:
   title: "LLM Tracing with OpenTelemetry and OTLP"
   description: "Send LLM traces from your own OpenTelemetry setup. Add the telemetry.dev span processor to a TypeScript or Python provider, or point an OTLP/HTTP exporter at our API."
@@ -22,7 +22,7 @@ If your application does not use OpenTelemetry yet, the [TypeScript SDK](/sdk/ty
 npm install @telemetry-dev/otel @opentelemetry/api
 ```
 
-Create a project at telemetry.dev and copy an API key from the project setup page. Keys look like `td_live_...`.
+Create a project at telemetry.dev, then create an API key on the project's **Setup** page. Keys look like `td_live_...`.
 
 ```bash .env
 TELEMETRY_DEV_API_KEY=td_live_...
