@@ -1,7 +1,7 @@
 ---
 title: OTLP ingest API
 description: Send OTLP/HTTP traces, logs, and metrics to telemetry.dev.
-lastModified: 2026-10-18
+lastModified: 2026-10-26
 seo:
   title: "OTLP/HTTP Ingest API (Protobuf and JSON)"
   description: "Send OpenTelemetry traces, logs, and metrics to telemetry.dev over OTLP/HTTP with protobuf or JSON. This page gives endpoints, authentication, limits, and error responses."
@@ -150,20 +150,20 @@ The server returns `413` as soon as a declared `Content-Length` is over 4 MiB, o
 | --- | --- | --- | --- |
 | Failed authentication attempts | Per sender, per minute | 20 | `429` with `Retry-After` |
 | Requests | Per project, per minute | 6,000 | `429` with `Retry-After` |
-| Monthly ingestion units | Per organization without a paid subscription | Plan dependent | `429` until the next UTC month |
+| Monthly ingestion units | Per workspace without a paid subscription | Plan dependent | `429` until the next UTC month |
 
 The per-minute limits use fixed one-minute windows. `Retry-After` gives the seconds until the current window ends. A key that authenticated recently has its own failure budget, so failed attempts from other clients behind the same address do not normally lock it out.
 
-Organizations without a paid subscription have a hard monthly cap on ingestion units. For the cap and how units are counted, see [Plans and billing](/platform/billing). Paid subscriptions are metered and are not rejected for volume.
+Workspaces without a paid subscription have a hard monthly cap on ingestion units. For the cap and how units are counted, see [Plans and billing](/platform/billing). Paid subscriptions are metered and are not rejected for volume.
 
 When a cap applies, every accepted response also carries:
 
 | Response header | Value |
 | --- | --- |
-| `ratelimit-limit` | The organization's hard cap in ingestion units |
+| `ratelimit-limit` | The workspace's hard cap in ingestion units |
 | `ratelimit-reset` | Seconds until the next UTC month |
 
-A request that would go over the monthly cap returns `429` with `retry-after` set to the seconds until the next UTC month. An organization that redeemed a gift code also has a lifetime gift budget, which does not reset monthly. A batch that would go over it returns `429` with `ratelimit-limit` set to the budget and `ratelimit-remaining` set to the units left, and no `retry-after`.
+A request that would go over the monthly cap returns `429` with `retry-after` set to the seconds until the next UTC month. A workspace that redeemed a gift code also has a lifetime gift budget, which does not reset monthly. A batch that would go over it returns `429` with `ratelimit-limit` set to the budget and `ratelimit-remaining` set to the units left, and no `retry-after`.
 
 ## Success response
 
@@ -201,7 +201,7 @@ telemetry.dev also records each rejection of an authenticated request on the pro
 | `415` | `unsupported_media_type` | `Content-Type must be application/x-protobuf or application/json` | Missing or unsupported `Content-Type`. | No |
 | `415` | `unsupported_encoding` | `Content-Encoding must be gzip or identity` | Unsupported `Content-Encoding`. | No |
 | `429` | `rate_limited` | `Too many failed authentication attempts`, `Authentication rate-limit capacity reached; retry later`, or `Too many requests for this project; export larger batches less often` | A per-minute limit was reached. | After `Retry-After` |
-| `429` | `quota_exceeded` | `Monthly ingestion quota exceeded; ...` or a lifetime gift budget message | The batch would exceed the organization's monthly cap or gift budget. | After `Retry-After`, if present |
+| `429` | `quota_exceeded` | `Monthly ingestion quota exceeded; ...` or a lifetime gift budget message | The batch would exceed the workspace's monthly cap or gift budget. | After `Retry-After`, if present |
 | `500` | `authentication_failed` | `Failed to authenticate request` | The key lookup failed or took longer than 10 seconds. | Later, with backoff |
 | `500` | `privacy_configuration_invalid` | `Project privacy settings are invalid` | The project's stored privacy settings cannot be read. | No |
 | `500` | `ingestion_failed` | `Failed to decode OTLP payload` | An unexpected error while decoding. | No |

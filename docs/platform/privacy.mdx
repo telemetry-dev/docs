@@ -41,7 +41,7 @@ The server-side controls below still apply to everything the SDK sends.
 
 ## Turn off prompt and response capture for an environment
 
-An organization owner or admin can change capture settings. Members can view them. Each change saves as soon as you make it.
+A workspace owner or admin can change capture settings. Members can view them. Each change saves as soon as you make it.
 
 <Steps>
   <Step title="Open privacy settings">
@@ -57,7 +57,7 @@ An organization owner or admin can change capture settings. Members can view the
 
 Enter the environment name that your telemetry reports in `deployment.environment.name`. Letter case and spaces at either end do not matter: `Production ` and `production` are the same environment. Telemetry without an environment attribute uses the environment of its API key if the key is limited to one environment, and `default` otherwise. Add a `default` row to cover the second case.
 
-An environment without its own row follows **Capture by default**, at the top of **Prompt capture**. A new project copies it from **Prompt capture** under **Defaults for new projects** in the organization's **General** settings, which is on unless an owner or admin turned it off. Turn **Capture by default** off to stop storing prompts and responses for every environment that has no row of its own, including environments your app reports later.
+An environment without its own row follows **Capture by default**, at the top of **Prompt capture**. A new project copies it from **Prompt capture** under **Defaults for new projects** in the workspace's **General** settings, which is on unless an owner or admin turned it off. Turn **Capture by default** off to stop storing prompts and responses for every environment that has no row of its own, including environments your app reports later.
 
 A project can have at most 100 environment rows, and each name can have at most 100 characters. To delete a row that you added, select its remove button.
 
@@ -158,7 +158,7 @@ telemetry.dev trims spaces from each line, skips blank lines, and saves duplicat
 
 ## Set retention
 
-Retention sets how long the project keeps telemetry. An organization owner or admin can change it.
+Retention sets how long the project keeps telemetry. A workspace owner or admin can change it.
 
 Open **Settings**, select **Privacy** under the project in the settings sidebar, and select a value in **Keep telemetry for**, under **Retention**. A longer period saves at once. A shorter one asks you to confirm with **Shorten retention**. The choices are 7, 14, 30, and 90 days. A choice above your plan's limit shows **(upgrade required)**.
 
@@ -168,7 +168,7 @@ Open **Settings**, select **Privacy** under the project in the settings sidebar,
 | Pro | 30 days |
 | Team | 90 days |
 
-A new project starts at **Data retention** under **Defaults for new projects** in the organization's **General** settings, capped at the plan's limit. Unless an owner or admin changed it, that is the plan's maximum. After a plan downgrade, a project keeps its saved retention, but you cannot raise it above the new plan's limit.
+A new project starts at **Data retention** under **Defaults for new projects** in the workspace's **General** settings, capped at the plan's limit. Unless an owner or admin changed it, that is the plan's maximum. After a plan downgrade, a project keeps its saved retention, but you cannot raise it above the new plan's limit.
 
 Dashboard views show only telemetry inside the retention window, so a shorter retention hides older data right away. A cleanup job then deletes telemetry older than the project's retention. It runs about once a day.
 

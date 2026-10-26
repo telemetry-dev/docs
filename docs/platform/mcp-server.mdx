@@ -1,7 +1,7 @@
 ---
 title: Connect an AI agent
-description: Let Claude, ChatGPT, Cursor, VS Code, or another MCP client read traces, logs, and usage from one organization.
-lastModified: 2026-10-25
+description: Let Claude, ChatGPT, Cursor, VS Code, or another MCP client read traces, logs, and usage from one workspace.
+lastModified: 2026-10-26
 ---
 
 telemetry.dev runs an MCP server at `https://telemetry.dev/mcp`. An AI agent connected to it can find traces, read a trace's spans and errors, list logs, and summarize token usage and cost, so you can ask questions such as "why did the last checkout run fail?" in your editor or chat app.
@@ -44,8 +44,8 @@ Then approve the connection in the browser:
   <Step title="Sign in">
     Sign in to telemetry.dev, or create an account. A new account needs a verified email before it can connect; the verification link brings you back to the connection.
   </Step>
-  <Step title="Choose an organization">
-    If you belong to more than one organization, choose the one the agent can read. A connection reads one organization. To give an agent another one, connect it again.
+  <Step title="Choose a workspace">
+    If you belong to more than one workspace, choose the one the agent can read. A connection reads one workspace. To give an agent another one, connect it again.
   </Step>
   <Step title="Approve">
     Check what the agent will be able to read and select **Allow**. telemetry.dev asks every time you connect, even for an app you approved before.
@@ -58,7 +58,7 @@ If the page says **telemetry.dev has not verified this app**, the app's name was
 
 | Tool | What it returns |
 | --- | --- |
-| `list_projects` | The organization's projects. Every other tool needs a project from this list. |
+| `list_projects` | The workspace's projects. Every other tool needs a project from this list. |
 | `search_sessions` | Sessions, most recently active first, with trace count, errors, tokens, and cost. |
 | `search_traces` | Traces, newest first, filtered by name, status, environment, session, or end user. |
 | `get_trace` | One trace's spans with models, tools, timing, tokens, cost, and error text, plus its first logs. |
@@ -82,4 +82,4 @@ Open your user menu and select **Account**. Under **Connected apps**, select **D
 
 The app loses access right away. To use it again, connect it again from the app.
 
-An agent also loses access when you leave the organization or the organization is deleted.
+An agent also loses access when you leave the workspace or the workspace is deleted.
