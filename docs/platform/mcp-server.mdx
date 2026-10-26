@@ -1,0 +1,85 @@
+---
+title: Connect an AI agent
+description: Let Claude, ChatGPT, Cursor, VS Code, or another MCP client read traces, logs, and usage from one organization.
+lastModified: 2026-10-25
+---
+
+telemetry.dev runs an MCP server at `https://telemetry.dev/mcp`. An AI agent connected to it can find traces, read a trace's spans and errors, list logs, and summarize token usage and cost, so you can ask questions such as "why did the last checkout run fail?" in your editor or chat app.
+
+The server is read-only. An agent cannot change projects, settings, keys, or telemetry.
+
+## Connect a client
+
+Add the server URL to your client. The client opens telemetry.dev in your browser the first time it calls the server.
+
+<CodeGroup>
+
+```sh Claude Code
+claude mcp add --transport http telemetry https://telemetry.dev/mcp
+```
+
+```json Cursor (~/.cursor/mcp.json)
+{
+  "mcpServers": {
+    "telemetry": { "url": "https://telemetry.dev/mcp" }
+  }
+}
+```
+
+```json VS Code (.vscode/mcp.json)
+{
+  "servers": {
+    "telemetry": { "type": "http", "url": "https://telemetry.dev/mcp" }
+  }
+}
+```
+
+</CodeGroup>
+
+In Claude on the web or desktop, and in ChatGPT, add a custom connector with the URL `https://telemetry.dev/mcp`.
+
+Then approve the connection in the browser:
+
+<Steps>
+  <Step title="Sign in">
+    Sign in to telemetry.dev, or create an account. A new account needs a verified email before it can connect; the verification link brings you back to the connection.
+  </Step>
+  <Step title="Choose an organization">
+    If you belong to more than one organization, choose the one the agent can read. A connection reads one organization. To give an agent another one, connect it again.
+  </Step>
+  <Step title="Approve">
+    Check what the agent will be able to read and select **Allow**. telemetry.dev asks every time you connect, even for an app you approved before.
+  </Step>
+</Steps>
+
+If the page says **telemetry.dev has not verified this app**, the app's name was chosen by whoever registered it. Only select **Allow** if you just started the connection yourself.
+
+## What an agent can read
+
+| Tool | What it returns |
+| --- | --- |
+| `list_projects` | The organization's projects. Every other tool needs a project from this list. |
+| `search_sessions` | Sessions, most recently active first, with trace count, errors, tokens, and cost. |
+| `search_traces` | Traces, newest first, filtered by name, status, environment, session, or end user. |
+| `get_trace` | One trace's spans with models, tools, timing, tokens, cost, and error text, plus its first logs. |
+| `get_span_payload` | The captured input, output, or error of one span, in pages. Needs the extra permission below. |
+| `list_logs` | Up to 50 of the most recent log records, filtered by level, with counts per level. |
+| `get_usage_summary` | Requests, errors, latency, tokens, cost, and active users for 7, 30, or 90 days, compared with the period before, broken down by model, provider, end user, or operation. The breakdown lists the top 6 groups by requests. |
+
+Every tool reads only within the project's retention period. Search tools return pages with a cursor for the next one, and a single result is cut at 40,000 characters.
+
+### Prompts and outputs
+
+By default an agent cannot read captured prompts, model outputs, or tool arguments. To allow it, check **Also read captured prompts, outputs, and tool arguments** when you approve. If an agent calls `get_span_payload` without that permission, the server asks the client for it, and a client that supports this opens the approval page again.
+
+Without the permission, an agent still reads error messages and log messages. Those can contain text from your users or from your prompts.
+
+What an agent reads goes to the client and its model provider. The telemetry was written by your users, models, and tools, so it can contain instructions. The server tells agents to treat it as data, but an agent can still be misled by it.
+
+## Disconnect an agent
+
+Open your user menu and select **Account**. Under **Connected apps**, select **Disconnect** next to the app, then confirm.
+
+The app loses access right away. To use it again, connect it again from the app.
+
+An agent also loses access when you leave the organization or the organization is deleted.

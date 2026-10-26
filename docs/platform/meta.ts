@@ -12,6 +12,7 @@ export default defineMeta({
     "analytics",
     "alerts",
     "privacy",
+    "mcp-server",
     "team",
     "billing",
   ],
