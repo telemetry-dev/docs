@@ -6,21 +6,25 @@ seo:
   description: "Use projects to keep telemetry, API keys, environments, and privacy settings separate. Create, set up, rename, or delete a project in telemetry.dev."
 ---
 
-A project holds the telemetry for one application, with its own API keys, privacy settings, and retention. Projects belong to an organization, which holds members, billing, and usage. Use [environments](/platform/environments) inside one project to separate production from staging.
+A project holds the telemetry for one application, with its own API keys, privacy settings, and retention. Projects belong to a workspace, which holds members, billing, and usage. Use [environments](/platform/environments) inside one project to separate production from staging.
 
-## Sign in and get an organization
+<span id="sign-in-and-get-an-organization" />
+
+## Sign in and get a workspace
 
 Sign in with an email address and a password. **Continue with GitHub** and **Continue with Google** appear when the deployment has those providers set up.
 
-After you verify your email address, telemetry.dev creates an organization named after you, such as `Ada's workspace`, and makes you its owner.
+After you verify your email address, telemetry.dev creates a workspace named after you, such as `Ada's workspace`, and makes you its owner.
 
-If an invitation for your email address is waiting, telemetry.dev does not create that organization. It opens onboarding instead. There you can **Accept** or **Decline** each invitation, or select **Create an organization**.
+If an invitation for your email address is waiting, telemetry.dev does not create that workspace. It opens onboarding instead. There you can **Accept** or **Decline** each invitation, or select **Create a workspace**.
 
-To add another organization later, open the organization switcher in the sidebar and select **New organization**. You can own up to 5 organizations.
+To add another workspace later, open the workspace switcher in the sidebar and select **New workspace**. You can own up to 5 workspaces.
+
+In the user menu, **Documentation** opens the docs in a new tab.
 
 ## Create a project
 
-Any member of the organization can create a project.
+Any member of the workspace can create a project.
 
 <Steps>
   <Step title="Open the project list">
@@ -34,7 +38,7 @@ Any member of the organization can create a project.
   </Step>
 </Steps>
 
-Each plan limits the number of projects in an organization:
+Each plan limits the number of projects in a workspace:
 
 | Plan | Projects |
 | --- | ---: |
@@ -42,7 +46,7 @@ Each plan limits the number of projects in an organization:
 | Pro | 5 |
 | Team | Unlimited |
 
-At the limit, the project list shows **Upgrade to add projects** instead of **Create project**. It opens the organization's **Billing** settings. Read [Plans and billing](/platform/billing#compare-plans).
+At the limit, the project list shows **Upgrade to add projects** instead of **Create project**. It opens the workspace's **Billing** settings. Read [Plans and billing](/platform/billing#compare-plans).
 
 ## Connect an application
 
@@ -57,14 +61,16 @@ Where a code block sets `OTEL_SERVICE_NAME`, it uses the project name in lowerca
 
 ## Rename or delete a project
 
-An organization owner or admin can rename or delete a project.
+A workspace owner or admin can rename or delete a project.
 
 Select **Settings** in the project sidebar to open the project's **General** settings. Change **Project name** and select **Save**, or select **Delete project** under **Danger zone** and confirm.
 
 Deleting a project removes the project and its API keys, so the keys stop working at once. It also deletes the project's stored telemetry. You cannot undo it.
 
-## Rename the organization
+<span id="rename-the-organization" />
 
-An organization owner or admin can rename the organization. Open the organization switcher and select **Organization settings** to open the organization's **General** settings. Change **Organization name** and select **Save**.
+## Rename the workspace
 
-Only an owner can delete the organization. **Delete organization**, under **Danger zone** on the same page, removes every project in it and all of their telemetry.
+A workspace owner or admin can rename the workspace. Open the workspace switcher and select **Workspace settings** to open the workspace's **General** settings. Change **Workspace name** and select **Save**.
+
+Only an owner can delete the workspace. **Delete workspace**, under **Danger zone** on the same page, removes every project in it and all of their telemetry.

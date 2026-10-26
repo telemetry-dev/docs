@@ -1,20 +1,20 @@
 ---
 title: Team members
-description: Invite people to an organization, set their roles, and remove or leave members.
+description: Invite people to a workspace, set their roles, and remove or leave members.
 lastModified: 2026-10-26
 ---
 
-Members of an organization can use all of its projects. To manage members, open the organization switcher in the sidebar, select **Organization settings**, and then select **Members** in the settings sidebar.
+Members of a workspace can use all of its projects. To manage members, open the workspace switcher in the sidebar, select **Workspace settings**, and then select **Members** in the settings sidebar.
 
 ## Roles
 
-An organization member has one of three roles:
+A workspace member has one of three roles:
 
 | Role | What the role can do |
 | --- | --- |
 | `member` | View telemetry, usage, settings, and the API key list. Create projects. |
-| `admin` | Everything a member can do. Also invite and manage members, create and revoke API keys, change project names, privacy settings, and retention, delete projects, rename the organization, manage alert rules, and change the plan. |
-| `owner` | Everything an admin can do. Also give the `owner` role, manage other owners, and delete the organization. |
+| `admin` | Everything a member can do. Also invite and manage members, create and revoke API keys, change project names, privacy settings, and retention, delete projects, rename the workspace, manage alert rules, and change the plan. |
+| `owner` | Everything an admin can do. Also give the `owner` role, manage other owners, and delete the workspace. |
 
 An admin can give the `member` or `admin` role, and cannot change or remove an owner. Only an owner can give the `owner` role. The member table does not let you change your own role.
 
@@ -24,7 +24,7 @@ An owner or admin can invite people.
 
 <Steps>
   <Step title="Open members">
-    Open **Organization settings**, then select **Members** in the settings sidebar.
+    Open **Workspace settings**, then select **Members** in the settings sidebar.
   </Step>
   <Step title="Start the invitation">
     Select **Invite member**.
@@ -67,10 +67,12 @@ Select a new role in the member's row. The role limits above still apply.
 
 ## Remove a member
 
-Select the delete button in the member's row, then select **Remove** to confirm. The person loses access to the organization and its projects.
+Select the delete button in the member's row, then select **Remove** to confirm. The person loses access to the workspace and its projects.
 
-## Leave an organization
+<span id="leave-an-organization" />
 
-Open **Organization settings**, which starts on the **General** page. Under **Danger zone**, select **Leave** in the **Leave organization** row, then select **Leave** again to confirm. telemetry.dev takes you to onboarding, where you can accept another invitation or create an organization.
+## Leave a workspace
+
+Open **Workspace settings**, which starts on the **General** page. Under **Danger zone**, select **Leave** in the **Leave workspace** row, then select **Leave** again to confirm. telemetry.dev takes you to onboarding, where you can accept another invitation or create a workspace.
 
 If you are the only owner, you cannot leave. Give another member the `owner` role first, or select **Transfer ownership** on the same page. Transferring makes the other member the owner and you an admin.

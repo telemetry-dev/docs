@@ -4,7 +4,7 @@ description: Compare plan limits, track ingestion units, and change or manage a 
 lastModified: 2026-10-26
 ---
 
-Each organization has one plan. The plan sets how many projects and seats the organization can have, how long projects can keep telemetry, and how many ingestion units it includes each month.
+Each workspace has one plan. The plan sets how many projects and seats the workspace can have, how long projects can keep telemetry, and how many ingestion units it includes each month.
 
 ## Compare plans
 
@@ -20,7 +20,7 @@ For current purchase terms, read [telemetry.dev/pricing](https://telemetry.dev/p
 
 One ingestion unit is one span, one log record, or one metric data point. A trace with 12 spans uses 12 units.
 
-The monthly allowance belongs to the organization and covers all of its projects. Usage resets at the start of each calendar month in UTC.
+The monthly allowance belongs to the workspace and covers all of its projects. Usage resets at the start of each calendar month in UTC.
 
 ### What happens at the Free limit
 
@@ -28,11 +28,11 @@ The Free plan stops accepting telemetry at 120% of its allowance: 36,000 units i
 
 Paid Pro and Team subscriptions count usage but do not reject telemetry above the monthly allowance. A Pro or Team plan from a gift works differently; read [Use a gift plan](#use-a-gift-plan).
 
-To get a warning before the limit, turn on the [**Quota running out** alert](https://telemetry.dev/docs/platform/alerts#quota-running-out) in the **Alerts** section of the organization's **Usage** settings.
+To get a warning before the limit, turn on the [**Quota running out** alert](https://telemetry.dev/docs/platform/alerts#quota-running-out) in the **Alerts** section of the workspace's **Usage** settings.
 
 ## Check usage
 
-Open the organization switcher, select **Organization settings**, and then select **Usage** in the settings sidebar. It shows:
+Open the workspace switcher, select **Workspace settings**, and then select **Usage** in the settings sidebar. It shows:
 
 - **Ingestion units** used this month and the plan allowance
 - Spans, logs, and metric points this period
@@ -40,15 +40,15 @@ Open the organization switcher, select **Organization settings**, and then selec
 - **Seats** used and the plan limit, counting members and unexpired pending invitations
 - The date the usage resets
 
-For one project, select **Settings** in the project sidebar, then **Usage** under the project in the settings sidebar. It shows the project's ingestion units this month against the organization's allowance, and the traces, spans, logs, and metric points that the project currently stores.
+For one project, select **Settings** in the project sidebar, then **Usage** under the project in the settings sidebar. It shows the project's ingestion units this month against the workspace's allowance, and the traces, spans, logs, and metric points that the project currently stores.
 
 ## Change your plan
 
-An organization owner or admin can upgrade the plan.
+A workspace owner or admin can upgrade the plan.
 
 <Steps>
   <Step title="Open billing">
-    Open **Organization settings**, then select **Billing** in the settings sidebar.
+    Open **Workspace settings**, then select **Billing** in the settings sidebar.
   </Step>
   <Step title="Choose a plan">
     Select **Upgrade to Pro** or **Upgrade to Team**. **Other plans** shows only plans above the plan you pay for. During a gift, the button for the gifted plan reads **Subscribe to** instead.
@@ -67,18 +67,18 @@ On a deployment without billing set up, the **Billing** page says that the plan 
 
 Select **Manage billing** on the **Billing** page to open the Polar customer portal, where you manage the subscription.
 
-Only the admin who paid for the subscription sees **Manage billing**. Other owners and admins see "Billing is managed by another admin of this organization."
+Only the admin who paid for the subscription sees **Manage billing**. Other owners and admins see "Billing is managed by another admin of this workspace."
 
-Deleting the organization also cancels its subscription. The cancellation can take a few minutes.
+Deleting the workspace also cancels its subscription. The cancellation can take a few minutes.
 
 ## Use a gift plan
 
-A gift link gives an organization the Pro or Team plan for a set time, without a card. An owner or admin with a verified email address opens the link and selects the organization. Only an organization without a paid plan or another active gift can claim one.
+A gift link gives a workspace the Pro or Team plan for a set time, without a card. An owner or admin with a verified email address opens the link and selects the workspace. Only a workspace without a paid plan or another active gift can claim one.
 
 During the gift, the **Billing** page shows the gifted plan, its end date, and how much of the gift's ingestion budget is used.
 
-- The gift has a lifetime ingestion budget, shared by the whole organization. It does not reset each month.
-- If the organization does not pay for a plan, ingestion stops when the budget runs out or when the month's usage would pass the gifted plan's monthly allowance. The ingest service returns `429 quota_exceeded`. The gift itself continues until its end date.
-- If the organization also pays for a plan, ingestion continues without using the gift budget.
+- The gift has a lifetime ingestion budget, shared by the whole workspace. It does not reset each month.
+- If the workspace does not pay for a plan, ingestion stops when the budget runs out or when the month's usage would pass the gifted plan's monthly allowance. The ingest service returns `429 quota_exceeded`. The gift itself continues until its end date.
+- If the workspace also pays for a plan, ingestion continues without using the gift budget.
 
-When the gift ends, the organization returns to the Free plan, unless it has a subscription. To keep the plan, subscribe before the end date.
+When the gift ends, the workspace returns to the Free plan, unless it has a subscription. To keep the plan, subscribe before the end date.
