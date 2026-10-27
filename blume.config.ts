@@ -21,6 +21,7 @@ export default defineConfig({
   theme: {
     accent: { light: "#000000", dark: "#e5e5e5" },
     // theme.css sets App Sans first. Geist is its fallback; without a body and display font, Blume loads Inter.
+    // The Fonts.astro change in patches/blume.patch skips the Geist preload by name.
     fonts: { body: "geist", display: "geist", mono: "geist-mono" },
     radius: "sm",
     mode: "system",

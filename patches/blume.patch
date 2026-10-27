@@ -1,17 +1,23 @@
 diff --git a/src/components/layout/Fonts.astro b/src/components/layout/Fonts.astro
-index a02a467dabf713e3934d9b11e3e9f9dc5c48a2fc..f7eaf2c56d3f2b1741e707161e5848831e4c8076 100644
+index a02a467dabf713e3934d9b11e3e9f9dc5c48a2fc..f362eb48c3d7de87ae2b5613677b0a79196ccc5f 100644
 --- a/src/components/layout/Fonts.astro
 +++ b/src/components/layout/Fonts.astro
-@@ -9,6 +9,11 @@ interface Props {
+@@ -9,6 +9,17 @@ interface Props {
  }
  
  const { cssVars } = Astro.props;
 +// Preload only the regular face of each family. Other weights and italics
 +// still load when a page uses them, but they do not compete with the first paint.
 +const preload = [{ style: "normal", weight: 400 }];
++// Geist is only the fallback for App Sans, so on telemetry.dev a Geist preload downloads a font no text uses.
++const appSansFallback = "--blume-ff-geist";
  ---
  
 -{cssVars.map((cssVar) => <Font cssVariable={cssVar} preload />)}
 +{/* theme.css loads App Sans from the app on the same origin, outside Astro's Fonts API. */}
 +<link rel="preload" href="/fonts/app-sans-regular.woff2" as="font" type="font/woff2" crossorigin />
-+{cssVars.map((cssVar) => <Font cssVariable={cssVar} preload={preload} />)}
++{
++  cssVars.map((cssVar) => (
++    <Font cssVariable={cssVar} preload={cssVar === appSansFallback ? false : preload} />
++  ))
++}
