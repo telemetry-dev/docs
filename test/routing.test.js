@@ -105,8 +105,13 @@ test("Markdown copies name their HTML page as canonical", async () => {
   }
 });
 
-test("the App Sans preload names a font file that the stylesheet uses", async () => {
+test("pages preload App Sans and Geist Mono, and the App Sans preload names a file the stylesheet uses", async () => {
   const html = await (await server.fetch("/docs")).text();
+  const fontPreloads = [...html.matchAll(/<link rel="preload" href="([^"]+)" as="font"/g)].map((match) => match[1]);
+  assert.equal(fontPreloads.length, 2);
+  const astroFont = fontPreloads.find((href) => href.startsWith("/docs/_astro/fonts/"));
+  assert.ok(astroFont);
+  assert.match(html, new RegExp(`@font-face\\{font-family:"Geist Mono-[^"]+";src:url\\("${astroFont}"\\)`));
   const preload = html.match(/<link rel="preload" href="(\/fonts\/app-sans-[^"]+)" as="font"[^>]* crossorigin>/);
   assert.ok(preload);
   const style = html.match(/<link rel="stylesheet" href="([^"]+)"/);
