@@ -35,12 +35,108 @@
   }
 }
 
+/* The dashboard's tokens, so the docs read as part of the product. App Sans is a licensed font:
+   the app at telemetry.dev serves it, and the docs live on the same origin, so this repository
+   does not copy the files. Where /fonts is not the app (local dev, preview URLs), Geist from
+   blume.config.ts takes its place. */
+@font-face {
+  font-family: "App Sans";
+  src: url("/fonts/app-sans-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "App Sans";
+  src: url("/fonts/app-sans-medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "App Sans";
+  src: url("/fonts/app-sans-bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
+  --blume-font-body: "App Sans", var(--blume-font-body-src);
+  --blume-font-display: "App Sans", var(--blume-font-display-src);
+  --blume-background: #ffffff;
+  --blume-foreground: #000000;
+  --blume-muted: #f0f0f0;
+  --blume-muted-foreground: #6c6c6c;
+  --blume-border: rgb(0 0 0 / 0.1);
+  --blume-code-background: #fafafa;
+  --td-sidebar: #fafafa;
+  --td-nav-current: #ffffff;
+  --td-nav-current-edge: var(--blume-border);
+  --td-focus-ring: rgb(0 0 0 / 0.5);
   --td-accent: oklch(0.6 0.19 145);
 }
 
 :root[data-theme="dark"] {
+  --blume-background: #000000;
+  --blume-foreground: #ffffff;
+  --blume-muted: #2b2b2b;
+  --blume-muted-foreground: #a3a3a3;
+  --blume-border: #383838;
+  --blume-code-background: #202020;
+  --td-sidebar: #202020;
+  /* Blume puts white text on every dark accent, which hides the step numbers on the light accent. */
+  --blume-accent-foreground: #000000;
+  --td-nav-current: rgb(229 229 229 / 0.2);
+  --td-nav-current-edge: transparent;
+  --td-focus-ring: rgb(255 255 255 / 0.5);
   --td-accent: oklch(0.74 0.17 145);
+}
+
+:focus-visible {
+  outline-color: var(--td-focus-ring);
+}
+
+.prose :where(h1, h2) {
+  letter-spacing: -0.01em;
+}
+
+[data-blume-nav-drawer] {
+  background: var(--td-sidebar);
+}
+
+[data-blume-nav-tree] :where(a, summary, button) {
+  border-radius: 2px;
+}
+
+[data-blume-search-open] {
+  border-radius: 3px;
+}
+
+[data-blume-nav-tree] a[aria-current="page"] {
+  background: var(--td-nav-current);
+  box-shadow: inset 0 0 0 1px var(--td-nav-current-edge);
+}
+
+/* Blume clears the background of highlighted code with !important. */
+.prose pre.astro-code {
+  background: var(--blume-code-background) !important;
+}
+
+blume-tabs:has(pre.astro-code) {
+  background: var(--blume-code-background);
+}
+
+/* The copy button is an opaque chip so code scrolls under it; keep the chip the colour of the code. */
+[data-blume-copy] {
+  --blume-background: var(--blume-code-background);
+}
+
+/* github-light-default comments are 4.36:1 on Neutral 2, below WCAG AA. Neutral 7 is 5.03:1. */
+.prose pre.astro-code span[style*="--shiki-light:#6E7781"] {
+  --shiki-light: #6c6c6c !important;
 }
 
 .td-figure {
