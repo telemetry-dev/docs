@@ -1,7 +1,7 @@
 ---
 title: Span attributes
 description: Send recognized OpenTelemetry attributes for models, tools, agents, users, and content.
-lastModified: 2026-10-18
+lastModified: 2026-10-27
 seo:
   title: "GenAI Span Attributes for LLM Tracing"
   description: "Send OpenTelemetry gen_ai span attributes for models, tools, agents, users, and content. The ingest API reads them into search fields, token totals, and cost."
@@ -213,7 +213,7 @@ An `exception` or `gen_ai.client.operation.exception` span event adds `exception
 | --- | --- |
 | User ID | `user.id`, `ai.telemetry.metadata.userId`, `ai.telemetry.metadata.user_id`, `ai.settings.context.user.id`, `ai.settings.context.userId`, `ai.settings.context.user_id`, `td.user_id`, `td.metadata.userId`, `td.metadata.user_id` |
 | Session ID | `anthropic.session.id`, `gen_ai.conversation.id`, `session.id`, `ai.telemetry.metadata.sessionId`, `ai.telemetry.metadata.session_id`, `eve.session.id`, `ai.settings.context.eve.session.id`, `ai.settings.context.sessionId`, `ai.settings.context.session_id`, `td.session_id`, `td.metadata.sessionId`, `td.metadata.session_id` |
-| Metadata | Every attribute that starts with `td.metadata.`, `ai.telemetry.metadata.`, or `ai.settings.context.`, with the prefix removed |
+| Metadata | Every attribute that starts with `td.metadata.`, `ai.telemetry.metadata.`, or `ai.settings.context.`, with the prefix removed. On OpenRouter Broadcast spans, also `trace.metadata.`; see [OpenRouter Broadcast](#openrouter-broadcast). |
 
 For user and session IDs, the ingest API checks the whole list on the span first, then on the resource. A span's `td.user_id` therefore wins over a resource's `user.id`. If redaction removes the value it finds, the span contributes no ID, and another span in the trace can still supply one.
 
@@ -367,3 +367,24 @@ Claude Code `claude_code.llm_request` spans report usage in their own keys. The 
 | `speed` | `fast` turns on [fast-mode pricing](/reference/cost#provider-specific-adjustments) |
 
 These spans get provider `anthropic` when no provider attribute is present. For setup, see [Claude Code](/integrations/claude-code).
+
+### OpenRouter Broadcast
+
+The ingest API reads these attributes only on spans from OpenRouter Broadcast. A span is from OpenRouter Broadcast when the resource `service.name` is `openrouter` and the resource or the span has `openrouter.trace.id`. For each field, the standard attributes in the tables above win.
+
+| Purpose | Attributes |
+| --- | --- |
+| Cache-read tokens | `gen_ai.usage.input_tokens.cached` |
+| Cache-creation tokens | `gen_ai.usage.input_tokens.cache_write` |
+| One-hour cache creation tokens | `gen_ai.usage.input_tokens.cache_write_1h` |
+| Reasoning tokens | `gen_ai.usage.output_tokens.reasoning` |
+| Cost | `gen_ai.usage.total_cost`, except when the last entry of `span.metadata.provider_responses` has `is_byok: true` |
+| Provider | `gen_ai.provider.name` or `gen_ai.system`, but not the value `unknown` |
+| Time to first chunk, in ms | `trace.metadata.openrouter.first_token_ms` |
+| Input | The `messages` list in `gen_ai.prompt` (parsed) |
+| Output | One assistant message from `completion`, `reasoning`, and `toolCalls` in `gen_ai.completion` (parsed). `rawRequest` is not stored. |
+| Metadata | `trace.metadata.<key>`, except `user.id`, `session.id`, `provider_responses`, and keys that start with `openrouter.`, `openrouter_`, or `error_ownership`. `trace.metadata.openrouter.api_key_name` is also metadata, as `openrouter.api_key_name`. |
+
+A span with `span.type` set to `span` is a provider attempt. It gets no operation, so it is not a model call. When the ingest API stores the input or the output, it does not store `span.input` and `span.output`, which repeat them.
+
+The ingest API answers the OpenRouter **Test Connection** request with `200` and stores nothing. This request has one span, `openrouter-connection-test`, with the trace ID `00000000000000000000000000000001`. For setup, see [OpenRouter Broadcast](/integrations/openrouter-broadcast).

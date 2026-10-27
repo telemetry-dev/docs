@@ -1,7 +1,7 @@
 ---
 title: Privacy and retention
 description: Choose what telemetry.dev stores, what it redacts, and how long it keeps telemetry.
-lastModified: 2026-10-26
+lastModified: 2026-10-27
 ---
 
 telemetry.dev stores prompts and responses by default. You can limit what it keeps in three places:
@@ -66,7 +66,7 @@ A project can have at most 100 environment rows, and each name can have at most 
 When capture is off for an environment, telemetry.dev removes these items from that environment's telemetry:
 
 - The span input and output that appear in the span's **Input** and **Output** sections and in the trace table's **Input** and **Output** columns.
-- Attributes with recognized prompt or response keys, at any depth. These include `gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions`, `gen_ai.prompt.*`, `gen_ai.completion.*`, the Vercel AI SDK `ai.prompt`, `ai.prompt.*`, `ai.response.*`, `ai.toolCall.args`, and `ai.toolCall.result` keys, `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result`, `llm.prompts`, `llm.completions`, `traceloop.entity.input`, `traceloop.entity.output`, `langchain.inputs`, `langchain.outputs`, and Anthropic tool-result content.
+- Attributes with recognized prompt or response keys, at any depth. These include `gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions`, `gen_ai.prompt.*`, `gen_ai.completion.*`, the Vercel AI SDK `ai.prompt`, `ai.prompt.*`, `ai.response.*`, `ai.toolCall.args`, and `ai.toolCall.result` keys, `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result`, `llm.prompts`, `llm.completions`, `traceloop.entity.input`, `traceloop.entity.output`, `langchain.inputs`, `langchain.outputs`, `span.input`, `span.output`, `trace.input`, `trace.output`, and Anthropic tool-result content.
 - Attributes whose whole key is one of these words: `input`, `inputs`, `prompt`, `prompts`, `messages`, `request`, `request_body`, `question`, `output`, `outputs`, `response`, `responses`, `completion`, `completions`, `answer`, or `result`.
 - The span name. telemetry.dev stores `[REDACTED]` instead, so the trace name is also `[REDACTED]` and name search cannot find it.
 - The message text and content attributes of GenAI message log events (`gen_ai.system.message`, `gen_ai.user.message`, `gen_ai.assistant.message`, `gen_ai.tool.message`, and `gen_ai.choice`).

@@ -4,7 +4,7 @@ description: Add telemetry.dev as a destination in OpenRouter Broadcast and get 
 lastModified: 2026-10-27
 seo:
   title: "OpenRouter Broadcast OpenTelemetry Traces"
-  description: "Add telemetry.dev as an OpenTelemetry Collector destination in OpenRouter Broadcast. Get the model, tokens, user, and session of each OpenRouter request with no code changes."
+  description: "Add telemetry.dev as an OpenTelemetry Collector destination in OpenRouter Broadcast. Get the model, tokens, cost, user, and session of each OpenRouter request with no code changes."
 ---
 
 OpenRouter Broadcast sends a trace of each request that you make through OpenRouter to the destinations that you add. Add telemetry.dev as an **OpenTelemetry Collector** destination, and each OpenRouter request becomes a trace in your project. You do not change your code.
@@ -16,10 +16,12 @@ Use Broadcast to get a trace of all OpenRouter requests with no code change. Use
 - A trace for each OpenRouter request, with the service name `openrouter`
 - A child span for each provider that OpenRouter tried, named `provider attempt N: <provider>`
 - The model, the provider that OpenRouter sent the request to, the response model, and the finish reason
-- Input and output token counts
-- The prompt and the completion, unless **Privacy Mode** is on for the destination
+- Input, output, cache-read, cache-write, and reasoning token counts
+- The cost that OpenRouter bills for the request (see [Cost](#cost))
+- The time to first chunk
+- The prompt messages and the response, unless **Privacy Mode** is on for the destination
 - The user and the session, when the request has `user` and `session_id`
-- A cost that telemetry.dev calculates from the token counts (see [Cost](#cost))
+- The keys of the request's `trace` object as trace metadata
 
 OpenRouter sends traces in OTLP/HTTP with JSON encoding. Broadcast sends traces only. It does not send logs or metrics.
 
@@ -59,7 +61,7 @@ Click the edit icon next to **OpenTelemetry Collector**. Set these fields:
 
   <Step title="Do a test of the connection">
 
-Click **Test Connection**. OpenRouter sends a test trace with the name `openrouter-connection-test` to telemetry.dev, and it keeps the destination only if the test is successful.
+Click **Test Connection**. OpenRouter sends a test request to telemetry.dev, and it keeps the destination only if the test is successful. telemetry.dev checks the API key and answers the test, but it does not store a trace for it.
 
   </Step>
 </Steps>
@@ -81,30 +83,38 @@ If the test is not successful, or if no trace shows, make sure that:
 - The `Authorization` value in **Headers** is `Bearer`, one space, and a key that is not revoked.
 - **Enable Broadcast** is on, and the sampling rate of the destination is more than 0.
 - The API key filter of the destination includes the OpenRouter key that sent the request.
-- No destination with a key of a different environment did a test in the same telemetry.dev project before. See [Environment](#environment).
 
 ## Fields that telemetry.dev reads
 
-OpenRouter sends the data of each request as span attributes. telemetry.dev reads these attributes:
+OpenRouter sends the data of each request as span attributes. telemetry.dev reads these attributes on the generation span:
 
 | Request data | Span attribute | In telemetry.dev |
 | --- | --- | --- |
-| Model | `gen_ai.request.model` | The span's model. telemetry.dev also uses it to find a price. |
-| Provider that OpenRouter sent the request to | `gen_ai.provider.name` or `gen_ai.system` | The span's provider, as a slug such as `openai`. On a failed request, OpenRouter sends `unknown` in `gen_ai.provider.name`, and the provider is `unknown`. |
+| Model | `gen_ai.request.model` | The span's model |
+| Provider that OpenRouter sent the request to | `gen_ai.provider.name` or `gen_ai.system` | The span's provider, as a slug such as `openai`. On a failed request, OpenRouter sends `unknown` in `gen_ai.provider.name`, and telemetry.dev uses `gen_ai.system`. |
 | Response model and finish reason | `gen_ai.response.model`, `gen_ai.response.finish_reason` | The span's response model and finish reason |
 | Input and output tokens | `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens` | The token counts of the span and of the trace |
-| Prompt and completion | `gen_ai.prompt`, `gen_ai.completion` | The span's **Input** and **Output** |
+| Cache reads | `gen_ai.usage.input_tokens.cached` | The cache-read token count |
+| Cache writes | `gen_ai.usage.input_tokens.cache_write`, `gen_ai.usage.input_tokens.cache_write_1h` | The cache-write token count, and its one-hour part |
+| Reasoning tokens | `gen_ai.usage.output_tokens.reasoning` | The reasoning token count |
+| Cost | `gen_ai.usage.total_cost` | The span's cost. See [Cost](#cost). |
+| Time to first chunk | `trace.metadata.openrouter.first_token_ms` | The span's time to first chunk |
+| Prompt | `gen_ai.prompt` | The span's **Input**, as the list of request messages |
+| Completion | `gen_ai.completion` | The span's **Output**, as one assistant message with the reasoning, the text, and the tool calls |
 | `user` | `user.id` | The trace's **User** |
 | `session_id`, or the `x-session-id` header | `session.id` | The trace's **Session** |
-| Other keys in the `trace` object | `trace.metadata.<key>` and `span.metadata.<key>` | The span's **Attributes**. They are not trace metadata. |
+| Other keys in the `trace` object | `trace.metadata.<key>` | Trace metadata, with the key `<key>` |
+| Name of the OpenRouter API key | `trace.metadata.openrouter.api_key_name` | Trace metadata, with the key `openrouter.api_key_name` |
 
-OpenRouter sends `gen_ai.prompt` as a JSON object with a `messages` list. It sends `gen_ai.completion` as a JSON object with `completion`, `reasoning`, `toolCalls`, and `rawRequest`. `rawRequest` is a copy of the full request body. telemetry.dev keeps the two values as text. It does not read them as a list of messages.
+For each field, a standard attribute wins over the OpenRouter attribute. For example, a `gen_ai.usage.cache_read.input_tokens` attribute wins over `gen_ai.usage.input_tokens.cached`.
 
-The generation span is the root span of the trace. OpenRouter gives it the name of `generation_name` in the request's `trace` object, or `LLM Generation`. telemetry.dev uses this name as the trace name. OpenRouter sends `trace_name` as the span attribute `trace.name`, and telemetry.dev does not read it.
+OpenRouter also sends the completion with `rawRequest`, a copy of the request body. telemetry.dev does not store `rawRequest`. OpenRouter sends the prompt and the completion a second time as `span.input` and `span.output`. telemetry.dev does not store these copies.
 
-Each `provider attempt` span has the provider, but no model and no tokens. telemetry.dev counts these spans as model calls (operation `llm`) with no model. A failed attempt thus counts as a failed model call in the [Model errors](/platform/alerts#model-errors) alert, also when a different provider then answered the request.
+OpenRouter adds more keys under `trace.metadata.openrouter.`, such as the provider name and the latency milestones. These keys stay span attributes. They are not trace metadata.
 
-OpenRouter sends the time to first token as `trace.metadata.openrouter.provider_time_to_first_token_ms`. telemetry.dev does not read it, so the spans have no time to first chunk.
+The generation span is the root span of the trace. OpenRouter gives it the name of `generation_name` in the request's `trace` object, or `LLM Generation`. telemetry.dev uses this name as the trace name. OpenRouter sends `trace_name` as the span attribute `trace.name`, and telemetry.dev does not use it as the trace name.
+
+Each `provider attempt` span has the provider and the status of one attempt. These spans are not model calls, so a failed attempt does not count in the [Model errors](/platform/alerts#model-errors) alert. The trace status is `error` if an attempt failed, also when a different provider then answered the request.
 
 For the full list of attributes that telemetry.dev reads, see [Span attributes](/reference/span-attributes).
 
@@ -112,48 +122,29 @@ For the full list of attributes that telemetry.dev reads, see [Span attributes](
 
 OpenRouter does not send a deployment environment. Thus telemetry.dev puts Broadcast traces in the environment of the API key. A key without an environment puts them in `default`.
 
-An `environment` key in the request's `trace` object does not change the environment. OpenRouter sends it as the span attribute `trace.metadata.environment`.
+An `environment` key in the request's `trace` object does not change the environment. It becomes the trace metadata key `environment`.
 
 To send the requests of different OpenRouter API keys to different environments:
 
-1. Make one telemetry.dev project for each environment.
-2. In each project, make a key with that **Environment**.
-3. In OpenRouter, add one OpenTelemetry Collector destination for each telemetry.dev key. You can add a maximum of 5 destinations of one type.
-4. In the API key filter of each destination, select the OpenRouter keys for that environment.
+1. Make one telemetry.dev key for each environment, with that **Environment**.
+2. In OpenRouter, add one OpenTelemetry Collector destination for each telemetry.dev key. You can add a maximum of 5 destinations of one type.
+3. In the API key filter of each destination, select the OpenRouter keys for that environment.
 
 If you use one OpenRouter workspace for each environment, add the destination on the **Observability** page of each workspace.
 
-Use a different project for each environment, because each **Test Connection** sends a trace with the same trace ID. The first test puts this trace in the environment of its key. In the same project, a test with a key of a different environment then gets `403 environment_mismatch`, and OpenRouter does not keep the destination.
-
 ## Cost
 
-telemetry.dev uses a cost from the span only if the span has a [client cost](/reference/cost#client-cost) attribute, such as `gen_ai.usage.cost`. OpenRouter sends its cost as `gen_ai.usage.total_cost`, `gen_ai.usage.input_cost`, and `gen_ai.usage.output_cost`, and telemetry.dev does not read these attributes. Thus telemetry.dev calculates the cost from the token counts and its [pricing snapshot](/reference/cost#pricing-snapshot).
+The span's cost is `gen_ai.usage.total_cost`. This is the total that OpenRouter bills for the request, with OpenRouter fees and plugin costs. If the span also has a standard [client cost](/reference/cost#client-cost) attribute, such as `gen_ai.usage.cost`, telemetry.dev uses that attribute.
 
-The provider on these spans is the provider that OpenRouter sent the request to, not `openrouter`. Thus telemetry.dev does not use the OpenRouter prices in its snapshot. It uses the provider and the OpenRouter model name, such as `openai/gpt-4o-mini`, to find the price. See [Model matching](/reference/cost#model-matching). The calculated cost can be very different from the OpenRouter cost. For example, the OpenRouter cost includes OpenRouter fees and plugin costs, and the calculation does not.
-
-telemetry.dev reads token counts only from the attributes in [Token usage](/reference/span-attributes#token-usage). OpenRouter uses different names for these counts, and telemetry.dev does not read them:
-
-| Count | OpenRouter attribute |
-| --- | --- |
-| Cache reads | `gen_ai.usage.input_tokens.cached` |
-| Cache writes | `gen_ai.usage.input_tokens.cache_write`, `gen_ai.usage.input_tokens.cache_write_5m`, `gen_ai.usage.input_tokens.cache_write_1h` |
-| Reasoning tokens | `gen_ai.usage.output_tokens.reasoning` |
-
-Thus telemetry.dev uses the uncached input rate for all input tokens, and it shows no reasoning token count.
-
-OpenRouter sends the cache-read and reasoning counts on each successful request, also when they are 0. For each of these spans, telemetry.dev records the diagnostic `unrecognized_usage_attribute`. These diagnostics count toward the [Ingestion errors](/platform/alerts#ingestion-errors) alert. With the default settings, this alert opens when a project gets 3 or more OpenRouter requests in 5 minutes.
+A request with your own provider key (BYOK) is different. The provider bills you for the inference, and `gen_ai.usage.total_cost` is only the OpenRouter fee. For these requests, telemetry.dev ignores the fee and calculates the cost from the token counts and its [pricing snapshot](/reference/cost#pricing-snapshot). This cost is an estimate, and it does not include the OpenRouter fee. telemetry.dev finds a BYOK request from the `is_byok` value of the last provider attempt in `span.metadata.provider_responses`.
 
 ## Privacy
 
-:::warning[Prompt capture does not remove all OpenRouter content]
-
-Do not use the prompt capture setting of telemetry.dev to keep OpenRouter prompts out of your project. OpenRouter also sends the prompt and the completion as the attributes `span.input` and `span.output`, and telemetry.dev keeps these attributes when capture is off. To keep prompts and completions out of telemetry.dev, set **Privacy Mode** on the destination in OpenRouter.
-
-:::
-
 **Privacy Mode** removes the input messages and the output from each trace before OpenRouter sends it. OpenRouter continues to send token counts, cost, timing, model data, model parameters, user and session IDs, and custom metadata. The model parameters include `stop`, which is text from your request.
 
-telemetry.dev applies built-in and custom [redaction](/platform/privacy#what-built-in-redaction-removes) to all span attributes. For example, built-in redaction removes custom `trace` keys such as `api_key` and `user_token`. It also removes `trace.metadata.openrouter.api_key_name`, which has the name of the OpenRouter API key.
+If you turn off [prompt capture](/platform/privacy#turn-off-prompt-and-response-capture-for-an-environment) for an environment in telemetry.dev, telemetry.dev removes the input, the output, `gen_ai.prompt`, `gen_ai.completion`, `span.input`, and `span.output`. It keeps the trace metadata, the user and session IDs, and the model parameters, such as `gen_ai.request.stop_sequences`. To keep content out of telemetry.dev before it leaves OpenRouter, use **Privacy Mode**.
+
+telemetry.dev applies built-in and custom [redaction](/platform/privacy#what-built-in-redaction-removes) to all span attributes. For example, built-in redaction removes custom `trace` keys such as `api_key` and `user_token`. The name of the OpenRouter API key also contains `api_key`, but telemetry.dev keeps it, because it is a name and not a key.
 
 ## Good to know
 
