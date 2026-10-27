@@ -111,7 +111,9 @@
   border-radius: 2px;
 }
 
-[data-blume-search-open] {
+/* The second selector matches Blume's round header icon buttons: menu, GitHub, and theme. */
+[data-blume-search-open],
+[data-blume-header] .size-9.rounded-full {
   border-radius: 3px;
 }
 
