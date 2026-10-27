@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  blume: dafcd2b276a4627900a370365164b82db8adb2bb8265ed44edd9b02ae91fd433
+  blume: 1cc8816893bcdd23e85748262e3b9ec253e1da6efd6044039a88ede098b8fcce
 
 importers:
 
@@ -13,7 +13,7 @@ importers:
     dependencies:
       blume:
         specifier: 1.3.1
-        version: 1.3.1(patch_hash=dafcd2b276a4627900a370365164b82db8adb2bb8265ed44edd9b02ae91fd433)(@astrojs/markdown-remark@7.2.2(supports-color@10.2.2))(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.2)(@shikijs/themes@4.4.2)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(@vercel/functions@3.8.0(ws@8.21.0))(csstype@3.2.3)(esbuild@0.28.1)(prettier@3.9.6)(supports-color@10.2.2)(vite@8.2.0(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(ws@8.21.0)(yaml@2.9.0)
+        version: 1.3.1(patch_hash=1cc8816893bcdd23e85748262e3b9ec253e1da6efd6044039a88ede098b8fcce)(@astrojs/markdown-remark@7.2.2(supports-color@10.2.2))(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.2)(@shikijs/themes@4.4.2)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(@vercel/functions@3.8.0(ws@8.21.0))(csstype@3.2.3)(esbuild@0.28.1)(prettier@3.9.6)(supports-color@10.2.2)(vite@8.2.0(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(ws@8.21.0)(yaml@2.9.0)
     devDependencies:
       wrangler:
         specifier: 4.129.0
@@ -6111,7 +6111,7 @@ snapshots:
 
   blake3-wasm@2.1.5: {}
 
-  blume@1.3.1(patch_hash=dafcd2b276a4627900a370365164b82db8adb2bb8265ed44edd9b02ae91fd433)(@astrojs/markdown-remark@7.2.2(supports-color@10.2.2))(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.2)(@shikijs/themes@4.4.2)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(@vercel/functions@3.8.0(ws@8.21.0))(csstype@3.2.3)(esbuild@0.28.1)(prettier@3.9.6)(supports-color@10.2.2)(vite@8.2.0(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(ws@8.21.0)(yaml@2.9.0):
+  blume@1.3.1(patch_hash=1cc8816893bcdd23e85748262e3b9ec253e1da6efd6044039a88ede098b8fcce)(@astrojs/markdown-remark@7.2.2(supports-color@10.2.2))(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.2)(@shikijs/themes@4.4.2)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(@vercel/functions@3.8.0(ws@8.21.0))(csstype@3.2.3)(esbuild@0.28.1)(prettier@3.9.6)(supports-color@10.2.2)(vite@8.2.0(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(ws@8.21.0)(yaml@2.9.0):
     dependencies:
       '@astrojs/check': 0.9.10(prettier@3.9.6)(typescript@6.0.3)
       '@astrojs/markdown-satteri': 0.3.5

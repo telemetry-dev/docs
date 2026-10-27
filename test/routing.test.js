@@ -105,6 +105,16 @@ test("Markdown copies name their HTML page as canonical", async () => {
   }
 });
 
+test("the App Sans preload names a font file that the stylesheet uses", async () => {
+  const html = await (await server.fetch("/docs")).text();
+  const preload = html.match(/<link rel="preload" href="(\/fonts\/app-sans-[^"]+)" as="font"[^>]* crossorigin>/);
+  assert.ok(preload);
+  const style = html.match(/<link rel="stylesheet" href="([^"]+)"/);
+  assert.ok(style);
+  const css = await (await server.fetch(style[1])).text();
+  assert.ok(css.includes(`url(${preload[1]})`));
+});
+
 test("docs pages and their assets load under the mount path", async () => {
   const response = await server.fetch("/docs");
   assert.equal(response.status, 200);
