@@ -10,6 +10,7 @@ export default defineMeta({
     "google-genai",
     "bedrock",
     "openrouter",
+    "openrouter-broadcast",
     "litellm",
   ],
 });

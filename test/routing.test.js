@@ -27,6 +27,7 @@ const integrationMarks = {
   "/docs/integrations/openclaw": "/docs/integrations/openclaw.svg",
   "/docs/integrations/opencode": "/docs/integrations/opencode.svg",
   "/docs/integrations/openrouter": "/docs/integrations/openrouter.svg",
+  "/docs/integrations/openrouter-broadcast": "/docs/integrations/openrouter.svg",
   "/docs/integrations/pi": "/docs/integrations/pi.svg",
   "/docs/integrations/pydantic-ai": "/docs/integrations/pydantic-ai.svg",
   "/docs/integrations/tanstack-ai": "/docs/integrations/tanstack-ai.svg",

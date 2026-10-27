@@ -1,7 +1,7 @@
 ---
 title: OpenRouter
 description: Trace OpenRouter chat, Responses API, embeddings, streams, usage, and cost from TypeScript or Python.
-lastModified: 2026-10-26
+lastModified: 2026-10-27
 seo:
   title: "OpenRouter Tracing, Usage, and Cost"
   description: "Trace OpenRouter chat, Responses API, embedding, and stream calls from TypeScript or Python. Record token usage and the cost that OpenRouter reports."
@@ -10,6 +10,8 @@ seo:
 Wrap your client from the official OpenRouter SDK, and each chat, Responses API, and embedding call you make with it becomes a span in telemetry.dev. Your calls and their return values don't change.
 
 If you call OpenRouter through the OpenAI SDK instead, use the [OpenAI integration](/integrations/openai). It records those calls with the provider `openrouter`.
+
+To get a trace of all OpenRouter requests with no code change, use [OpenRouter Broadcast](/integrations/openrouter-broadcast). Use this wrapper when you want each OpenRouter call to be a child of a span from your application. If you use the two in one project, telemetry.dev counts the tokens and cost of each request two times.
 
 ## What you get
 
