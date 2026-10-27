@@ -1,7 +1,7 @@
 ---
 title: Claude Platform
 description: Send OpenTelemetry traces of Messages API requests and Managed Agents sessions from the Claude Console to telemetry.dev.
-lastModified: 2026-10-26
+lastModified: 2026-10-27
 seo:
   title: "Claude Platform OpenTelemetry Traces"
   description: "Add telemetry.dev as an OpenTelemetry destination in the Claude Console. Trace Messages API requests and Managed Agents sessions with no code changes."
@@ -84,7 +84,7 @@ If the destination uses an environment-scoped API key, its API spans take over o
 
 ## Size limit
 
-telemetry.dev rejects an OTLP request larger than 4 MiB as sent, or 16 MiB after gzip decompression, with a `413` response. The Claude API retries a delivery only after a timeout, a connection failure, or a `408`, `429`, or `5xx` response, so it doesn't send the rejected spans again.
+telemetry.dev rejects an OTLP request larger than 16 MiB, as sent or after gzip decompression, with a `413` response. The Claude API retries a delivery only after a timeout, a connection failure, or a `408`, `429`, or `5xx` response, so it doesn't send the rejected spans again.
 
 With **Full content**, keep **Maximum content size in MB** at 0.75 or lower. That is Anthropic's default content limit for each span. If you leave the field empty, the API sends as much content as it allows, and a large delivery can go over telemetry.dev's limit.
 
