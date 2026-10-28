@@ -1,7 +1,7 @@
 ---
 title: Environments
 description: Label telemetry by deployment, then filter by it, limit API keys to it, and set capture for it.
-lastModified: 2026-10-26
+lastModified: 2026-10-28
 ---
 
 An environment names the deployment that sent telemetry, such as `production`, `staging`, or `development`. Use environments to keep one project's deployments apart: you can filter by environment, limit an API key to one environment, and turn off prompt and response capture for one environment.
@@ -18,7 +18,7 @@ The telemetry.dev SDKs set this attribute from the `environment` option or the `
 
 If `deployment.environment.name` is absent, telemetry.dev reads the older `deployment.environment` attribute. If both are absent, the telemetry gets the environment of its API key when the key is [limited to one environment](#limit-an-api-key-to-one-environment), and the environment `default` otherwise. This lets senders that cannot set resource attributes, such as the Claude API, still report an environment.
 
-Set the same environment name on every service in a deployment. The dashboard shows names as sent, so `Production` and `production` appear as two filter values. API key limits and capture settings treat them as one environment.
+Set the same environment name on every service in a deployment. The dashboard shows names as sent, so `Production` and `production` appear as two filter values. Selecting either one in the **Traces** filter shows the telemetry of both. API key limits, capture settings, and alerts also treat them as one environment.
 
 ## Use environments in the dashboard
 

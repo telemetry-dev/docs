@@ -1,7 +1,7 @@
 ---
 title: Alerts
 description: Get an email when model cost, traces, model or tool failures, ingestion errors, or quota usage need attention.
-lastModified: 2026-10-27
+lastModified: 2026-10-28
 ---
 
 Alerts check your telemetry every 5 minutes and email you when something needs attention: model cost heading over budget, a trace that might be an agent loop, a burst of failed model or tool calls, or ingestion that is failing or running out of quota.
@@ -17,7 +17,7 @@ Workspace owners and admins can create and change alerts. Other members can see 
 
 The **Rules** tab lists every kind of project alert, and the workspace's **Alerts** section lists the workspace alerts. Each row says in one sentence when the alert opens.
 
-To turn an alert on, select its switch. It starts with the defaults listed below and checks within 5 minutes. **Monthly budget** has no default budget, so its switch opens the settings instead; enter a budget and select **Turn on**. A project with no alerts also shows **Turn on 6 alerts**, which turns on six recommended alerts with their default limits. Existing projects can turn on **Tool errors** separately; adding the rule does not change their other alerts.
+To turn an alert on, select its switch. It starts with the defaults listed below and checks within 5 minutes. **Monthly budget** has no default budget, so its switch opens the settings instead; enter a budget and select **Turn on**. A project with no alerts also shows **Turn on 6 alerts**, which turns on six recommended alerts with their default limits. A project that already has other alerts and a destination, but no **Tool errors** alert, shows owners and admins **New: Tool errors**; select **Turn on Tool errors** to add it with its defaults and the project's email recipients. Adding it does not change the other alerts. Turning **Tool errors** off removes the prompt.
 
 To change an alert's settings, select its row on the **Rules** tab, or its name in the workspace's **Alerts** section. Edit the fields under **Alert when** and select **Save changes**. **Current data** runs the alert against your current telemetry and says whether it would alert now (**Would alert now**, **All clear now**, or **Needs more data**), with the measurement an email would report. It sends no email.
 
@@ -82,6 +82,8 @@ Opens when calls to one provider and model fail with the same error type often e
 
 A provider and model without enough history to have a usual rate, such as a model you just started using, opens when it has at least **Minimum calls** calls, at least 10 failures, and half or more of its calls fail.
 
+**Investigate** opens the failed spans of the last 7 days for that provider, model, and operation in the project's traces page. A provider or model that was not recorded is left out of the filter.
+
 ### Tool errors
 
 **Settings:** **Environments**, separated by commas (default `production`), and **Minimum calls** (default 50).
@@ -92,7 +94,13 @@ The rule needs at least **Minimum calls** calls to the tool. It opens when at le
 
 Without at least 7 comparable hours of history, the rule opens only when at least half of the tool's calls fail with the same error type, still subject to the call and failure minimums. A single failed tool call does not trigger it.
 
-The email names the tool and error type, reports failed calls and affected traces, and suggests checking inputs, permissions, and dependencies. **Investigate** opens failed tool spans in the project's traces page.
+The email names the tool and error type and reports failed calls and affected traces. Its likely cause compares with the tool's earlier calls in the watched environments over the last 30 days:
+
+- When the tool has no earlier calls, the tool may be new, so the email suggests checking its first failed calls for input or configuration errors.
+- When the tool has earlier calls but none failed with this error type, the error is new for the tool, which usually points to a recent deploy or a change in the tool's input, permissions, or a service it calls.
+- When the tool failed this way before, the email says how often and suggests checking whether a service the tool calls is degraded or rate limited.
+
+Reminders repeat the likely cause of the opening email. **Investigate** opens that tool's failed spans of the last 7 days in the project's traces page.
 
 ### Ingestion errors
 
@@ -163,7 +171,7 @@ Each email has these sections:
 - **Why it matters**: what the problem means for your application or bill.
 - **Likely cause**: the model, provider, agent, or error that contributed most, when telemetry.dev can tell.
 
-The **Investigate** button opens the page to start from: the project overview, the trace itself for a runaway trace, failed tool spans for tool errors, the project's **Setup** page for ingestion errors, or the workspace's **Usage** or **Billing** settings for quota.
+The **Investigate** button opens the page to start from: the project overview, the trace itself for a runaway trace, the failed spans of the model or tool for model and tool errors, the project's **Setup** page for ingestion errors, or the workspace's **Usage** or **Billing** settings for quota. When the rule watches one environment, the spans are filtered to it. A name longer than 128 characters is left out of the filter.
 
 ## Alert history
 

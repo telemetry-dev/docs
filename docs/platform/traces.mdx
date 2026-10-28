@@ -1,7 +1,7 @@
 ---
 title: Traces, sessions, and logs
 description: Find a request, inspect its spans, follow a conversation, and read related logs.
-lastModified: 2026-10-26
+lastModified: 2026-10-28
 ---
 
 A trace is one request through your application. Each step inside it, such as a model call, a tool call, or an agent step, is a span. Use the trace explorer to find failed or slow requests and to see what each model call received and returned.
@@ -16,13 +16,13 @@ Both lists have these filters:
 | --- | --- |
 | Search | Matches trace names or span names. It does not search prompt or response content. |
 | Status | Shows **All statuses**, `success`, or `error`. |
-| Environment | Lists up to 100 environment names from your telemetry. |
+| Environment | Lists up to 100 environment names from your telemetry. Names match regardless of case and surrounding spaces, so `production` also shows telemetry sent as `Production`. |
 | Framework | Lists the frameworks detected in your telemetry. |
 | Date range | Shows **Last 7 days**, **Last 30 days**, or **Last 90 days**. The default is 30 days. |
 | Session | Select a value in the **Session** column. A chip shows the filter; select it to clear the filter. |
 | User | In the trace list, select a value in the **User** column. A chip shows the filter; select it to clear the filter. |
 
-A row of the **Breakdown** table on the [Overview](/platform/analytics#break-traces-down-by-a-dimension) can also open the span list filtered by **Model**, **Provider**, or **Operation**, with a chip for that filter.
+A row of the **Breakdown** table on the [Overview](/platform/analytics#break-traces-down-by-a-dimension) can also open the span list filtered by **Model**, **Provider**, or **Operation**, with a chip for that filter. The **Investigate** button of a [Tool errors](/platform/alerts#tool-errors) alert opens it filtered by **Tool**, which matches tool calls by tool name, or by span name when a span has no tool name.
 
 The filters are part of the page URL, so you can bookmark or share a filtered view.
 
@@ -75,7 +75,7 @@ Select a span to open its panel. The panel header shows the span's type and name
 - **Error**: the error message and details, for a failed span.
 - **Metrics**: when the span started, its duration, and its offset from the start of the trace. Model calls also show **First token**, **Output speed**, **Cost**, and their tokens.
 - A section for the kind of span, such as **Model call** with the **Requested model**, **Response model**, **Provider**, **Finish reason**, and **Response ID**, or **Tool call**, **Agent**, or **MCP**.
-- **Input** and **Output**: the prompt and the reply. A tool call shows **Arguments** and **Result** instead. Where a section offers them, select **Pretty** for a formatted view or **JSON** for the stored value.
+- **Input** and **Output**: the prompt and the reply. In **Output**, a model's reasoning, such as Anthropic thinking or Gemini thoughts, appears as **Reasoning** above the reply when it was captured. A tool call shows **Arguments** and **Result** instead. Where a section offers them, select **Pretty** for a formatted view or **JSON** for the stored value.
 - **Events**: the span events and their attributes.
 - **Attributes**: the span attributes.
 
