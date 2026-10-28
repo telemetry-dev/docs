@@ -1,14 +1,14 @@
 ---
 title: Alerts
-description: Get an email when model cost, traces, model failures, ingestion errors, or quota usage need attention.
-lastModified: 2026-10-26
+description: Get an email when model cost, traces, model or tool failures, ingestion errors, or quota usage need attention.
+lastModified: 2026-10-27
 ---
 
-Alerts check your telemetry every 5 minutes and email you when something needs attention: model cost heading over budget, a trace that might be an agent loop, a burst of failed model calls, or ingestion that is failing or running out of quota.
+Alerts check your telemetry every 5 minutes and email you when something needs attention: model cost heading over budget, a trace that might be an agent loop, a burst of failed model or tool calls, or ingestion that is failing or running out of quota.
 
 There are two places to set them up:
 
-- **Project alerts** cover cost, traces, model calls, and ingestion errors for one project. Select **Alerts** in the project sidebar. The page has three tabs: **Rules**, **History**, and **Destinations**.
+- **Project alerts** cover cost, traces, model and tool calls, and ingestion errors for one project. Select **Alerts** in the project sidebar. The page has three tabs: **Rules**, **History**, and **Destinations**.
 - **Workspace alerts** cover quota and the mix of data the whole workspace sends. Open **Workspace settings**, select **Usage** in the settings sidebar, and go to the **Alerts** section.
 
 Workspace owners and admins can create and change alerts. Other members can see the alerts but cannot change them. Alerts are available on every plan.
@@ -17,7 +17,7 @@ Workspace owners and admins can create and change alerts. Other members can see 
 
 The **Rules** tab lists every kind of project alert, and the workspace's **Alerts** section lists the workspace alerts. Each row says in one sentence when the alert opens.
 
-To turn an alert on, select its switch. It starts with the defaults listed below and checks within 5 minutes. **Monthly budget** has no default budget, so its switch opens the settings instead; enter a budget and select **Turn on**. A project with no alerts also shows **Turn on 5 alerts**, which turns on five recommended alerts with their default limits.
+To turn an alert on, select its switch. It starts with the defaults listed below and checks within 5 minutes. **Monthly budget** has no default budget, so its switch opens the settings instead; enter a budget and select **Turn on**. A project with no alerts also shows **Turn on 6 alerts**, which turns on six recommended alerts with their default limits. Existing projects can turn on **Tool errors** separately; adding the rule does not change their other alerts.
 
 To change an alert's settings, select its row on the **Rules** tab, or its name in the workspace's **Alerts** section. Edit the fields under **Alert when** and select **Save changes**. **Current data** runs the alert against your current telemetry and says whether it would alert now (**Would alert now**, **All clear now**, or **Needs more data**), with the measurement an email would report. It sends no email.
 
@@ -82,6 +82,18 @@ Opens when calls to one provider and model fail with the same error type often e
 
 A provider and model without enough history to have a usual rate, such as a model you just started using, opens when it has at least **Minimum calls** calls, at least 10 failures, and half or more of its calls fail.
 
+### Tool errors
+
+**Settings:** **Environments**, separated by commas (default `production`), and **Minimum calls** (default 50).
+
+Watches `execute_tool` spans, grouped by tool name and error type. It counts failed tool calls even when the model calls or the overall trace succeed. If a span has no tool name, the rule uses its span name.
+
+The rule needs at least **Minimum calls** calls to the tool. It opens when at least 10 fail with the same error type, the failure rate is above 5%, and that rate is at least 3 times its usual level. It uses the last completed hour, or the last 6 completed hours when the hour has too few calls. The comparison uses hourly samples from the preceding 30 days, excluding the hours being evaluated.
+
+Without at least 7 comparable hours of history, the rule opens only when at least half of the tool's calls fail with the same error type, still subject to the call and failure minimums. A single failed tool call does not trigger it.
+
+The email names the tool and error type, reports failed calls and affected traces, and suggests checking inputs, permissions, and dependencies. **Investigate** opens failed tool spans in the project's traces page.
+
 ### Ingestion errors
 
 **Settings:** **Minimum occurrences** (default 3, at most 100).
@@ -130,11 +142,11 @@ Each check reports every rule as breached, healthy, or still needing more data.
 - **Resolving.** An alert resolves after three healthy checks in a row, about 15 minutes. Recipients get a resolved email if they got the opening email.
 - **Quiet period.** For 30 minutes after an alert resolves, the same thing opening again still appears on the page, but its opening email is held. It goes out on the first check after the 30 minutes if the alert is still breached. An alert that resolves before then sends no email. The quiet period applies only to the thing that resolved: a different environment, model, or trace opening in that time is emailed as usual. Immediate opens are not held.
 
-A rule can have several alerts open at once, one for each thing it watches: each environment for a budget, each provider and model for failures, each diagnostic code and API key environment for ingestion errors.
+A rule can have several alerts open at once, one for each thing it watches: each environment for a budget, each provider and model for model failures, each tool and error type for tool failures, each diagnostic code and API key environment for ingestion errors.
 
 ### Needs more data
 
-Rules that compare with your usual traffic need history before they can decide. **Cost per trace jump** and **Model errors** need at least 7 comparable hours from the last 30 days, and **Data mix shift** needs 7 samples of the same hour of the day. **Missing prices** needs at least **Minimum calls** calls in the last 6 hours, and **Monthly budget** needs the first 24 hours of the month. Until then the rule shows **Needs more data** and does not open or resolve alerts, except that **Model errors** still opens for a model without history when half or more of its calls fail.
+Rules that compare with your usual traffic need history before they can decide. **Cost per trace jump**, **Model errors**, and **Tool errors** need at least 7 comparable hours from the last 30 days, and **Data mix shift** needs 7 samples of the same hour of the day. **Missing prices** needs at least **Minimum calls** calls in the last 6 hours, and **Monthly budget** needs the first 24 hours of the month. Until then the rule shows **Needs more data**, except that **Model errors** and **Tool errors** can open without history when half or more of the calls fail, subject to their count minimums. An existing model or tool failure alert can recover when fewer than 10 calls fail, including when traffic stops.
 
 A rule with nothing to judge is **All clear**, not **Needs more data**. For example, **Model errors** is all clear when no calls are failing at all.
 
@@ -151,7 +163,7 @@ Each email has these sections:
 - **Why it matters**: what the problem means for your application or bill.
 - **Likely cause**: the model, provider, agent, or error that contributed most, when telemetry.dev can tell.
 
-The **Investigate** button opens the page to start from: the project overview, the trace itself for a runaway trace, the project's **Setup** page for ingestion errors, or the workspace's **Usage** or **Billing** settings for quota.
+The **Investigate** button opens the page to start from: the project overview, the trace itself for a runaway trace, failed tool spans for tool errors, the project's **Setup** page for ingestion errors, or the workspace's **Usage** or **Billing** settings for quota.
 
 ## Alert history
 

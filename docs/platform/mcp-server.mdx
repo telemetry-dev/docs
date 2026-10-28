@@ -1,7 +1,7 @@
 ---
 title: Connect an AI agent
 description: Let Claude, ChatGPT, Cursor, VS Code, or another MCP client read traces, logs, and usage from one workspace.
-lastModified: 2026-10-26
+lastModified: 2026-10-27
 ---
 
 telemetry.dev runs an MCP server at `https://telemetry.dev/mcp`. An AI agent connected to it can find traces, read a trace's spans and errors, list logs, and summarize token usage and cost, so you can ask questions such as "why did the last checkout run fail?" in your editor or chat app.
@@ -70,7 +70,11 @@ Every tool reads only within the project's retention period. Search tools return
 
 ### Prompts and outputs
 
-By default an agent cannot read captured prompts, model outputs, or tool arguments. To allow it, check **Also read captured prompts, outputs, and tool arguments** when you approve. If an agent calls `get_span_payload` without that permission, the server asks the client for it, and a client that supports this opens the approval page again.
+By default an agent cannot read captured prompts, model outputs, or tool arguments. To allow it, check **Also read captured prompts, outputs, and tool arguments** when you approve. A previous grant can leave this checked; you can uncheck it before approving.
+
+If an agent calls `get_span_payload` without that permission, the tool returns an error explaining how to grant it. The server does not send an OAuth reapproval challenge, and the other tools remain available. The agent can continue investigating span status, timing, and error text without reading captured payloads.
+
+If you need payload access later, reconnect telemetry.dev from your client, check **Also read captured prompts, outputs, and tool arguments**, and select **Allow**. Reconnecting may interrupt access until you approve, so do it when you are ready.
 
 Without the permission, an agent still reads error messages and log messages. Those can contain text from your users or from your prompts.
 
