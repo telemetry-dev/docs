@@ -40,7 +40,7 @@ The key list shows each key's **Name**, the first 16 characters of the **Key**, 
 | Access | What the key can do | Necessary for |
 | --- | --- | --- |
 | **Send telemetry** | Send traces, logs, and metrics to the ingest service. The API name of this scope is `telemetry:write`. | Telemetry from the telemetry.dev SDKs and integrations, and from an OTLP/HTTP exporter. |
-| **Read prompts** | Get the prompts of the project from the API service. The API name of this scope is `prompts:read`. | An app that gets prompts from telemetry.dev. |
+| **Read prompts** | Get the prompts of the project from the ingest service. The API name of this scope is `prompts:read`. | An app that gets prompts from telemetry.dev. |
 
 If your app sends telemetry and gets prompts with the same key, the key must have the two access choices.
 
@@ -51,7 +51,7 @@ Keys that were made before the **Access** choices were available have the two ch
 If a key does not have the access for a request, the request gets `403 insufficient_scope`:
 
 - Without **Send telemetry**, the ingest service rejects the request. telemetry.dev stores no data from the request and records the rejection on the project with the diagnostic code `insufficient_scope`.
-- Without **Read prompts**, the API service rejects a request for a prompt. The JSON body has the error code `insufficient_scope`.
+- Without **Read prompts**, the ingest service rejects a request for a prompt. The JSON body has the error code `insufficient_scope`.
 
 To correct the error, make a key with the necessary access. Put the new key in your app, then revoke the old key.
 
