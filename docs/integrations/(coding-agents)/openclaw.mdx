@@ -1,7 +1,7 @@
 ---
 title: OpenClaw
 description: Export OpenClaw agent runs, model calls, tools, token usage, cost, metrics, and logs to telemetry.dev over OTLP.
-lastModified: 2026-10-26
+lastModified: 2026-10-29
 seo:
   title: "OpenClaw Telemetry with OpenTelemetry"
   description: "Send OpenClaw telemetry to telemetry.dev with the official diagnostics-otel plugin. Export agent runs, model calls, tools, token usage, cost, metrics, and logs."
@@ -42,7 +42,7 @@ Add the plugin and exporter settings to `~/.openclaw/openclaw.json`:
     enabled: true,
     otel: {
       enabled: true,
-      endpoint: "https://ingest.telemetry.dev",
+      endpoint: "https://api.telemetry.dev",
       protocol: "http/protobuf",
       serviceName: "openclaw-gateway",
       headers: { Authorization: "Bearer td_live_..." },

@@ -1,7 +1,7 @@
 ---
 title: Claude SDK OpenTelemetry
 description: Send the native OpenTelemetry spans of the Claude SDK to telemetry.dev from TypeScript or Python.
-lastModified: 2026-10-26
+lastModified: 2026-10-29
 seo:
   title: "Claude SDK OpenTelemetry Tracing"
   description: "Send the native OpenTelemetry spans of the Claude SDK to telemetry.dev. Trace Messages API requests, tool runner tools, token usage, cache writes, and cost."
@@ -124,7 +124,7 @@ A telemetry.dev package is not necessary. You can add a standard OTLP/HTTP expor
 
 | Setting | Value |
 | --- | --- |
-| Traces endpoint | `https://ingest.telemetry.dev/v1/traces` |
+| Traces endpoint | `https://api.telemetry.dev/v1/traces` |
 | Request header | `Authorization: Bearer td_live_...` |
 | Encoding | OTLP protobuf or OTLP JSON |
 

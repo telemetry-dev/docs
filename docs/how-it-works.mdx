@@ -2,7 +2,7 @@
 title: How it works
 description: How telemetry.dev turns OpenTelemetry spans into traces, costs, and dashboard views.
 sidebar: { label: "How it works", order: 2 }
-lastModified: 2026-10-26
+lastModified: 2026-10-29
 ---
 
 Your application records spans with an SDK or any OpenTelemetry exporter and sends them over OTLP/HTTP. The ingest service checks the API key, reads model, token, and content fields from each span, calculates cost, removes content your privacy settings exclude, and stores the result for the dashboard.
@@ -53,7 +53,7 @@ A key can accept every environment or only one. A key scoped to one environment 
   caption="Each OTLP request goes through these steps in order. A request that fails a check is rejected with an error response before anything from it is stored."
 />
 
-The ingest service accepts OTLP traces, logs, and metrics as protobuf or JSON at `https://ingest.telemetry.dev/v1/traces`, `/v1/logs`, and `/v1/metrics`. The [OTLP ingest reference](/reference/otlp) covers headers, limits, and every error response.
+The ingest service accepts OTLP traces, logs, and metrics as protobuf or JSON at `https://api.telemetry.dev/v1/traces`, `/v1/logs`, and `/v1/metrics`. The [OTLP ingest reference](/reference/otlp) covers headers, limits, and every error response.
 
 While it normalizes a span, the service:
 

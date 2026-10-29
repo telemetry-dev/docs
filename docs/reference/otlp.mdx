@@ -1,13 +1,15 @@
 ---
 title: OTLP ingest API
 description: Send OTLP/HTTP traces, logs, and metrics to telemetry.dev.
-lastModified: 2026-10-27
+lastModified: 2026-10-29
 seo:
   title: "OTLP/HTTP Ingest API (Protobuf and JSON)"
   description: "Send OpenTelemetry traces, logs, and metrics to telemetry.dev over OTLP/HTTP with protobuf or JSON. This page gives endpoints, authentication, limits, and error responses."
 ---
 
-The ingest API accepts OTLP/HTTP at `https://ingest.telemetry.dev`. Send traces to `/v1/traces`, logs to `/v1/logs`, and metrics to `/v1/metrics`, as protobuf or OTLP JSON, with your API key as a bearer token.
+The ingest API accepts OTLP/HTTP at `https://api.telemetry.dev`. Send traces to `/v1/traces`, logs to `/v1/logs`, and metrics to `/v1/metrics`, as protobuf or OTLP JSON, with your API key as a bearer token.
+
+`https://ingest.telemetry.dev` is the earlier name of the same host and stays supported, so existing setups keep working. The SDKs and plugins still use it as their default base URL.
 
 ## Send a span with curl
 
@@ -62,7 +64,7 @@ EOF
 Then post it:
 
 ```sh
-curl "https://ingest.telemetry.dev/v1/traces" \
+curl "https://api.telemetry.dev/v1/traces" \
   --request POST \
   --header "Authorization: Bearer ${TELEMETRY_DEV_API_KEY}" \
   --header "Content-Type: application/json" \

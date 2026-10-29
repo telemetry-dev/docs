@@ -1,7 +1,7 @@
 ---
 title: Hermes Agent
 description: Export Hermes Agent turns, LLM calls, tool executions, sub-agents, and token metrics through the community hermes-otel plugin.
-lastModified: 2026-10-18
+lastModified: 2026-10-29
 seo:
   title: "Hermes Agent Telemetry with OpenTelemetry"
   description: "Export Hermes Agent traces with the hermes-otel plugin. Record the LLM calls, tool executions, and sub-agents of each turn, with token usage and GenAI metrics."
@@ -52,7 +52,7 @@ content_capture: "off"
 backends:
   - type: otlp
     name: telemetry-dev
-    endpoint: https://ingest.telemetry.dev/v1/traces
+    endpoint: https://api.telemetry.dev/v1/traces
     headers:
       Authorization: Bearer ${TELEMETRY_DEV_API_KEY}
 ```
@@ -85,7 +85,7 @@ A profile without the plugin or without this file sends nothing to telemetry.dev
 
 ## Check that data arrives
 
-When Hermes starts, hermes-otel prints a startup banner with one `[hermes-otel] ✓` line per backend. Look for the line with `https://ingest.telemetry.dev/v1/traces`, and for the `content_capture=off` notice.
+When Hermes starts, hermes-otel prints a startup banner with one `[hermes-otel] ✓` line per backend. Look for the line with `https://api.telemetry.dev/v1/traces`, and for the `content_capture=off` notice.
 
 Send a message, then open the [trace explorer](/platform/traces). Each turn is its own trace, and turns from one session share the `session.id` and `gen_ai.conversation.id` attributes. When a turn ends, the plugin flushes its spans in the background and waits up to 1.5 seconds (`force_flush_wait_ms`) before handing control back to Hermes.
 
