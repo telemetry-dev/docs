@@ -1,7 +1,7 @@
 ---
 title: Pydantic AI
 description: Send Pydantic AI agent and model spans through native OpenTelemetry instrumentation.
-lastModified: 2026-10-18
+lastModified: 2026-10-29
 seo:
   title: "Pydantic AI Tracing with OpenTelemetry"
   description: "Send Pydantic AI agent and model spans to telemetry.dev with native OpenTelemetry instrumentation. Monitor token usage, latency, and cost for each agent run."
@@ -26,13 +26,13 @@ Get a project API key from telemetry.dev. Then configure the exporter:
 ```sh
 export TELEMETRY_DEV_API_KEY="td_live_..."
 export OPENAI_API_KEY="your-openai-api-key"
-export OTEL_EXPORTER_OTLP_ENDPOINT="https://ingest.telemetry.dev"
+export OTEL_EXPORTER_OTLP_ENDPOINT="https://api.telemetry.dev"
 export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer%20$TELEMETRY_DEV_API_KEY"
 export OTEL_SERVICE_NAME="your-service-name"
 export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
 ```
 
-The OTLP exporter reads these variables and sends traces to `https://ingest.telemetry.dev/v1/traces`.
+The OTLP exporter reads these variables and sends traces to `https://api.telemetry.dev/v1/traces`.
 
 ## Trace an agent
 

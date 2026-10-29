@@ -1,7 +1,7 @@
 ---
 title: CrewAI
 description: Trace CrewAI agent and model spans with OpenLIT and standard OTLP/HTTP.
-lastModified: 2026-10-18
+lastModified: 2026-10-29
 seo:
   title: "CrewAI Tracing with OpenTelemetry"
   description: "Trace CrewAI agents and LLM calls with OpenLIT and OTLP/HTTP. Monitor the model, token usage, latency, and cost of each crew run, with no change to your agents."
@@ -27,13 +27,13 @@ Get a project API key from telemetry.dev. Then configure the OpenTelemetry expor
 
 ```sh
 export TELEMETRY_DEV_API_KEY="td_live_..."
-export OTEL_EXPORTER_OTLP_ENDPOINT="https://ingest.telemetry.dev"
+export OTEL_EXPORTER_OTLP_ENDPOINT="https://api.telemetry.dev"
 export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer%20$TELEMETRY_DEV_API_KEY"
 export OTEL_SERVICE_NAME="your-crewai-service"
 export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
 ```
 
-OpenLIT sends traces to `https://ingest.telemetry.dev/v1/traces`, plus logs and metrics to `/v1/logs` and `/v1/metrics`. Without `OTEL_EXPORTER_OTLP_ENDPOINT`, OpenLIT prints spans to the console instead of sending them.
+OpenLIT sends traces to `https://api.telemetry.dev/v1/traces`, plus logs and metrics to `/v1/logs` and `/v1/metrics`. Without `OTEL_EXPORTER_OTLP_ENDPOINT`, OpenLIT prints spans to the console instead of sending them.
 
 ## Trace a crew
 

@@ -1,7 +1,7 @@
 ---
 title: Claude Platform
 description: Send OpenTelemetry traces of Messages API requests and Managed Agents sessions from the Claude Console to telemetry.dev.
-lastModified: 2026-10-27
+lastModified: 2026-10-29
 seo:
   title: "Claude Platform OpenTelemetry Traces"
   description: "Add telemetry.dev as an OpenTelemetry destination in the Claude Console. Trace Messages API requests and Managed Agents sessions with no code changes."
@@ -35,7 +35,7 @@ In the Claude Console, open the organization's [OpenTelemetry settings](https://
 | Field | Value |
 | --- | --- |
 | Provider | **Custom** |
-| OTLP endpoint URL | `https://ingest.telemetry.dev` |
+| OTLP endpoint URL | `https://api.telemetry.dev` |
 | Request headers | `authorization` with the value `Bearer td_live_...` |
 | Content mode | **Metadata only**, or **Full content** to include prompts and responses |
 | Workspaces | The workspaces to trace |

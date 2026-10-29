@@ -1,7 +1,7 @@
 ---
 title: LangChain and LangGraph
 description: Trace LangChain and LangGraph chains, model calls, and tool steps over OpenTelemetry.
-lastModified: 2026-10-18
+lastModified: 2026-10-29
 seo:
   title: "LangChain & LangGraph OpenTelemetry Tracing"
   description: "Trace LangChain and LangGraph with OpenTelemetry instrumentation, for example OpenLLMetry. Monitor chains, model calls, tools, token usage, and cost."
@@ -30,11 +30,11 @@ Get a project API key from telemetry.dev. Then set the keys and the OpenLLMetry 
 ```sh
 export TELEMETRY_DEV_API_KEY="td_live_..."
 export OPENAI_API_KEY="your-openai-api-key"
-export TRACELOOP_BASE_URL="https://ingest.telemetry.dev"
+export TRACELOOP_BASE_URL="https://api.telemetry.dev"
 export TRACELOOP_HEADERS="Authorization=Bearer%20$TELEMETRY_DEV_API_KEY"
 ```
 
-OpenLLMetry sends traces to `https://ingest.telemetry.dev/v1/traces`, and metrics to `/v1/metrics`. The `%20` is the space in `Bearer <key>`; header values in this variable are URL-encoded. Keep these keys out of version control.
+OpenLLMetry sends traces to `https://api.telemetry.dev/v1/traces`, and metrics to `/v1/metrics`. The `%20` is the space in `Bearer <key>`; header values in this variable are URL-encoded. Keep these keys out of version control.
 
 ## Trace a chain
 
@@ -140,7 +140,7 @@ With content off, model spans keep token usage, model names, and other metadata.
 If your app already emits LangChain spans through the OpenTelemetry SDK, point its OTLP/HTTP exporter at telemetry.dev:
 
 ```sh
-export OTEL_EXPORTER_OTLP_ENDPOINT="https://ingest.telemetry.dev"
+export OTEL_EXPORTER_OTLP_ENDPOINT="https://api.telemetry.dev"
 export OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf"
 export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer%20$TELEMETRY_DEV_API_KEY"
 export OTEL_SERVICE_NAME="your-service-name"

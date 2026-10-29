@@ -1,7 +1,7 @@
 ---
 title: OpenRouter Broadcast
 description: Add telemetry.dev as a destination in OpenRouter Broadcast and get a trace of each OpenRouter request, with no code changes.
-lastModified: 2026-10-27
+lastModified: 2026-10-29
 seo:
   title: "OpenRouter Broadcast OpenTelemetry Traces"
   description: "Add telemetry.dev as an OpenTelemetry Collector destination in OpenRouter Broadcast. Get the model, tokens, cost, user, and session of each OpenRouter request with no code changes."
@@ -52,7 +52,7 @@ Click the edit icon next to **OpenTelemetry Collector**. Set these fields:
 
 | Field | Value |
 | --- | --- |
-| Endpoint | `https://ingest.telemetry.dev/v1/traces` |
+| Endpoint | `https://api.telemetry.dev/v1/traces` |
 | Headers | `{"Authorization": "Bearer td_live_..."}` |
 
 **Headers** is a JSON object. Replace `td_live_...` with your full key. Keep `Bearer` and the space before the key.
@@ -79,7 +79,7 @@ You can also set these items on the destination:
 
 If the test is not successful, or if no trace shows, make sure that:
 
-- The endpoint is `https://ingest.telemetry.dev/v1/traces`.
+- The endpoint is `https://api.telemetry.dev/v1/traces`.
 - The `Authorization` value in **Headers** is `Bearer`, one space, and a key that is not revoked.
 - **Enable Broadcast** is on, and the sampling rate of the destination is more than 0.
 - The API key filter of the destination includes the OpenRouter key that sent the request.

@@ -1,7 +1,7 @@
 ---
 title: OpenTelemetry
 description: Connect an existing OpenTelemetry setup to telemetry.dev with a span processor or a standard OTLP/HTTP exporter.
-lastModified: 2026-10-26
+lastModified: 2026-10-29
 seo:
   title: "LLM Tracing with OpenTelemetry and OTLP"
   description: "Send LLM traces from your own OpenTelemetry setup. Add the telemetry.dev span processor to a TypeScript or Python provider, or point an OTLP/HTTP exporter at our API."
@@ -282,8 +282,10 @@ provider.add_span_processor(BatchSpanProcessor(create_telemetry_span_exporter())
 You do not need a telemetry.dev package. Point a standard OTLP/HTTP exporter at the trace endpoint, and send your API key as a bearer token:
 
 ```text
-https://ingest.telemetry.dev/v1/traces
+https://api.telemetry.dev/v1/traces
 ```
+
+`https://ingest.telemetry.dev`, the default of the processors above, is the earlier name of the same host and stays supported. See the [OTLP ingest API](/reference/otlp).
 
 ```text
 Authorization: Bearer td_live_...
@@ -293,7 +295,7 @@ OpenTelemetry SDKs that follow the exporter specification read the standard expo
 
 ```bash
 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-OTEL_EXPORTER_OTLP_ENDPOINT=https://ingest.telemetry.dev
+OTEL_EXPORTER_OTLP_ENDPOINT=https://api.telemetry.dev
 OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20td_live_...
 ```
 
@@ -323,7 +325,7 @@ import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 
 const apiKey = process.env.TELEMETRY_DEV_API_KEY!;
-const baseUrl = (process.env.TELEMETRY_DEV_BASE_URL ?? "https://ingest.telemetry.dev")
+const baseUrl = (process.env.TELEMETRY_DEV_BASE_URL ?? "https://api.telemetry.dev")
   .replace(/\/+$/, "");
 
 const provider = new NodeTracerProvider({
