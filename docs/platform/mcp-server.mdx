@@ -92,6 +92,10 @@ While a result's `next_cursor` is not null, pass it as `cursor` to get the next 
 
 `search_sessions` lists sessions by the start of their latest trace in the window. A trace that started before the window ended but reached telemetry.dev after the first page was read can move its session to a page already read, so a session can be missed or listed twice. `list_logs` counts levels over the whole window on every page, so a late log can change the counts between pages.
 
+### Usage reads that fail
+
+`get_usage_summary` still answers when one of its reads fails. `data_incomplete` is `true` when any read failed, such as the read of the period before. `current_unavailable` is `true` when the totals of the range were not read, and `breakdown_unavailable` is `true` when the breakdown was not read. In those cases the zeros in `current`, or the empty `breakdown`, are not data, so read them as unknown rather than as no usage.
+
 ### Prompts and outputs
 
 By default an agent cannot read captured prompts, model outputs, or tool arguments. To allow it, check **Also read captured prompts, outputs, and tool arguments** when you approve. A previous grant can leave this checked; you can uncheck it before approving.
