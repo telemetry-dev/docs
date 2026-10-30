@@ -6,8 +6,9 @@ import TraceFigure from "./components/figures/TraceFigure.astro";
 import IntegrationCard from "./components/IntegrationCard.astro";
 import IntegrationTitleMark from "./components/IntegrationTitleMark.astro";
 import Screenshot from "./components/Screenshot.astro";
+import Video from "./components/Video.astro";
 
 export default defineComponents({
   layout: { PageHeader: IntegrationTitleMark },
-  mdx: { AlertLifecycleFigure, CostFigure, IntegrationCard, PipelineFigure, Screenshot, TraceFigure },
+  mdx: { AlertLifecycleFigure, CostFigure, IntegrationCard, PipelineFigure, Screenshot, TraceFigure, Video },
 });

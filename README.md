@@ -33,7 +33,7 @@ npx blume validate
 | `docs/` | The pages, as MDX. The path of a file is its URL under `/docs`; folders in parentheses, such as `(coding-agents)`, group pages without changing their URL. |
 | `docs/**/meta.ts` | The order and titles of the pages in each sidebar section. |
 | `components/figures/` | Figures drawn in HTML and CSS, so they follow the light and dark themes. `model.js` holds their data and the Markdown versions used for `.md` pages and `llms-full.txt`. |
-| `public/` | Screenshots and integration marks. [ASSET_PROVENANCE.md](ASSET_PROVENANCE.md) records where each mark came from. |
+| `public/` | Screenshots and integration marks. `public/recordings/` holds the screen recordings and their posters. [ASSET_PROVENANCE.md](ASSET_PROVENANCE.md) records where each mark came from. |
 | `blume.config.ts`, `theme.css` | Site configuration and styles. The site is built with [Blume](https://www.npmjs.com/package/blume). |
 
 ## Writing guidelines
@@ -41,7 +41,8 @@ npx blume validate
 - Check each claim against the product and the released SDK versions, not against older pages. Say which SDK version a statement applies to when behavior changed between releases.
 - Document what users can see and rely on: endpoints, limits, status codes, settings, and what data is sent. Leave out how the hosted service is built, such as databases, internal flags, and deployment steps.
 - When a page says what is not captured or not sent, also say what still is.
-- A figure that shows the dashboard has to match it. When the dashboard changes, update the figure too.
+- A figure or recording that shows the dashboard has to match it. When the dashboard changes, update the figure or record it again.
+- Add a recording only where the page describes something that is hard to follow as text, such as a flow across several screens. Keep the text steps; the recording does not replace them.
 
 ## Deployment
 
