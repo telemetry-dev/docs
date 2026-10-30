@@ -1,7 +1,7 @@
 ---
 title: Use the command line
 description: Search traces, sessions, logs, and usage from a terminal, a script, or an agent's shell with the telemetry command.
-lastModified: 2026-10-29
+lastModified: 2026-10-30
 ---
 
 The `telemetry` command reads the same data as the [MCP server](/platform/mcp-server): projects, traces, sessions, logs, usage, and captured prompts and outputs. It signs in the same way and has the same read-only access to one workspace.
@@ -55,6 +55,18 @@ telemetry login --finish 'http://127.0.0.1:53124/callback?code=…'
 ```
 
 Put the address in single quotes, because it contains `&`.
+
+From version 0.1.2, a script or agent can run `telemetry login --json` instead. It never opens a browser or waits. It prints the link to pass on to a person, then exits:
+
+```json
+{
+  "status": "pending",
+  "authorization_url": "https://telemetry.dev/api/auth/oauth2/authorize?…",
+  "next": "telemetry login --finish '<address>'"
+}
+```
+
+After the person selects **Allow**, `telemetry login --finish '<address>' --json` finishes the sign-in and prints it, with the same fields as `telemetry status --json` and `"status": "signed_in"`.
 
 ## Choose a project
 
@@ -119,7 +131,7 @@ Captured text comes from your users, models, and tools. Output for people, inclu
 
 ## Use the command line in scripts and agents
 
-Add `--json` to any command except `login` and `logout`. The data goes to stdout, and messages and progress go to stderr, so `telemetry traces --json > traces.json` writes only data.
+Add `--json` to any command for JSON output; `login` and `logout` take it from version 0.1.2. The data goes to stdout, and messages and progress go to stderr, so `telemetry traces --json > traces.json` writes only data.
 
 `projects`, `traces`, `sessions`, `logs`, and `usage` print the result of the matching MCP tool as it is returned, with the fields described in [What an agent can read](/platform/mcp-server#what-an-agent-can-read). `trace` and `payload` read every page of the result and print it as one object, with `complete: false` when they stopped at the limit.
 
@@ -134,6 +146,44 @@ To check whether the command is signed in, run `telemetry status --json`. It exi
 | `2` | The command or its options are not valid |
 | `4` | You are not signed in, the sign-in expired, or access is denied |
 | `130` | Interrupted with Ctrl-C |
+
+### Errors
+
+From version 0.1.1, with `--json`, an error is one line of JSON on stderr and stdout stays empty:
+
+```json
+{"error":{"code":"not_signed_in","message":"You're not signed in. Run `telemetry login` first.","hint":"telemetry login","retryable":false,"exit_code":4,"cli_version":"0.1.2"}}
+```
+
+Branch on `code`, because the wording of `message` can change. `hint` is a command to run next, when there is one. `telemetry login` needs a person at a browser, so an agent should run `telemetry login --json` and pass the link on instead. `retryable` is `true` when running the same command again may succeed. Ctrl-C exits with 130 and no JSON, and `status --json` reports a missing sign-in as data on stdout with exit code 4.
+
+| Code | Exit | Meaning |
+| --- | --- | --- |
+| `invalid_arguments` | 2 | An option or argument is not valid |
+| `unknown_command` | 2 | There is no command with that name |
+| `project_not_found` | 2 | No project in the workspace has that name or ID |
+| `invalid_cursor` | 2 | `--cursor` isn't from an earlier page of this command |
+| `project_ambiguous` | 2 | Several projects have that name; pass its ID |
+| `project_required` | 2 | The workspace has several projects and none was chosen |
+| `no_projects` | 1 | The workspace has no projects yet |
+| `not_signed_in` | 4 | No sign-in is saved for this deployment |
+| `sign_in_expired` | 4 | The sign-in expired or was disconnected |
+| `payloads_not_allowed` | 4 | The sign-in doesn't include reading captured prompts and outputs |
+| `access_denied` | 4 | The account no longer has access to the workspace |
+| `sign_in_failed` | 4 | The sign-in was cancelled, refused, or used an address from another sign-in |
+| `no_pending_sign_in` | 4 | `login --finish` found no sign-in waiting to finish |
+| `trace_not_found` | 1 | No trace has that ID, or it is past the project's retention |
+| `span_not_found` | 1 | The trace has no span with that ID, or it is past the project's retention |
+| `unreachable` | 1 | telemetry.dev could not be reached |
+| `timeout` | 1 | telemetry.dev took too long to answer |
+| `server_error` | 1 | telemetry.dev failed to complete the request; try again |
+| `tool_error` | 1 | telemetry.dev returned another error; `message` says what it was |
+| `result_too_large` | 1 | The result was too large to read; narrow it with filters or `--limit` |
+| `request_failed` | 1 | The request failed for another reason |
+| `failed` | 1 | The command failed for another reason |
+| `internal` | 1 | An unexpected error, such as a configuration file the command couldn't read or write |
+
+New codes may be added, and existing codes keep their meaning. Version 0.1.2 added `invalid_cursor`, `access_denied`, `trace_not_found`, `span_not_found`, and `server_error`; version 0.1.1 reports those errors as `tool_error`. `sign_in_failed` and `no_pending_sign_in` appear in JSON only from 0.1.2, when `login` takes `--json`.
 
 ## Environment variables
 
@@ -152,4 +202,4 @@ The saved sign-in holds a token that reads your workspace, and only your user ca
 telemetry logout
 ```
 
-`logout` revokes the sign-in at telemetry.dev and removes it from this machine. If telemetry.dev doesn't confirm the revocation, the command says so. To remove the command line's access from your account, open your user menu, select **Account**, and disconnect it under **Connected apps**, as described in [Disconnect an agent](/platform/mcp-server#disconnect-an-agent).
+`logout` revokes the sign-in at telemetry.dev and removes it from this machine. If telemetry.dev doesn't confirm the revocation, the command says so. From version 0.1.2, `telemetry logout --json` prints `{"was_signed_in": true, "revoked": false}` in that case, and `revoked` is `null` when there was no sign-in. To remove the command line's access from your account, open your user menu, select **Account**, and disconnect it under **Connected apps**, as described in [Disconnect an agent](/platform/mcp-server#disconnect-an-agent).
