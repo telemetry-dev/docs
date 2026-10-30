@@ -106,7 +106,7 @@ An option that you pass to `init()` takes precedence over its environment variab
 | Option | Type | Environment fallback | Default | Purpose |
 | --- | --- | --- | --- | --- |
 | `apiKey` | `string` | `TELEMETRY_DEV_API_KEY` | None | Authenticates exports. Without a key, the SDK does nothing. |
-| `baseUrl` | `string` | `TELEMETRY_DEV_BASE_URL` | `https://ingest.telemetry.dev` | Sets the ingest URL. Trailing slashes are removed. |
+| `baseUrl` | `string` | `TELEMETRY_DEV_BASE_URL` | `https://api.telemetry.dev` | Sets the ingest URL. Trailing slashes are removed. |
 | `environment` | `string` | `TELEMETRY_DEV_ENVIRONMENT` | `production` | Sets `deployment.environment.name`. |
 | `serviceName` | `string` | `OTEL_SERVICE_NAME` | `unknown_service` | Sets `service.name`. |
 | `enabled` | `boolean` | None | `true` | Set `false` to turn the SDK off. |

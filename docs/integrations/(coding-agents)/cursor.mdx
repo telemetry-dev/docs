@@ -38,7 +38,7 @@ The command does two things:
 - Adds a telemetry.dev entry for each hook it uses to `~/.cursor/hooks.json`. It keeps your other hooks and replaces only earlier telemetry.dev entries.
 - Saves the API key in `~/.cursor/telemetry-dev.json`, readable only by your user. Cursor started from the macOS Dock doesn't see your shell's environment variables, so the key has to live in a file.
 
-Add `--environment development` to label the data with an environment other than `production`, or `--base-url` to send it somewhere other than `https://ingest.telemetry.dev`.
+Add `--environment development` to label the data with an environment other than `production`, or `--base-url` to send it somewhere other than `https://api.telemetry.dev`.
 
   </Step>
 
@@ -116,7 +116,7 @@ Environment variables take precedence over `~/.cursor/telemetry-dev.json`:
 | Variable | File key | Default | Description |
 | --- | --- | --- | --- |
 | `TELEMETRY_DEV_API_KEY` | `apiKey` | None | Ingest API key. Without one, the integration sends nothing. |
-| `TELEMETRY_DEV_BASE_URL` | `baseUrl` | `https://ingest.telemetry.dev` | OTLP ingest base URL. |
+| `TELEMETRY_DEV_BASE_URL` | `baseUrl` | `https://api.telemetry.dev` | OTLP ingest base URL. |
 | `TELEMETRY_DEV_ENVIRONMENT` | `environment` | `production` | Environment on traces and logs. |
 | `OTEL_SERVICE_NAME` | `serviceName` | `cursor` | OpenTelemetry service name. |
 

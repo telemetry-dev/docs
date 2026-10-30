@@ -104,7 +104,7 @@ The run produces one trace. The `answer` agent span is the root. The `search_web
 | Argument | Type | Environment fallback | Default | Purpose |
 | --- | --- | --- | --- | --- |
 | `api_key` | `str \| None` | `TELEMETRY_DEV_API_KEY` | `None` | Authenticates exports. Without a key, the SDK does nothing. |
-| `base_url` | `str \| None` | `TELEMETRY_DEV_BASE_URL` | `https://ingest.telemetry.dev` | Sets the ingest URL. Trailing slashes are removed. |
+| `base_url` | `str \| None` | `TELEMETRY_DEV_BASE_URL` | `https://api.telemetry.dev` | Sets the ingest URL. Trailing slashes are removed. |
 | `environment` | `str \| None` | `TELEMETRY_DEV_ENVIRONMENT` | `production` | Sets `deployment.environment.name`. |
 | `service_name` | `str \| None` | `OTEL_SERVICE_NAME` | `unknown_service` | Sets `service.name`. |
 | `enabled` | `bool` | None | `True` | Set `False` to turn the SDK off. |

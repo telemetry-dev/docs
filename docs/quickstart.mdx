@@ -173,7 +173,7 @@ Select the `chat gpt-5-mini` span to read its input and output messages, its 11 
 | `TELEMETRY_DEV_API_KEY` | None | Authenticates exports. Keys start with `td_live_`. |
 | `TELEMETRY_DEV_ENVIRONMENT` | `production` | Sets `deployment.environment.name`. |
 | `OTEL_SERVICE_NAME` | `unknown_service` | Sets `service.name`. |
-| `TELEMETRY_DEV_BASE_URL` | `https://ingest.telemetry.dev` | Sends to a different ingest URL. |
+| `TELEMETRY_DEV_BASE_URL` | `https://api.telemetry.dev` | Sends to a different ingest URL. |
 
 :::tip[Serverless runtimes]
 Send pending telemetry before the runtime freezes. In TypeScript, await `flush()` at the end of each invocation, or pass the platform's `waitUntil` function to `init()`. In Python, call `telemetry_dev.flush()`.
