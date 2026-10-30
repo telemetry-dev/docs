@@ -1,0 +1,155 @@
+---
+title: Use the command line
+description: Search traces, sessions, logs, and usage from a terminal, a script, or an agent's shell with the telemetry command.
+lastModified: 2026-10-29
+---
+
+The `telemetry` command reads the same data as the [MCP server](/platform/mcp-server): projects, traces, sessions, logs, usage, and captured prompts and outputs. It signs in the same way and has the same read-only access to one workspace.
+
+Connect an MCP client when you want to ask questions in Claude, ChatGPT, Cursor, or VS Code. Use the command line to look something up in a terminal, to read telemetry from a script, or to give an agent access through its shell when it can't connect an MCP client.
+
+## Install
+
+The command line needs Node.js 20 or later.
+
+<CodeGroup>
+
+```sh npm
+npm install --global @telemetry-dev/cli
+```
+
+```sh npx
+npx @telemetry-dev/cli login
+```
+
+</CodeGroup>
+
+`npx` runs it without installing. The examples on this page use the installed `telemetry` command.
+
+## Sign in
+
+```sh
+telemetry login
+```
+
+`login` opens your browser. Choose a workspace and select **Allow**, as when you [connect an MCP client](/platform/mcp-server#connect-a-client). The command waits up to 10 minutes for you to approve.
+
+A sign-in reads one workspace. To read another workspace, run `telemetry login` again and choose it. `telemetry status` shows the account you're signed in with, the default project, and whether you allowed captured prompts and outputs.
+
+### Sign in without a browser
+
+Over SSH, in a container, or anywhere the command can't open a browser, run:
+
+```sh
+telemetry login --no-browser
+```
+
+Open the printed link on any device and select **Allow**. The browser then goes to an address that starts with `http://127.0.0.1` and doesn't load. Copy the whole address and paste it into the terminal.
+
+### Sign in from an agent's shell
+
+In a shell with no terminal to paste into, such as an agent's, `telemetry login --no-browser` prints the link and exits. Open the link and select **Allow**. Then finish the sign-in with the address the browser ended on:
+
+```sh
+telemetry login --finish 'http://127.0.0.1:53124/callback?code=…'
+```
+
+Put the address in single quotes, because it contains `&`.
+
+## Choose a project
+
+Commands that read telemetry use one project. The command picks it in this order:
+
+1. The `--project` option, with a project name or ID, such as `--project support-bot`.
+2. The `TELEMETRY_DEV_PROJECT` environment variable.
+3. The default project that you set with `telemetry use`.
+4. The workspace's project, if the workspace has only one.
+
+```sh
+telemetry projects
+telemetry use support-bot
+```
+
+Names match without regard to letter case. If two projects have the same name, use the ID from `telemetry projects`.
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `telemetry projects` | Lists the workspace's projects. |
+| `telemetry use <name\|id>` | Sets the default project. |
+| `telemetry traces` | Finds traces, newest first. Filter with `--errors`, `--name`, `--env`, `--session`, and `--user`. |
+| `telemetry trace <trace-id>` | Shows a trace's spans as a tree, with duration, tokens, error text, and the trace's logs. |
+| `telemetry sessions` | Finds sessions, most recently active first. Filter with `--range` (`24h`, `72h`, `7d`, or `30d`; default `24h`), `--errors`, `--contains`, `--agent`, `--model`, and `--user`. |
+| `telemetry logs` | Lists the newest logs, with counts per level. Filter with `--level` and `--range` (`7d`, `30d`, or `90d`; default `7d`). |
+| `telemetry usage` | Summarizes requests, errors, p95 latency, tokens, cost, and active users, compared with the period before. Set the period with `--range` and the breakdown with `--by` (`model`, `provider`, `user`, or `operation`; default `model`). |
+| `telemetry payload <trace-id> <span-id>` | Prints a span's captured input and output. |
+| `telemetry status` | Shows who you're signed in as. |
+| `telemetry logout` | Signs out on this machine. |
+
+Run `telemetry --help` for the list of commands, and `telemetry <command> --help` for a command's options and examples.
+
+```sh
+telemetry traces --errors                        # recent failed traces
+telemetry traces --name checkout --env production
+telemetry trace 4bf92f3577b34da6a3ce929d0e0e4736
+telemetry sessions --range 7d --errors           # sessions with a failed trace
+telemetry logs --level error
+telemetry usage --range 30d --by user
+```
+
+`traces`, `sessions`, and `logs` return 20 results by default. Use `--limit` for 1 to 50. When `traces` or `sessions` has more results, it prints the same command with `--cursor` for the next page. `logs` has no next page; raise `--limit` or narrow the search with `--level`.
+
+`telemetry trace` reads up to 2,000 spans of a trace and says so when the trace has more.
+
+### Read prompts and outputs
+
+`telemetry payload` needs the permission to read captured prompts, outputs, and tool arguments. To grant it, run `telemetry login`, check **Also read captured prompts, outputs, and tool arguments** on the approval page, and select **Allow**. Without it, every other command works and `payload` exits with code 4.
+
+Span IDs are in the output of `telemetry trace <trace-id> --json`.
+
+```sh
+telemetry payload <trace-id> <span-id>
+telemetry payload <trace-id> <span-id> --field output > answer.txt
+```
+
+Without `--field`, the command prints the input and the output. `--field input`, `--field output`, or `--field error` prints that one field as plain text, for a pipe or a file. The command reads up to 1,000,000 characters of each field.
+
+Captured text comes from your users, models, and tools. Output for people, including `--field`, removes terminal escape sequences and control characters from it. Use `--json` when you need the exact text.
+
+## Use the command line in scripts and agents
+
+Add `--json` to any command except `login` and `logout`. The data goes to stdout, and messages and progress go to stderr, so `telemetry traces --json > traces.json` writes only data.
+
+`projects`, `traces`, `sessions`, `logs`, and `usage` print the result of the matching MCP tool as it is returned, with the fields described in [What an agent can read](/platform/mcp-server#what-an-agent-can-read). `trace` and `payload` read every page of the result and print it as one object, with `complete: false` when they stopped at the limit.
+
+To check whether the command is signed in, run `telemetry status --json`. It exits with code 4 when it isn't.
+
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success |
+| `1` | The request failed |
+| `2` | The command or its options are not valid |
+| `4` | You are not signed in, the sign-in expired, or access is denied |
+| `130` | Interrupted with Ctrl-C |
+
+## Environment variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `TELEMETRY_DEV_PROJECT` | None | The project to read when you don't pass `--project` |
+| `TELEMETRY_DEV_URL` | `https://telemetry.dev` | The telemetry.dev deployment to sign in to |
+| `TELEMETRY_DEV_CONFIG_DIR` | `~/.config/telemetry-dev` | Where the sign-in is saved. The default follows `XDG_CONFIG_HOME` when it is set. |
+| `NO_COLOR` | None | Turns off color, like `--no-color` |
+
+The saved sign-in holds a token that reads your workspace, and only your user can read the file. Keep it private.
+
+## Sign out
+
+```sh
+telemetry logout
+```
+
+`logout` revokes the sign-in at telemetry.dev and removes it from this machine. If telemetry.dev doesn't confirm the revocation, the command says so. To remove the command line's access from your account, open your user menu, select **Account**, and disconnect it under **Connected apps**, as described in [Disconnect an agent](/platform/mcp-server#disconnect-an-agent).
