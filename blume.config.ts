@@ -42,6 +42,10 @@ export default defineConfig({
         lossy || typeof props.src !== "string" || typeof props.alt !== "string"
           ? null
           : `![${props.alt}](${DOCS_BASE_PATH}/${props.src})`,
+      Video: ({ lossy, props }) =>
+        lossy || typeof props.src !== "string" || typeof props.title !== "string"
+          ? null
+          : `[Video: ${props.title}](${DOCS_BASE_PATH}/${props.src})`,
       AlertLifecycleFigure: alertLifecycleMarkdown as ComponentMarkdown,
       CostFigure: costMarkdown as ComponentMarkdown,
       PipelineFigure: pipelineMarkdown as ComponentMarkdown,

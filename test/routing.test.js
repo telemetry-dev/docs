@@ -159,6 +159,58 @@ test("docs pages and their assets load under the mount path", async () => {
   assert.equal(missing.status, 404);
 });
 
+test("recordings answer byte ranges, which Safari and iOS need to play them", async () => {
+  const path = "/docs/recordings/quickstart.mp4";
+  const file = readFileSync(`.blume/cloudflare${path}`);
+  const size = file.byteLength;
+  const get = (range) => server.fetch(path, { headers: { Range: range } });
+
+  const first = await get("bytes=0-1");
+  assert.equal(first.status, 206);
+  assert.equal(first.headers.get("Content-Range"), `bytes 0-1/${size}`);
+  assert.equal(first.headers.get("Accept-Ranges"), "bytes");
+  assert.match(first.headers.get("Content-Type"), /^video\/mp4/);
+  assert.deepEqual(Buffer.from(await first.arrayBuffer()), file.subarray(0, 2));
+
+  const middle = await get("bytes=1000-1999");
+  assert.equal(middle.headers.get("Content-Range"), `bytes 1000-1999/${size}`);
+  assert.deepEqual(Buffer.from(await middle.arrayBuffer()), file.subarray(1000, 2000));
+
+  const open = await get(`bytes=${size - 3}-`);
+  assert.equal(open.headers.get("Content-Range"), `bytes ${size - 3}-${size - 1}/${size}`);
+  assert.deepEqual(Buffer.from(await open.arrayBuffer()), file.subarray(size - 3));
+
+  const suffix = await get("bytes=-5");
+  assert.equal(suffix.headers.get("Content-Range"), `bytes ${size - 5}-${size - 1}/${size}`);
+  assert.deepEqual(Buffer.from(await suffix.arrayBuffer()), file.subarray(size - 5));
+
+  const past = await get(`bytes=${size}-`);
+  assert.equal(past.status, 416);
+  assert.equal(past.headers.get("Content-Range"), `bytes */${size}`);
+  await past.arrayBuffer();
+
+  const whole = await server.fetch(path);
+  assert.equal(whole.status, 200);
+  assert.equal(whole.headers.get("Accept-Ranges"), "bytes");
+  assert.equal((await whole.arrayBuffer()).byteLength, size);
+
+  const etag = whole.headers.get("ETag");
+  assert.ok(etag);
+  const current = await server.fetch(path, { headers: { Range: "bytes=0-1", "If-Range": etag } });
+  assert.equal(current.status, 206);
+  await current.arrayBuffer();
+  const replaced = await server.fetch(path, { headers: { Range: "bytes=0-1", "If-Range": '"an-older-recording"' } });
+  assert.equal(replaced.status, 200);
+  assert.equal((await replaced.arrayBuffer()).byteLength, size);
+  const unchanged = await server.fetch(path, { headers: { Range: "bytes=0-1", "If-None-Match": etag } });
+  assert.equal(unchanged.status, 304);
+  const head = await server.fetch(path, { method: "HEAD", headers: { Range: "bytes=0-1" } });
+  assert.equal(head.status, 200);
+
+  const missing = await server.fetch("/docs/recordings/none.mp4", { headers: { Range: "bytes=0-1" } });
+  assert.equal(missing.status, 404);
+});
+
 test("published integration mark URLs remain compatible", async () => {
   for (const [legacy, canonical] of [
     ["gemini.svg", "google-genai.svg"],
@@ -319,7 +371,7 @@ test("cross-references in Markdown resolve inside the docs site", async () => {
   }
 });
 
-test("every image on a built page loads under the mount path", async () => {
+test("every image and recording on a built page loads under the mount path", async () => {
   const root = ".blume/cloudflare";
   const pages = readdirSync(`${root}/docs`, { recursive: true }).filter(
     (file) => file.endsWith(".html") || file.endsWith(".md"),
@@ -329,10 +381,20 @@ test("every image on a built page loads under the mount path", async () => {
 
   for (const page of pages) {
     const body = readFileSync(`${root}/docs/${page}`, "utf8");
-    const pattern = page.endsWith(".html") ? /<img\b[^>]*\ssrc="([^"]+)"/g : /!\[[^\]]*\]\(([^)\s]+)/g;
+    const found = page.endsWith(".html")
+      ? [...body.matchAll(/<(img|video)\b[^>]*>/g)].flatMap(([tag, element]) =>
+          [...tag.matchAll(/\s(src|poster)="([^"]+)"/g)].map(([, attribute, src]) => [
+            src,
+            element === "video" && attribute === "src" ? "video" : "image",
+          ]),
+        )
+      : [...body.matchAll(/(!\[|\[Video: )[^\]]*\]\(([^)\s]+)/g)].map(([, prefix, src]) => [
+          src,
+          prefix === "![" ? "image" : "video",
+        ]);
 
-    for (const [, src] of body.matchAll(pattern)) {
-      if (!src.startsWith("data:") && !/^(?:https?:)?\/\//.test(src)) sources.set(src, page);
+    for (const [src, type] of found) {
+      if (!src.startsWith("data:") && !/^(?:https?:)?\/\//.test(src)) sources.set(src, { page, type });
     }
   }
 
@@ -340,11 +402,15 @@ test("every image on a built page loads under the mount path", async () => {
     [...sources.keys()].some((src) => src.includes("trace-waterfall")),
     "the introduction screenshot must be among the checked images",
   );
+  assert.ok(
+    [...sources.keys()].some((src) => src.endsWith("/recordings/quickstart.mp4")),
+    "the quickstart recording must be among the checked files",
+  );
 
-  for (const [src, page] of sources) {
+  for (const [src, { page, type }] of sources) {
     assert.ok(src.startsWith("/docs/"), `${page} references ${src} outside the docs path`);
     const response = await server.fetch(src);
     assert.equal(response.status, 200, `${page} references ${src}`);
-    assert.match(response.headers.get("Content-Type"), /^image\//, `${page} references ${src}`);
+    assert.ok(response.headers.get("Content-Type").startsWith(`${type}/`), `${page} references ${src}`);
   }
 });

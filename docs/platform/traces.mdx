@@ -6,6 +6,10 @@ lastModified: 2026-10-30
 
 A trace is one request through your application. Each step inside it, such as a model call, a tool call, or an agent step, is a span. Use the trace explorer to find failed or slow requests and to see what each model call received and returned.
 
+<Frame caption="Filter the trace list to failed requests, open one, and step through its spans to the tool call that failed.">
+  <Video src="recordings/trace-explorer.mp4" poster="recordings/trace-explorer-poster.jpg" title="In the Traces list, the Status filter is set to error and the Framework filter to vercel-ai-sdk. An agent.workflow trace with a rate_limit error opens. A model call is selected in the span tree, then the down arrow key moves to the failed tool.execute span, whose panel shows the check_inventory arguments, a failed outcome, and a rate_limit result." />
+</Frame>
+
 ## Find a trace or span
 
 Select **Traces** in the project sidebar. Use the **Traces** and **Spans** switch above the table to list whole requests or single operations.
