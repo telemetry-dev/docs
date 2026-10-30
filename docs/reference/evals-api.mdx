@@ -1,0 +1,188 @@
+---
+title: Evals API
+description: Read dataset items, run experiments of your code, and send scores over HTTP, with request fields, limits, and error codes.
+lastModified: 2026-10-30
+---
+
+The Evals API lets your code read the items of a dataset, send the outputs of an experiment, and send scores over HTTP. The TypeScript and Python SDKs use this API in `runExperiment` and `score`. Read [Experiments](/evals/experiments) and [Scores](/evals/scores) first.
+
+The API is at `https://api.telemetry.dev`, the same host as the [OTLP ingest API](/reference/otlp). `https://ingest.telemetry.dev` also works. The [OpenAPI document](https://telemetry.dev/openapi.json) describes each route.
+
+## Endpoints
+
+| Method | Path | Purpose | Scope |
+| --- | --- | --- | --- |
+| `GET` | `/v1/datasets/{name}` | Get a page of the items of a dataset version | `datasets:read` |
+| `POST` | `/v1/experiments` | Start an experiment of your code | `experiments:write` |
+| `POST` | `/v1/experiments/{id}/items` | Send the runs of items | `experiments:write` |
+| `POST` | `/v1/experiments/{id}/complete` | Tell telemetry.dev that you sent all runs | `experiments:write` |
+| `GET` | `/v1/experiments/{id}` | Get the status and the scores of an experiment | `experiments:write` |
+| `POST` | `/v1/scores` | Record a score on a trace, a span, or a session | `scores:write` |
+
+## Authentication
+
+Send a project API key as a bearer token:
+
+```http
+Authorization: Bearer td_live_your_key
+```
+
+The **Run experiments** access of a key gives the three scopes `datasets:read`, `experiments:write`, and `scores:write`. Read [Select the access of a key](/platform/api-keys#select-the-access-of-a-key). A key without the scope of a route gets `403 insufficient_scope`.
+
+The key also selects the project. Dataset names and experiment IDs are those of the project of the key.
+
+## Get a dataset
+
+```sh
+curl "https://api.telemetry.dev/v1/datasets/support-golden?limit=100" \
+  -H "Authorization: Bearer $TELEMETRY_DEV_API_KEY"
+```
+
+| Query parameter | Description |
+| --- | --- |
+| `version` | The dataset version. Without it, the API reads the newest version. |
+| `split` | Get only the items of this split. 1 to 64 characters. |
+| `limit` | Items in a page, 1 to 100. The default is 100. |
+| `cursor` | The `nextCursor` of the page before. |
+
+```json
+{
+  "dataset": { "id": "…", "name": "support-golden", "version": 3 },
+  "items": [
+    {
+      "id": "…",
+      "number": 1,
+      "input": { "question": "Where is my refund?" },
+      "expectedOutput": "Refunds take 5 to 7 days.",
+      "metadata": {},
+      "tags": ["refunds"],
+      "split": "test"
+    }
+  ],
+  "nextCursor": "…"
+}
+```
+
+- Items come in number order. The `id` of an item is the same in each version. Send it as `itemId` with the run of the item.
+- A page ends before `limit` when its items have 4 MiB of JSON. This cut always leaves at least one item in the page.
+- The cursor holds the version. Thus each page reads the same version, also when the dataset changes. `nextCursor` is `null` on the last page.
+- A dataset before its first change is at version 0, with no items.
+
+## Run an experiment
+
+An experiment of your code has three steps:
+
+1. Start the experiment with `POST /v1/experiments`.
+2. Run your code on each item, and send the runs with `POST /v1/experiments/{id}/items`.
+3. Send `POST /v1/experiments/{id}/complete`. Then read the result with `GET /v1/experiments/{id}`.
+
+### Start the experiment
+
+`POST /v1/experiments` takes a JSON body of up to 1 MiB:
+
+| Field | Description |
+| --- | --- |
+| `dataset` | Necessary. The dataset name, such as `support-golden`. |
+| `name` | Up to 128 characters. The default is `<dataset>-v<version>`. If the project has the name, telemetry.dev adds `-2`, `-3`, and so on. |
+| `datasetVersion` | The version to run. The default is the newest version. |
+| `split` | Run only the items of this split. |
+| `runsPerItem` | 1 to 5. The default is 1. |
+| `evaluators` | Up to 20 names of LLM judges, code checks, and rules of the project. telemetry.dev scores each run with them. |
+| `minScores` | Up to 20 pass marks by score name: the lowest pass rate (0 to 1) of a pass or fail score, or the lowest mean of a number score. |
+| `ci` | The GitHub Actions run: `provider` (`github_actions`), `repository` (`owner/name`), `commit`, and the optional `runUrl`, `prNumber`, `prTitle`, and `prUrl`. |
+| `metadata` | Up to 16 KiB of JSON. telemetry.dev applies the redaction of the project to its strings. |
+
+The response is `201` with the `id`, the `name`, the `datasetVersion`, the `itemsTotal` (the items multiplied by the runs for each item), and the `url` of the experiment page. The experiment is `running` immediately.
+
+This request makes a new experiment each time. Send it again only after a `429`.
+
+### Send the runs
+
+`POST /v1/experiments/{id}/items` takes 1 to 100 runs in `items`, in a body of up to 16 MiB:
+
+| Field | Description |
+| --- | --- |
+| `itemId` | Necessary. The `id` of the item from `GET /v1/datasets/{name}`. |
+| `runIndex` | 0 to `runsPerItem` − 1. The default is 0. |
+| `output` | The output of your code, up to 100,000 characters. |
+| `traceId` | The trace of the run, as 32 lowercase hex characters. If the run has no `costUsd`, telemetry.dev reads the cost of the run from this trace. |
+| `latencyMs` | The duration of the run in milliseconds. |
+| `costUsd` | The cost of the run, 0 to 999,999. |
+| `error` | The error of a run that was not successful. telemetry.dev keeps the first 4,000 characters, after redaction. |
+| `scores` | Up to 20 scores from your code, each with a `name`, a `value` or a `label`, and an optional `reason`. Each name one time only. |
+
+The response is `200` with `accepted` and `duplicates`. A run that the experiment has, by `itemId` and `runIndex`, keeps its first post. Thus you can send a request again after a timeout. The request adds all of its runs or none.
+
+### Complete and read the result
+
+`POST /v1/experiments/{id}/complete` answers `200` with the `id` and the `status`. The status stays `running` until telemetry.dev scores the last runs. Then the experiment completes, and telemetry.dev does a check of the pass marks.
+
+`GET /v1/experiments/{id}` returns these fields:
+
+| Field | Description |
+| --- | --- |
+| `status` | `queued`, `running`, `completed`, `failed`, or `stopped`. |
+| `checkStatus` | `passed`, `failed`, or `null` when the experiment has no pass marks or did not complete. |
+| `itemsTotal`, `itemsDone`, `itemsFailed` | The counts of runs. |
+| `error` | Why the experiment failed. |
+| `scores` | For each score name: `kind`, `value` (a pass rate from 0 to 1, or a mean), `passCount`, `failCount`, `baselineValue`, `delta`, `minScore`, and `passed`. |
+| `url` | The experiment page. |
+
+The `delta` is in whole points for a pass rate, and in one decimal for a mean. An experiment that gets no runs for 24 hours ends with the runs that it has.
+
+## Send a score
+
+```sh
+curl https://api.telemetry.dev/v1/scores \
+  -H "Authorization: Bearer $TELEMETRY_DEV_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"user_feedback","traceId":"4bf92f3577b34da6a3ce929d0e0e4736","value":0,"comment":"Wrong amount"}'
+```
+
+| Field | Description |
+| --- | --- |
+| `name` | Necessary. The score name, 1 to 64 characters. |
+| `traceId` | 32 lowercase hex characters, not all zeros. |
+| `spanId` | 16 lowercase hex characters. Give it with `traceId` to score one span. |
+| `sessionId` | 1 to 1,024 characters. |
+| `value` | A number. |
+| `label` | A label, such as `pass`, `fail`, or a label of your own. |
+| `comment` | Up to 4,000 characters. |
+
+Give `traceId`, `sessionId`, or the two. Give `value`, `label`, or the two. The label `pass` goes with the value 1, and `fail` with 0. A `pass` or `fail` label without a value gets 1 or 0. `user_feedback` takes the value 1 for up or 0 for down, and no label.
+
+The body can have up to 64 KiB. The response is `202` with the `id` of the score. telemetry.dev applies the redaction of the project to the comment. If the redaction would change the session ID, telemetry.dev drops the session ID. A score without a `traceId` then gets `400`. Each request adds a new score, also for the same name and trace.
+
+## Errors
+
+An error has a JSON body with a code and a message:
+
+```json
+{ "error": { "code": "insufficient_scope", "message": "This API key cannot send scores. Create a key with Run experiments access." } }
+```
+
+| HTTP | Code | Cause |
+| --- | --- | --- |
+| `400` | `invalid_request` | The body or a parameter is not valid. The message names the problem. |
+| `400` | `decompression_failed` | The gzip body does not decompress. |
+| `401` | `invalid_api_key` | The key is missing, malformed, unknown, or revoked. |
+| `403` | `insufficient_scope` | The key does not have the scope of the route. |
+| `403` | `project_not_accepting_telemetry` | **Accept telemetry** is off for the project. This applies to `POST /v1/experiments`, `POST /v1/experiments/{id}/items`, and `POST /v1/scores`. |
+| `404` | `dataset_not_found` | The project has no dataset of that name. |
+| `404` | `version_not_found` | The dataset has no such version. |
+| `404` | `experiment_not_found` | The project has no experiment with that ID. |
+| `409` | `experiment_ended` | The experiment ended and takes no more runs. |
+| `409` | `experiment_not_code` | The experiment runs a prompt version. Only experiments of your code take runs. |
+| `409` | `experiment_name_taken` | The name is in use, and telemetry.dev could not add a free number to it. Give a different name. |
+| `413` | `body_too_large` | The body is larger than the limit of the route. |
+| `415` | `unsupported_encoding` | The `Content-Encoding` is not `gzip` or `identity`. |
+| `422` | `dataset_empty` | The dataset version, or its split, has no items. |
+| `422` | `evaluator_not_found` | The project has no evaluator of that name. |
+| `422` | `evaluator_not_supported` | The evaluator is not an LLM judge, a code check, or a rule. Experiments run only these types. |
+| `422` | `item_not_found` | The dataset version has no item with that `itemId`. |
+| `429` | `rate_limited` | Too many requests for the project, or too many failed authentications. Wait for `Retry-After`. |
+| `500` | `internal_error` | The server could not answer. |
+| `500` | `privacy_configuration_invalid` | telemetry.dev cannot read the privacy settings of the project. |
+| `503` | `evals_unavailable` | Evals is not available at this time. Send the request again later. |
+
+The Evals routes have their own limit of 6,000 requests for each project in a minute. This limit is separate from the limit of the OTLP routes. Read [Rate limits and quotas](/reference/otlp#rate-limits-and-quotas).

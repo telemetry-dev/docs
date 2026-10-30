@@ -1,0 +1,263 @@
+---
+title: Experiments
+description: Run a prompt version or your own code on each item of a dataset, score the outputs, and compare them with the baseline in the dashboard or in CI.
+lastModified: 2026-10-30
+---
+
+An experiment runs a prompt version or your code on each item of a [dataset](/evals/datasets), then scores each output with [evaluators](/evals/evaluators). The experiment page compares the scores with the baseline of the dataset, so you can see which items became better or worse.
+
+There are two kinds of experiment:
+
+- **A prompt version.** telemetry.dev runs a saved version of a prompt of the project on each item. Start it in the dashboard.
+- **Your code.** Your code runs each item and sends the outputs with `runExperiment` (TypeScript) or `run_experiment` (Python). Start it from a script or from CI.
+
+## Run a prompt version
+
+<Steps>
+  <Step title="Open New experiment">
+    Select **New experiment** on the **Experiments** tab of **Evals**. You can also select **Run experiment** on a dataset page, on a version of a dataset, or on a prompt page.
+  </Step>
+  <Step title="Select the prompt">
+    Under **Run**, select **A prompt version**. Select the **Prompt** and the **Version**. Only saved versions can run. The dialog lists the newest 50 versions.
+  </Step>
+  <Step title="Select the items">
+    Select the **Dataset**, then **All items** or one split under **Items**. The experiment uses the newest version of the dataset. To use an older version, open that version of the dataset and select **Run experiment** there.
+  </Step>
+  <Step title="Select the model">
+    Under **Model**, keep the model of the prompt, or select a different model to compare models. The **Other models** group lists only the models of providers that have a key in **Model providers**.
+  </Step>
+  <Step title="Select the scores">
+    Set **Runs for each item** (1 to 5, default 1). Under **Evaluators**, select up to 20 LLM judges, code checks, and rules. Under **Compare with**, keep the baseline of the dataset, or select a different completed experiment of the same dataset.
+  </Step>
+  <Step title="Start the experiment">
+    Read the estimate of the cost and the time, then select **Run experiment**. The experiment page opens.
+  </Step>
+</Steps>
+
+The **Name** of the experiment follows the prompt, the version, and the model, such as `reply-v13-gpt-4o`. You can change it. Names are unique in the project. If the name is in use, telemetry.dev adds a number, such as `-2`.
+
+The keys of the item input become the variables of the prompt. A text value goes in as it is. A different value goes in as JSON. For example, the item input `{"question": "Where is my refund?"}` fills `{{question}}`. If a prompt calls a tool, the tool must have a sample result in the prompt.
+
+The model calls use the provider key of the project. If the project has no key for the provider of the model, the dialog tells you to add it in **Model providers**. Read [Model provider keys](/evals#model-provider-keys).
+
+### How telemetry.dev runs the items
+
+telemetry.dev runs at most 4 items of one experiment at the same time. Each run records a trace in the `experiment` environment, with the root span `experiment <name>`. If a run takes more than 5 minutes, it stops with an error, and the next item starts.
+
+A run with an error still counts as done, and it gets no scores. The experiment stops with **Failed** in these conditions:
+
+- The model returns an error for 20 runs in a row. The scores of the runs before the errors stay.
+- Each run of the experiment has an error.
+- The prompt version is deleted, or the project no longer has a key for the provider.
+
+The estimate in the dialog comes from earlier experiments of the same prompt and model. With no earlier experiment, it comes from the prices of the model. It includes the cost of the LLM judges.
+
+## Run your code
+
+Use `runExperiment` or `run_experiment` when the code under test is more than one prompt, such as an agent with tools. Your code runs on your computer or in CI, and telemetry.dev scores the outputs.
+
+Before you start, make sure that you have these items:
+
+- `@telemetry-dev/sdk` 0.2.2 or later, or `telemetry-dev` 0.3.2 or later.
+- An API key with **Send telemetry** and **Run experiments** access, in `TELEMETRY_DEV_API_KEY`. Read [API keys](/platform/api-keys).
+- A dataset with items in the project of the key.
+
+<CodeGroup>
+
+```ts TypeScript
+import { init, runExperiment } from "@telemetry-dev/sdk";
+
+init({ environment: "experiment" });
+
+const result = await runExperiment({
+  name: "reply-v13-gpt-4o",
+  dataset: "support-golden",
+  task: (item) => replyToCustomer(item.input),
+  evaluators: ["correctness", "helpfulness"],
+  scorers: { short: (output) => String(output).length < 600 },
+  minScores: { correctness: 0.9 },
+});
+
+console.log(result.url);
+```
+
+```python Python
+import telemetry_dev
+
+telemetry_dev.init(environment="experiment")
+
+result = telemetry_dev.run_experiment(
+    name="reply-v13-gpt-4o",
+    dataset="support-golden",
+    task=lambda item: reply_to_customer(item.input),
+    evaluators=["correctness", "helpfulness"],
+    scorers={"short": lambda output, item: len(output) < 600},
+    min_scores={"correctness": 0.9},
+)
+
+print(result.url)
+```
+
+</CodeGroup>
+
+In Python, use `run_experiment_async` for an `async` task or scorer.
+
+The function does these steps:
+
+1. It reads the newest version of the dataset, or the version in `datasetVersion` (`dataset_version`). With `split`, it reads only the items of that split.
+2. It makes the experiment. Without `name`, telemetry.dev selects a name.
+3. It calls `task` for each item, 4 items at the same time. Set `concurrency` to 1 to 100 to change this. With `runsPerItem` (`runs_per_item`), each item runs 1 to 5 times.
+4. It runs your `scorers` on each output, then sends the outputs to telemetry.dev, at most 100 items at a time.
+5. It waits up to 30 minutes for the server evaluators, prints the scores, and returns the result.
+
+### The task
+
+`task` gets the item: `id`, `number`, `input`, `expectedOutput` (`expected_output`), `metadata`, `tags`, `split`, and `runIndex` (`run_index`). Its return value is the output. A value that is not a string becomes JSON. The SDK cuts each output at 100,000 characters.
+
+If the task throws an error, only its item gets an error. The item records the name and the message of the error. Each run gets its own copy of the item, so a task that changes its input does not change the next run.
+
+Each item run is a trace with the span `experiment <name>`. The SDK puts `td.experiment.id` and `td.dataset.item_id` on each span of the run, also on the spans of the telemetry.dev provider integrations. Spans from the Vercel AI SDK and TanStack AI integrations do not get these attributes. Each run also gets its own session ID.
+
+### Scores of the experiment
+
+- `evaluators` names evaluators of the project: LLM judges, code checks, and rules. telemetry.dev runs them on the outputs. The match of the name ignores letter case when only one evaluator matches.
+- `scorers` run on your computer, after the span of the item ends. A scorer gets the output and the item. It returns `true` or `false` for a pass or a fail, a number, a label, or an object with `value`, `label`, and `reason`. A scorer cannot have the name of an evaluator of the run, or the name `user_feedback`.
+- `minScores` (`min_scores`) sets a pass mark for each score name. For a pass or fail score, the mark is the lowest pass rate, from 0 to 1. For a number score, it is the lowest mean. A score less than its mark makes the check fail.
+
+If a scorer throws an error or returns a value that is not a score, the item gets no score of that name. The SDK reports a `scorer_failed` error to `onError` (`on_error`).
+
+### The environment and the key
+
+Call `init({ environment: "experiment" })` before the run. The `experiment` environment keeps the item traces out of your production pages and metrics. In a different environment, the SDK logs a warning. Without an initialized client, the items record no traces and no cost.
+
+A key with **Send telemetry** and **Run experiments** access can send telemetry in the `experiment` environment, also when the key is [limited to a different environment](/platform/api-keys#limit-a-key-to-one-environment).
+
+### The result and errors
+
+The result has the `status`, the `checkStatus` (`check_status`), the item counts, the `url` of the experiment page, and the `scores`. Each score has its value, the baseline value, the change, and its pass mark.
+
+A failed request rejects with an `ExperimentError` (Python raises it). Its `code` tells the cause, such as `dataset_not_found`, `dataset_empty`, `evaluator_not_found`, `insufficient_scope`, `missing_api_key`, or `timeout`. The SDK sends a read, a post of outputs, or the completion again up to 2 times. It does this after a timeout, a network error, a `429`, or a `5xx`. It sends the request that makes the experiment again only after a `429`, so a lost response cannot make a second experiment.
+
+If the function fails after it made the experiment, it first tells telemetry.dev that the run is complete. In Python, this also occurs after `Ctrl-C` or a cancellation. telemetry.dev then ends the experiment with the item runs that it got, or marks it **Failed** when it got none. If the process stops without this step, the experiment ends 24 hours after its last item run.
+
+:::warning[Outputs ignore the capture settings]
+The outputs, the errors of failed tasks, the scorer reasons, and `metadata` go to telemetry.dev and stay with the experiment. `captureOutput`, `mask`, and the prompt capture setting of the environment do not apply to them. They apply only to the spans of the run.
+:::
+
+## Read the results
+
+The **Experiments** tab lists the experiments of the project, newest first. It shows the **Dataset**, the **Scores** with the change from the baseline of the dataset, the **Cost**, the time it was **Created**, and the **Status**. Use the search and the **All datasets** and **All prompts** filters to find an experiment.
+
+| Status | Meaning |
+| --- | --- |
+| A count, such as **64 of 120** | The items run and get scores. Scores show when items finish. |
+| **Completed** | All runs are done and scored. A run with an error has no scores. |
+| **Baseline** | The experiment is the baseline of its dataset. Other experiments on the dataset compare with it. |
+| **Check failed** | A score is less than its pass mark. |
+| **Failed** | The experiment stopped because of errors. The page shows the cause. |
+| **Stopped** | A person stopped the experiment. The scores of the items that ran stay. |
+
+Select an experiment to open its page:
+
+- The details: the dataset, the prompt and the model, or **Your code**, and the time of the run. An experiment from GitHub Actions also shows the pull request and the commit.
+- The summary cards: one card for each evaluator, with the pass rate, the mean, or the most frequent label. A pass rate or a mean also shows the change from the compared experiment. The **p50 latency** and **Cost** cards follow.
+- The check: if the experiment has pass marks, **The check passed** or **The check failed**, with the score and its mark.
+- The items: the **Input**, **Expected**, **Output**, and **Baseline output** of each item, with a column for each score. Select an item to open its outputs, its scores, and the reason of each score. From the item panel, select **Open trace**, **Send to review**, or **Add to dataset**.
+
+A pass rate counts only the items that got a score. An item with **Not scored** or **Judge error** is not part of the rate. If an LLM judge could not score items, the page shows how many.
+
+### Regressed and improved items
+
+When an experiment ends and compares with a different experiment, the filter above the items shows the counts of **Regressed**, **Improved**, and **Unchanged** items:
+
+- **Regressed**: at least one evaluator gave the item a worse score.
+- **Improved**: no evaluator gave a worse score, and at least one gave a better score.
+- **Unchanged**: no score changed.
+
+A pass or fail score compares whether half or more of the runs of the item pass. A number score must change by at least 1, or by at least 0.1 on a scale of 1 or less. Label scores, and items without a score on the two sides, count as unchanged.
+
+To let reviewers look at the regressed items, select **Send regressions to review**. Read [Send regressions to review](/evals/review-queues#send-regressions-to-review).
+
+## Compare experiments
+
+Each dataset has one baseline. A new experiment compares with the baseline by default. To make a completed experiment the baseline, select **Set as baseline** in its row menu. Experiments that started before the change keep their comparison.
+
+On the experiment page, use **Compare with** to compare with a different completed experiment of the same dataset, or with nothing.
+
+To see two experiments side by side, select **Compare with…** in the row menu of an experiment, then select the other experiment. The **Compare experiments** page shows the scores and the cost of **A** and **B**, and the outputs of each item next to each other. Items match by dataset item, so the two experiments must use the same dataset.
+
+## Run experiments in CI
+
+When the `CI` variable is `true` or `1`, or with `ci: true` (`ci=True`), the SDK runs in CI mode. The function then rejects (Python raises) when the check fails (`check_failed`) or when the experiment does not complete (`experiment_failed`). As a result, the process exits with an error. In GitHub Actions, the experiment also records the repository, the commit, the run, and the pull request.
+
+The `telemetry-dev/telemetry/actions/experiment` action runs your eval script in a GitHub Actions workflow. It writes the result to the job summary and to a comment on the pull request.
+
+```yaml
+on: pull_request
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  evals:
+    # Pull requests from forks get no secrets, so the job runs only for branches of this repository.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      TELEMETRY_DEV_API_KEY: ${{ secrets.TELEMETRY_DEV_API_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm ci
+      - uses: telemetry-dev/telemetry/actions/experiment@main
+        with:
+          dataset: support-golden
+          script: evals/reply.eval.ts
+          min-scores: correctness=0.9
+```
+
+| Input | Description |
+| --- | --- |
+| `script` | The eval script. A `.ts`, `.mts`, `.cts`, or `.tsx` script runs with the `tsx` of your project, so add `tsx` to your `devDependencies`. A `.js`, `.mjs`, or `.cjs` script runs with `node`, and a `.py` script with `python`. |
+| `command` | A shell command that runs the eval script, such as `uv run python evals/reply_eval.py`. Give `script` or `command`. |
+| `dataset` | The dataset. If the script also names a dataset, the two names must be the same. |
+| `min-scores` | Pass marks as `name=value` pairs, separated by commas or new lines. For the same name, they replace the `minScores` of the script. |
+| `api-key` | The API key. The default is the `TELEMETRY_DEV_API_KEY` variable of the job. |
+| `base-url` | The default is `https://api.telemetry.dev`. |
+| `working-directory` | The directory of the script or the command. The default is `.`. |
+| `comment` | Set to `false` to write only the job summary. |
+| `github-token` | The token that writes the comment. The default is `github.token`, which must have the `pull-requests: write` permission. |
+
+The action sets `TELEMETRY_DEV_ENVIRONMENT` to `experiment` if the job does not set it. It has two outputs: `check-status` (`passed`, `failed`, or `none`) and `url`. The job fails when the script exits with an error. In CI mode, the SDK makes the script exit with an error when the check fails or when the experiment does not complete, unless the script catches the error.
+
+The comment shows the status of each experiment and the count of items that ran. Its table of scores has the **Value**, the **Change**, and the **Pass mark** of each score. The action writes one comment for each workflow, job, and input, and changes that comment on each later push.
+
+To keep a workflow the same when `main` changes, use a commit SHA of `telemetry-dev/telemetry` in place of `@main`.
+
+## Stop, run again, or delete an experiment
+
+- To stop an experiment that runs, select **Stop** on its page. In a prompt experiment, the items that did not start close without an output, and the runs in progress finish and keep their scores. An experiment of your code takes no more runs, and its next post of runs gets `409 experiment_ended`.
+- To run a prompt experiment again, select **Run again** in its row menu. The **New experiment** dialog opens with the settings of the experiment. An experiment of your code runs again from your code.
+- To delete an experiment, select **Delete experiment** in its row menu. Its outputs and their scores go with it. The traces of its runs stay. You cannot delete an experiment while it runs.
+
+## Cost
+
+The model calls of a prompt experiment and its LLM judges use the provider keys of the project, and your provider bills them. The **Cost** card adds up the cost of the item runs. For your code, it uses the `costUsd` of each run, or the cost of the trace of the run when the run has no `costUsd`. The card does not include the cost of the LLM judges, but the estimate in the **New experiment** dialog does.
+
+Experiments do not count toward the [daily limit for live evaluators](/evals/evaluators#set-the-daily-limit), and the limit does not stop them.
+
+## Limits
+
+| Limit | Value |
+| --- | --- |
+| Name | 128 characters |
+| Runs for each item | 5 |
+| Evaluators in one experiment | 20 |
+| Pass marks | 20 |
+| Items | The items of one dataset version, at most 10,000 |
+| Output of an item from your code | 100,000 characters |
+| Runs of one experiment at the same time | 4 for a prompt experiment, 1 to 100 (default 4) for your code |
+| Time of one run of a prompt experiment | 5 minutes |

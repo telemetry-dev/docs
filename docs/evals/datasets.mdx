@@ -1,0 +1,151 @@
+---
+title: Datasets
+description: Make a dataset of test items from traces, sessions, CSV files, or by hand, and keep each change as a version that experiments can use.
+lastModified: 2026-10-30
+---
+
+A dataset is a list of test items for [experiments](/evals/experiments). Each change to the items makes a new version of the dataset. An experiment keeps the version that it ran on, so you can compare old results after the dataset changes.
+
+To see the datasets of a project, select **Evals** in the project sidebar, then the **Datasets** tab. The list shows each dataset's **Items**, its newest **Version**, its **Last experiment**, and when it was **Updated**.
+
+## Make a dataset
+
+<Steps>
+  <Step title="Open New dataset">
+    On the **Datasets** tab, select **New dataset**.
+  </Step>
+  <Step title="Name the dataset">
+    Enter a **Name** of up to 128 characters. Use lowercase letters, digits, dots, dashes, and underscores, such as `support-golden`. The first character must be a letter or a digit. Code finds the dataset by this name. Enter an optional **Description** of up to 500 characters.
+  </Step>
+  <Step title="Select the first items">
+    Under **Start with**, select **Empty**, **A CSV file**, or **Traces that match a filter**.
+  </Step>
+  <Step title="Make the dataset">
+    Select **Create dataset**. The dataset opens. If you selected **A CSV file**, the CSV import opens. Read [Import a CSV file](#import-a-csv-file).
+  </Step>
+</Steps>
+
+Each dataset name is unique in its project.
+
+With **Traces that match a filter**, enter text in **Trace name has** and select **Last 7 days**, **Last 30 days**, or **Last 90 days**. The match ignores letter case and can be a part of the trace name. The newest 100 traces that match become items, with no expected output. If no trace matches, telemetry.dev makes no dataset.
+
+## The fields of an item
+
+| Field | Contents | Limit |
+| --- | --- | --- |
+| **Input** | A JSON object, such as `{"question": "Where is my refund?"}`. A dashboard experiment uses its keys as the variables of the prompt. | 256 KiB |
+| **Expected output** | Optional text: the correct reply. LLM judges and code checks can compare the output with it. | 100,000 characters |
+| **Metadata** | A JSON object. The default is `{}`. | 256 KiB |
+| **Tags** | Optional labels, separated by commas. telemetry.dev removes spaces at each end and removes repeated tags. | 20 tags, 64 characters each |
+| **Split** | Optional. An experiment can run only the items of one split, such as `test` or `dev`. | 64 characters |
+| **Source** | Where the item came from: **Trace**, **Session**, **CSV import**, **Review queue**, **Experiment**, or **Added by hand**. You cannot change it. | None |
+
+A dataset version holds at most 10,000 items.
+
+## Add or change an item by hand
+
+On the dataset page, select **Add item**. Fill in the fields, then select **Add item**. To change an item, select its row, change the fields, and select **Save changes**. To remove an item, select **Delete item** in its row menu or in its panel.
+
+Each save, add, or delete makes a new version. The panel tells you the number of the version that it will make. The older versions, and the experiments on them, keep the item as it was.
+
+If a different person saved the same item after you opened it, telemetry.dev rejects your save with "Someone changed this item since you opened it". The panel then shows the item from the other person, and your changes are lost.
+
+## Import a CSV file
+
+Open the import in one of these ways:
+
+- Select **Import CSV** on the **Datasets** tab. This makes a new dataset first.
+- Select **Import CSV** in the row menu of a dataset.
+
+Do these steps:
+
+1. **Upload a file.** Drop the file, or select **Choose a file**. The first row must name the columns. Your browser reads the file. A file can have up to 10,000 rows and 5 MB.
+2. **Map columns.** For each column, select an **Item field**: **Input** with a key, **Expected output**, **Tags**, **Split**, **Metadata** with a key, or **Do not import**. The page shows the first 5 rows as items, and the problems that stop the import.
+3. Select **Import N items**. The **Check and import** step shows while the import runs.
+
+The import maps some column names for you. The match ignores letter case:
+
+| Column name | Item field |
+| --- | --- |
+| `expected`, `expected output`, `expected_output`, `expected-output`, `answer`, `output`, `reference`, `ideal` | **Expected output** (the first such column) |
+| `tag`, `tags`, `label`, `labels`, `category`, `categories` | **Tags** |
+| `split` | **Split** |
+| `note`, `notes`, `metadata`, `comment`, `comments` | **Metadata** |
+| `id` | **Do not import** |
+| Other names | **Input**, with the column name as the key |
+
+The CSV file must use commas between values. Use double quotes around a value that has a comma or a line break, and `""` for a quote in a value. The import ignores blank lines and a byte order mark.
+
+Each value comes in as a string. The import does not change numbers or JSON text into other types. The import splits a tags value at each comma. A row with an empty expected output comes in without one, and you can add it later.
+
+The full file becomes one version. An import cannot take the dataset to more than 10,000 items.
+
+## Add traces and sessions
+
+You can copy traces and sessions into a dataset from these places:
+
+- **Traces**, in the **Traces** view: select the check boxes of the rows, then select **Add to dataset**. You can select the rows of one page only. A change of the filters or the page clears the selection.
+- A trace: select **Add to dataset** in the header.
+- A session: select **Add to dataset** in the header.
+
+For traces, select the **Dataset** in the dialog. Under **Expected output**, select **Leave it empty** or **Use the trace output**. Then add optional **Tags** and a **Split**, and select **Add item** (**Add N items** for more than one trace). You can add at most 100 traces at a time.
+
+For a session, select the **Dataset**, then **Add item**. The last reply of the session is always the expected output.
+
+telemetry.dev makes the item from the trace in this order:
+
+1. If the SDK recorded the variables of the prompt, they become the input.
+2. If not, and the input of the trace is a JSON object, the object becomes the input.
+3. If not, the input is `{"input": "<the last user message>"}`.
+
+The input of a trace is the input of its first span that has one. The output is the reply text of its last span that has an output. An output of more than 100,000 characters is cut, and the item gets the metadata `{"truncated": true}`.
+
+A session becomes one item. Its input is `{"messages": [...]}` with the user messages of the newest 50 turns. The expected output is the last reply.
+
+telemetry.dev skips a trace in these conditions, and the toast gives the reason:
+
+- The environment of the trace has prompt capture off, so telemetry.dev stored no input. Read [Turn off prompt and response capture](/platform/privacy#turn-off-prompt-and-response-capture-for-an-environment).
+- Retention deleted the trace.
+- The input is larger than an item can hold.
+
+An item is a copy. It stays in the dataset after retention deletes its trace.
+
+## Use versions
+
+Each change to the items makes one version: an add, an edit, a delete, or an import. A change of the name or the description does not make a version. A new dataset is at version 0 until its first change.
+
+The **Versions** tab lists each version with its **Changes**, the person who made it (**By**), its **Date**, and its **Experiments**. telemetry.dev writes the text of **Changes**, such as "12 items imported from returns.csv". Select a version to see its items. You cannot change the items of an older version. Select **Run experiment** in the row of a version to run an experiment on it.
+
+The **Version** menu in the header of the dataset page also opens an older version. It lists the newest 100 versions.
+
+## Find items
+
+On the **Items** tab, the search matches the text and number values of the input, at each level of the JSON, and the expected output. It does not match keys, metadata, or tags. Use **All tags**, **All splits**, and **All sources** to filter the items. The tab shows 25 items at a time.
+
+## Rename or delete a dataset
+
+On the **Datasets** tab, open the row menu of the dataset:
+
+- Select **Edit name and description** to rename the dataset. Then change the code that loads the dataset by name.
+- Select **Delete dataset**, then **Delete dataset** to confirm.
+
+When you delete a dataset, telemetry.dev also deletes its items, its versions, and the experiments on it. Code that loads the dataset by name then gets an error. You cannot delete a dataset while an experiment on it runs. Stop the experiment first.
+
+## Read a dataset from code
+
+`runExperiment` and `run_experiment` read the dataset for you. Read [Run your code](/evals/experiments#run-your-code). To read the items with a different tool, use `GET /v1/datasets/{name}`. Read [Get a dataset](/reference/evals-api#get-a-dataset).
+
+## Limits
+
+| Limit | Value |
+| --- | --- |
+| Name | 128 characters |
+| Description | 500 characters |
+| Items in a version | 10,000 |
+| Traces or items in one add | 100 |
+| Session turns in one item | 50 |
+| CSV file | 10,000 rows and 5 MB |
+| Input or metadata of an item | 256 KiB of JSON each |
+| Expected output | 100,000 characters |
+| Tags | 20 for each item, 64 characters each |
+| Split | 64 characters |

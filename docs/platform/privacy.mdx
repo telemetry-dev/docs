@@ -1,7 +1,7 @@
 ---
 title: Privacy and retention
 description: Choose what telemetry.dev stores, what it redacts, and how long it keeps telemetry.
-lastModified: 2026-10-27
+lastModified: 2026-10-30
 ---
 
 telemetry.dev stores prompts and responses by default. You can limit what it keeps in three places:
@@ -51,7 +51,7 @@ A workspace owner or admin can change capture settings. Members can view them. E
     Under **Prompt capture**, the `production` and `development` rows are always present. For another environment, select **Add environment**, enter its **Name**, and select **Add environment**.
   </Step>
   <Step title="Turn off the switch">
-    Turn off the switch in the environment's row. The row then says "Prompts and responses are not stored."
+    Turn off the switch in the environment's row. The row then says "Prompts and responses are not stored. Live evaluators that read them show Not scored."
   </Step>
 </Steps>
 
@@ -85,6 +85,19 @@ Capture-off finds content by its key or event name. It does not read text to dec
 - Token counts, cost, and timing.
 
 Redaction still runs on these values. It catches only the patterns described below. If a field can contain private text, remove it in your application.
+
+### Capture-off and Evals
+
+When capture is off for an environment, Evals cannot read the content of its traces:
+
+- A live evaluator that reads the input or the output gives **Not scored**. Read [Prompt capture off](/evals/evaluators#prompt-capture-off).
+- telemetry.dev cannot copy the traces of the environment into a dataset, because it stored no input.
+
+Capture settings do not apply to the outputs that your code sends with `runExperiment` or `run_experiment`. telemetry.dev keeps them with the experiment. Read [Run your code](/evals/experiments#run-your-code).
+
+## Content that Evals sends to model providers
+
+An LLM judge sends its prompt to the model provider of the judge, with the project's provider key. On live and past traces, the prompt has the stored trace content that its variables hold, after redaction. In an experiment, the prompt has the dataset item and the output, and the outputs that your code sends get no redaction. A prompt experiment sends each dataset item to the model of the experiment. Code checks and rules run on telemetry.dev servers and send no content to a model provider. Read [What leaves telemetry.dev](/evals/evaluators#what-leaves-telemetrydev).
 
 ## What built-in redaction removes
 
@@ -171,5 +184,7 @@ Open **Settings**, select **Privacy** under the project in the settings sidebar,
 A new project starts at **Data retention** under **Defaults for new projects** in the workspace's **General** settings, capped at the plan's limit. Unless an owner or admin changed it, that is the plan's maximum. After a plan downgrade, a project keeps its saved retention, but you cannot raise it above the new plan's limit.
 
 Dashboard views show only telemetry inside the retention window, so a shorter retention hides older data right away. A cleanup job then deletes telemetry older than the project's retention. It runs about once a day.
+
+Retention also deletes the scores of the traces that it deletes. Datasets and experiments do not follow retention. A dataset item that came from a trace is a copy, and it stays until you delete it or its dataset. An experiment keeps its outputs and scores until you delete it or its dataset.
 
 The storage layer also deletes all telemetry after 90 days, whatever the project setting.

@@ -1,7 +1,7 @@
 ---
 title: Traces, sessions, and logs
 description: Find a request, inspect its spans, follow a conversation, and read related logs.
-lastModified: 2026-10-28
+lastModified: 2026-10-30
 ---
 
 A trace is one request through your application. Each step inside it, such as a model call, a tool call, or an agent step, is a span. Use the trace explorer to find failed or slow requests and to see what each model call received and returned.
@@ -16,7 +16,7 @@ Both lists have these filters:
 | --- | --- |
 | Search | Matches trace names or span names. It does not search prompt or response content. |
 | Status | Shows **All statuses**, `success`, or `error`. |
-| Environment | Lists up to 100 environment names from your telemetry. Names match regardless of case and surrounding spaces, so `production` also shows telemetry sent as `Production`. |
+| Environment | Lists up to 100 environment names from your telemetry. Names match regardless of case and surrounding spaces, so `production` also shows telemetry sent as `Production`. Without a selection, the lists leave out the `experiment` environment of [experiment runs](/evals/experiments). |
 | Framework | Lists the frameworks detected in your telemetry. |
 | Date range | Shows **Last 7 days**, **Last 30 days**, or **Last 90 days**. The default is 30 days. |
 | Session | Select a value in the **Session** column. A chip shows the filter; select it to clear the filter. |
@@ -30,7 +30,9 @@ The table shows one page at a time. Use the pager below it to move between pages
 
 ### Trace columns
 
-The trace list shows **Date** and **Trace**, plus these columns: **Input**, **Output**, **Duration**, **Tokens**, **Cost**, **Spans**, **Models**, **Session**, **User**, and **Environment**.
+The trace list shows **Date** and **Trace**, plus these columns: **Scores**, **Prompt**, **Input**, **Output**, **Duration**, **Tokens**, **Cost**, **Spans**, **Models**, **Session**, **User**, and **Environment**.
+
+- **Scores** shows one [score](/evals/scores) of the trace with its value, and **+N** for the others. Select a value to filter the list by it.
 
 - **Input** and **Output** show the start of the request's prompt and reply.
 - **Duration** shows the time to first token when you hover over it, if the trace has that value.
@@ -47,9 +49,13 @@ Select a span row to open its trace with that span selected.
 
 Select **Columns** to show or hide columns. **Environment** is hidden by default in both lists, and **Service** is hidden by default in the span list. Your browser keeps the choice for later visits.
 
+### Select traces
+
+In the trace list, select the check boxes of rows, then select **Add to dataset** or **Add to review queue**. You can select the rows of one page. A change of the filters or the page clears the selection. Read [Add traces and sessions](/evals/datasets#add-traces-and-sessions) and [Add traces by hand](/evals/review-queues#add-traces-by-hand).
+
 ## Inspect a trace
 
-Select a trace row to open the trace. The header shows the trace's name, its status, and its ID, with a button to copy the ID. Below the header are two tabs:
+Select a trace row to open the trace. The header shows the trace's name, its status, and its ID, with a button to copy the ID. The header also has **Add to dataset** and **Add to review queue**. Below the header are two tabs:
 
 - **Trace**: the span tree, with a bar for each span on a shared time axis, nested under its parent.
 - **Metadata**: the trace's details. **Trace** lists the **Trace ID**, **Started**, **Duration**, **Turns**, **Spans**, and **Errors**. **Usage** lists the **Models**, the token counts, and the **Cost**. **Source** lists the **Agent**, **Service**, **Environment**, **Framework**, **Session**, and **User**. The trace's metadata follows, if it has any.
@@ -74,6 +80,7 @@ Select a span to open its panel. The panel header shows the span's type and name
 
 - **Error**: the error message and details, for a failed span.
 - **Metrics**: when the span started, its duration, and its offset from the start of the trace. Model calls also show **First token**, **Output speed**, **Cost**, and their tokens.
+- **Scores**: the scores of the trace and the span, with the source and the reason of each. The root span always shows this section, with **Add score**. Read [Read scores on a trace](/evals/scores#read-scores-on-a-trace).
 - A section for the kind of span, such as **Model call** with the **Requested model**, **Response model**, **Provider**, **Finish reason**, and **Response ID**, or **Tool call**, **Agent**, or **MCP**.
 - **Input** and **Output**: the prompt and the reply. In **Output**, a model's reasoning, such as Anthropic thinking or Gemini thoughts, appears as **Reasoning** above the reply when it was captured. A tool call shows **Arguments** and **Result** instead. Where a section offers them, select **Pretty** for a formatted view or **JSON** for the stored value.
 - **Events**: the span events and their attributes.
@@ -87,9 +94,9 @@ If prompt and response capture is off for the environment, the **Input** and **O
 
 Select **Sessions** in the project sidebar to list conversations. A session groups the traces that share a session ID. To set one, read [Add user, session, and metadata](/sdk/typescript#add-user-session-and-metadata) for TypeScript or [Python](/sdk/python#add-user-session-and-metadata).
 
-Select **24h**, **3d**, **7d**, or **30d** to set the time range. You can search by session ID or trace name and filter by agent, user, or model. The list shows each session's **Agent**, **Model**, **Customer**, **Turns**, **Tokens**, **Cost**, and **Last active** time.
+Select **24h**, **3d**, **7d**, or **30d** to set the time range. You can search by session ID or trace name and filter by agent, user, model, or environment. The list shows each session's **Agent**, **Model**, **Customer**, **Turns**, **Tokens**, **Cost**, and **Last active** time.
 
-Select a session to see its **Customer**, **Agent**, **Models**, **Started** time, **Duration**, **Tokens**, and **Cost**, a list of its **Turns**, and each turn of the conversation. Select **Open in Traces** to list the session's traces, or **Open trace** if the session has one trace.
+Select a session to see its **Customer**, **Agent**, **Models**, **Started** time, **Duration**, **Tokens**, and **Cost**, a list of its **Turns**, and each turn of the conversation. Select **Open in Traces** to list the session's traces, or **Open trace** if the session has one trace. Select **Add to dataset** or **Add to review queue** to send the session to Evals. The session page also shows the [scores](/evals/scores#read-scores-on-a-session) of the session and of each turn.
 
 ## Read logs
 

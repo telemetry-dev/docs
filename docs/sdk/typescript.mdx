@@ -1,7 +1,7 @@
 ---
 title: TypeScript SDK
 description: Add spans, logs, metrics, and trace context to TypeScript applications.
-lastModified: 2026-10-26
+lastModified: 2026-10-30
 seo:
   title: "TypeScript SDK for LLM Tracing"
   description: "Install @telemetry-dev/sdk to add OpenTelemetry spans, logs, metrics, and trace context to TypeScript AI applications and send them to telemetry.dev over OTLP."
@@ -494,6 +494,15 @@ span.end({ finishReason: "stop" });
 ```
 
 After the first chunk, each interval between chunks feeds the `time_per_output_chunk` histogram. The SDK times chunks when your loop receives them, so time your code spends between reads counts toward the interval. `recordOutputChunk()` uses `performance.now()` by default. If you pass your own timestamp, use the same clock for every chunk of the span.
+
+## Run experiments and send scores
+
+`@telemetry-dev/sdk` 0.2.2 and later has two functions for [Evals](/evals):
+
+- `runExperiment(options)` runs your code on each item of a dataset, and records the outputs and the scores as an experiment. Read [Run your code](/evals/experiments#run-your-code).
+- `score(options)` records a score on a trace, a span, or a session, such as the thumbs up or down of a user. Read [Send scores from your app](/evals/scores#send-scores-from-your-app).
+
+The two functions use the API key and the base URL of the initialized client. Without a client, they use `TELEMETRY_DEV_API_KEY` and `TELEMETRY_DEV_BASE_URL`. Each function also takes its own `apiKey`, `baseUrl`, and `fetch` options. The key must have **Run experiments** access. `runExperiment` also sends the traces of the items, so the key of the client must also have **Send telemetry**. Read [Select the access of a key](/platform/api-keys#select-the-access-of-a-key).
 
 ## Flush and shut down
 

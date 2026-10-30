@@ -2,7 +2,7 @@
 title: telemetry.dev documentation
 description: Send your first AI trace, then connect the provider, framework, or coding agent you already use.
 sidebar: { label: "Introduction", order: 0 }
-lastModified: 2026-10-26
+lastModified: 2026-10-30
 seo:
   title: "LLM Observability Documentation"
   description: "Docs for telemetry.dev, OpenTelemetry-native observability for AI apps. Send your first trace, then connect your model provider, framework, or coding agent."
@@ -39,12 +39,14 @@ telemetry.dev is built on OpenTelemetry. The SDKs send standard OTLP/HTTP, and s
 - **Follow a conversation.** Traces that share a session ID are grouped into one session.
 - **Track cost and usage.** Tokens and cost are calculated per span and added up per trace, session, model, and user.
 - **Keep sensitive data out.** Turn off prompt and response capture per environment, and redact secrets and personal data before storage.
+- **Measure quality.** Run a prompt version or your code on a dataset, score the replies with LLM judges, code checks, and reviewers, and compare the results.
 
 ## Platform
 
 <CardGroup cols={2}>
   <Card title="Traces, sessions, and logs" href="/platform/traces" icon="activity">Search traces, read the span waterfall, and follow sessions.</Card>
   <Card title="Analytics" href="/platform/analytics" icon="gauge">Requests, cost, p95 latency, tokens, and error rate over time.</Card>
+  <Card title="Evals" href="/evals" icon="flask-conical">Datasets, experiments, evaluators, scores, and review queues.</Card>
   <Card title="Privacy and retention" href="/platform/privacy" icon="shield">Control what is captured, redact sensitive values, and set retention.</Card>
   <Card title="OTLP ingest API" href="/reference/otlp" icon="book-open">Endpoints, authentication, limits, and error responses.</Card>
 </CardGroup>

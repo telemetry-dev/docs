@@ -1,7 +1,7 @@
 ---
 title: Python SDK
 description: Add spans, logs, metrics, and trace context to Python applications.
-lastModified: 2026-10-26
+lastModified: 2026-10-30
 seo:
   title: "Python SDK for LLM Tracing"
   description: "Install telemetry-dev to add OpenTelemetry traces, logs, metrics, and trace context to Python AI applications. The SDK sends data to telemetry.dev over OTLP."
@@ -490,6 +490,15 @@ with start_span("chat-stream", type="generation", model="gpt-4o") as span:
 ```
 
 After the first chunk, each interval between chunks feeds the `time_per_output_chunk` histogram. The SDK times chunks when your loop receives them, so time your code spends between reads counts toward the interval. `record_output_chunk()` uses `time.perf_counter()` by default. If you pass your own `timestamp_ms`, use the same monotonic millisecond clock for every chunk of the span.
+
+## Run experiments and send scores
+
+`telemetry-dev` 0.3.2 and later has these functions for [Evals](/evals):
+
+- `run_experiment(...)` runs your code on each item of a dataset, and records the outputs and the scores as an experiment. `run_experiment_async(...)` takes `async` tasks and scorers. Read [Run your code](/evals/experiments#run-your-code).
+- `score(...)` records a score on a trace, a span, or a session, such as the thumbs up or down of a user. `score_async(...)` sends it from a worker thread. Read [Send scores from your app](/evals/scores#send-scores-from-your-app).
+
+The functions use the API key and the base URL of the enabled client. Without a client, they use `TELEMETRY_DEV_API_KEY` and `TELEMETRY_DEV_BASE_URL`. Each function also takes its own `api_key` and `base_url` arguments. The key must have **Run experiments** access. `run_experiment` also sends the traces of the items, so the key of the client must also have **Send telemetry**. Read [Select the access of a key](/platform/api-keys#select-the-access-of-a-key).
 
 ## Flush and shut down
 

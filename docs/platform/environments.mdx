@@ -1,7 +1,7 @@
 ---
 title: Environments
 description: Label telemetry by deployment, then filter by it, limit API keys to it, and set capture for it.
-lastModified: 2026-10-28
+lastModified: 2026-10-30
 ---
 
 An environment names the deployment that sent telemetry, such as `production`, `staging`, or `development`. Use environments to keep one project's deployments apart: you can filter by environment, limit an API key to one environment, and turn off prompt and response capture for one environment.
@@ -25,10 +25,17 @@ Set the same environment name on every service in a deployment. The dashboard sh
 | Where | What you can do |
 | --- | --- |
 | **Traces** | Filter traces and spans by environment. The filter lists up to 100 environment names. The **Environment** column is hidden by default; turn it on in **Columns**. |
+| **Sessions** | Filter sessions by environment. |
 | Trace detail | Read the trace's environment on the **Metadata** tab. |
 | **Logs** | Read a log's environment in the log details. |
 | **API keys** | Limit a key to one environment. |
 | **Settings** → **Privacy** | Turn prompt and response capture on or off for each environment. |
+
+## The `experiment` environment
+
+A prompt experiment records each item run as a trace in the `experiment` environment. Set this environment in the SDK client before you run an experiment of your code. Read [The experiment environment](/evals#the-experiment-environment).
+
+The **Overview**, **Traces**, and **Sessions** pages leave out `experiment` by default. To see these traces, select `experiment` in the **Environment** filter of **Traces** or **Sessions**. Live evaluators with **Any environment** also leave it out.
 
 ## Limit an API key to one environment
 
