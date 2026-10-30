@@ -1,7 +1,7 @@
 ---
 title: Connect an AI agent
 description: Let Claude, ChatGPT, Cursor, VS Code, or another MCP client read traces, logs, and usage from one workspace.
-lastModified: 2026-10-29
+lastModified: 2026-10-30
 ---
 
 telemetry.dev runs an MCP server at `https://telemetry.dev/mcp`. An AI agent connected to it can find traces, read a trace's spans and errors, list logs, and summarize token usage and cost, so you can ask questions such as "why did the last checkout run fail?" in your editor or chat app.
@@ -61,14 +61,36 @@ If the page says **telemetry.dev has not verified this app**, the app's name was
 | Tool | What it returns |
 | --- | --- |
 | `list_projects` | The workspace's projects. Every other tool needs a project from this list. |
-| `search_sessions` | Sessions, most recently active first, with trace count, errors, tokens, and cost. |
-| `search_traces` | Traces, newest first, filtered by name, status, environment, session, or end user. |
-| `get_trace` | One trace's spans with models, tools, timing, tokens, cost, and error text, plus its first logs. |
+| `search_sessions` | Sessions with traces in a time window, newest first, with trace count, errors, tokens, and cost. |
+| `search_traces` | Traces in a time window, newest first, filtered by name, status, environment, framework, service, session, or end user, or by the model, provider, or operation of one of their spans. |
+| `get_trace` | One trace's spans with models, tools, timing, tokens, cost, and error text, and its logs, in pages. It also returns `trace.url`, the trace's page in the dashboard, so an agent can give you a link to the run. |
 | `get_span_payload` | The captured input, output, or error of one span, in pages. Needs the extra permission below. |
-| `list_logs` | Up to 50 of the most recent log records, filtered by level, with counts per level. |
+| `list_logs` | Log records in a time window, newest first, filtered by level, with counts per level for the whole window. |
 | `get_usage_summary` | Requests, errors, latency, tokens, cost, and active users for 7, 30, or 90 days, compared with the period before, broken down by model, provider, end user, or operation. The breakdown lists the top 6 groups by requests. |
 
-Every tool reads only within the project's retention period. Search tools return pages with a cursor for the next one, and a single result is cut at 40,000 characters.
+Every tool reads only within the project's retention period. A single result holds at most 40,000 characters.
+
+### Time windows
+
+`search_traces`, `search_sessions`, and `list_logs` take `since` and `until`. Each is a duration before now, such as `30m`, `2h`, or `7d`, or an RFC 3339 time with `Z` or an offset, such as `2026-10-30T14:00:00Z`. The window includes `since` and excludes `until`. Without them, `search_traces` searches the whole retention period, `search_sessions` the last 24 hours, and `list_logs` the last 7 days.
+
+The server resolves a duration against its own clock. A `since` before the retention period starts at the start of it, and an `until` in the future ends now. Each result has a `window` with the times it read, for example:
+
+```json
+"window": {
+  "since": "2026-10-30T12:00:00.000Z",
+  "until": "2026-10-30T14:00:00.000Z",
+  "capped_by_retention": false
+}
+```
+
+`capped_by_retention` is `true` when the window starts at the start of the retention period, so older data was not read. The older `range_hours` and `range_days` arguments still work, but not together with `since` or `until`. A window the server can't read, such as one that ends before the retention period, returns an error that says what to change.
+
+### Pages
+
+While a result's `next_cursor` is not null, pass it as `cursor` to get the next page. The cursor keeps the window of the first page, so a duration such as `2h` covers the same two hours on every page. Pass the same other arguments as the call that returned the cursor; only `limit` can change. A cursor from a call with other arguments returns an error.
+
+`search_sessions` lists sessions by the start of their latest trace in the window. A trace that started before the window ended but reached telemetry.dev after the first page was read can move its session to a page already read, so a session can be missed or listed twice. `list_logs` counts levels over the whole window on every page, so a late log can change the counts between pages.
 
 ### Prompts and outputs
 
