@@ -92,7 +92,7 @@ Names match without regard to letter case. If two projects have the same name, u
 | `telemetry use <name\|id>` | Sets the default project. |
 | `telemetry traces` | Finds traces, newest first. Filter with `--errors`, `--name`, `--env`, `--session`, and `--user`, and from version 0.1.4 with [`--since` and `--until`](#time-windows), `--framework`, `--service`, `--model`, `--provider`, and `--operation`. |
 | `telemetry trace <trace-id>` | Shows a trace's spans as a tree, with duration, tokens, error text, and the trace's logs. From version 0.1.4 it also prints a link to the trace in the dashboard. |
-| `telemetry sessions` | Finds sessions, most recently active first. Filter with `--range` (`24h`, `72h`, `7d`, or `30d`; default `24h`), `--errors`, `--contains`, `--agent`, `--model`, and `--user`, and from version 0.1.4 with `--since` and `--until`. |
+| `telemetry sessions` | Finds sessions by the start of their latest trace, newest first. Filter with `--range` (`24h`, `72h`, `7d`, or `30d`; default `24h`), `--errors`, `--contains`, `--agent`, `--model`, and `--user`, and from version 0.1.4 with `--since` and `--until`. |
 | `telemetry logs` | Lists the newest logs, with counts per level. Filter with `--level` and `--range` (`7d`, `30d`, or `90d`; default `7d`), and from version 0.1.4 with `--since` and `--until`. |
 | `telemetry usage` | Summarizes requests, errors, p95 latency, tokens, cost, and active users, compared with the period before. Set the period with `--range` and the breakdown with `--by` (`model`, `provider`, `user`, or `operation`; default `model`). |
 | `telemetry payload <trace-id> <span-id>` | Prints a span's captured input and output. |
