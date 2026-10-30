@@ -1,14 +1,14 @@
 ---
 title: Alerts
-description: Get an email when model cost, traces, model or tool failures, ingestion errors, or quota usage need attention.
-lastModified: 2026-10-28
+description: Get an email when model cost, traces, model or tool failures, eval scores, ingestion errors, or quota usage need attention.
+lastModified: 2026-10-30
 ---
 
-Alerts check your telemetry every 5 minutes and email you when something needs attention: model cost heading over budget, a trace that might be an agent loop, a burst of failed model or tool calls, or ingestion that is failing or running out of quota.
+Alerts check your telemetry every 5 minutes and email you when something needs attention: model cost heading over budget, a trace that might be an agent loop, a burst of failed model or tool calls, a drop in the pass rate of an evaluator, or ingestion that is failing or running out of quota.
 
 There are two places to set them up:
 
-- **Project alerts** cover cost, traces, model and tool calls, and ingestion errors for one project. Select **Alerts** in the project sidebar. The page has three tabs: **Rules**, **History**, and **Destinations**.
+- **Project alerts** cover cost, traces, model and tool calls, eval scores, and ingestion errors for one project. Select **Alerts** in the project sidebar. The page has three tabs: **Rules**, **History**, and **Destinations**.
 - **Workspace alerts** cover quota and the mix of data the whole workspace sends. Open **Workspace settings**, select **Usage** in the settings sidebar, and go to the **Alerts** section.
 
 Workspace owners and admins can create and change alerts. Other members can see the alerts but cannot change them. Alerts are available on every plan.
@@ -17,7 +17,7 @@ Workspace owners and admins can create and change alerts. Other members can see 
 
 The **Rules** tab lists every kind of project alert, and the workspace's **Alerts** section lists the workspace alerts. Each row says in one sentence when the alert opens.
 
-To turn an alert on, select its switch. It starts with the defaults listed below and checks within 5 minutes. **Monthly budget** has no default budget, so its switch opens the settings instead; enter a budget and select **Turn on**. A project with no alerts also shows **Turn on 6 alerts**, which turns on six recommended alerts with their default limits. A project that already has other alerts and a destination, but no **Tool errors** alert, shows owners and admins **New: Tool errors**; select **Turn on Tool errors** to add it with its defaults and the project's email recipients. Adding it does not change the other alerts. Turning **Tool errors** off removes the prompt.
+To turn an alert on, select its switch. It starts with the defaults listed below and checks within 5 minutes. **Monthly budget** has no default budget, so its switch opens the settings instead; enter a budget and select **Turn on**. **Eval score drop** has no default evaluator, so its switch also opens the settings. A project with no alerts also shows **Turn on 6 alerts**, which turns on six recommended alerts with their default limits. A project that already has other alerts and a destination, but no **Tool errors** alert, shows owners and admins **New: Tool errors**; select **Turn on Tool errors** to add it with its defaults and the project's email recipients. Adding it does not change the other alerts. Turning **Tool errors** off removes the prompt.
 
 To change an alert's settings, select its row on the **Rules** tab, or its name in the workspace's **Alerts** section. Edit the fields under **Alert when** and select **Save changes**. **Current data** runs the alert against your current telemetry and says whether it would alert now (**Would alert now**, **All clear now**, or **Needs more data**), with the measurement an email would report. It sends no email.
 
@@ -114,6 +114,16 @@ Opens when telemetry.dev records at least that many diagnostics with the same [d
 
 Opens when fewer than the minimum share of model calls with token usage have a cost. When the last hour has fewer calls than **Minimum calls**, the rule uses the last 6 hours. A call usually has no cost because telemetry.dev has no price for its model; see [Cost](https://telemetry.dev/docs/reference/cost).
 
+### Eval score drop
+
+**Settings:** the **Evaluator**, the **Environment** (default `production`), the lowest pass rate in percent (default 85), and **Minimum scored traces** (default 50).
+
+Watches the scores of one pass or fail evaluator on traces. Read [Evaluators](/evals/evaluators). The rule counts the traces that started in the last 6 hours and got a score with a value from the evaluator. A trace fails when one of its scores from the evaluator is a fail. The scores of experiment items do not count.
+
+The rule opens when the pass rate of these traces is less than the limit. With fewer scored traces than **Minimum scored traces**, the rule shows **Needs more data**. If someone deletes the evaluator, or changes it so that it no longer gives pass or fail scores of traces, the rule also shows **Needs more data** and tells you to select a different evaluator.
+
+**Investigate** opens the traces of the last 7 days in the environment that have a fail score from the evaluator.
+
 <span id="organization-alerts" />
 
 ## Workspace alerts
@@ -150,11 +160,11 @@ Each check reports every rule as breached, healthy, or still needing more data.
 - **Resolving.** An alert resolves after three healthy checks in a row, about 15 minutes. Recipients get a resolved email if they got the opening email.
 - **Quiet period.** For 30 minutes after an alert resolves, the same thing opening again still appears on the page, but its opening email is held. It goes out on the first check after the 30 minutes if the alert is still breached. An alert that resolves before then sends no email. The quiet period applies only to the thing that resolved: a different environment, model, or trace opening in that time is emailed as usual. Immediate opens are not held.
 
-A rule can have several alerts open at once, one for each thing it watches: each environment for a budget, each provider and model for model failures, each tool and error type for tool failures, each diagnostic code and API key environment for ingestion errors.
+A rule can have several alerts open at once, one for each thing it watches: each environment for a budget, each provider and model for model failures, each tool and error type for tool failures, each diagnostic code and API key environment for ingestion errors. An **Eval score drop** rule watches one evaluator in one environment, so it has at most one open alert.
 
 ### Needs more data
 
-Rules that compare with your usual traffic need history before they can decide. **Cost per trace jump**, **Model errors**, and **Tool errors** need at least 7 comparable hours from the last 30 days, and **Data mix shift** needs 7 samples of the same hour of the day. **Missing prices** needs at least **Minimum calls** calls in the last 6 hours, and **Monthly budget** needs the first 24 hours of the month. Until then the rule shows **Needs more data**, except that **Model errors** and **Tool errors** can open without history when half or more of the calls fail, subject to their count minimums. An existing model or tool failure alert can recover when fewer than 10 calls fail, including when traffic stops.
+Rules that compare with your usual traffic need history before they can decide. **Cost per trace jump**, **Model errors**, and **Tool errors** need at least 7 comparable hours from the last 30 days, and **Data mix shift** needs 7 samples of the same hour of the day. **Missing prices** needs at least **Minimum calls** calls in the last 6 hours, **Eval score drop** needs at least **Minimum scored traces** scored traces in the last 6 hours, and **Monthly budget** needs the first 24 hours of the month. Until then the rule shows **Needs more data**, except that **Model errors** and **Tool errors** can open without history when half or more of the calls fail, subject to their count minimums. An existing model or tool failure alert can recover when fewer than 10 calls fail, including when traffic stops.
 
 A rule with nothing to judge is **All clear**, not **Needs more data**. For example, **Model errors** is all clear when no calls are failing at all.
 
@@ -171,7 +181,7 @@ Each email has these sections:
 - **Why it matters**: what the problem means for your application or bill.
 - **Likely cause**: the model, provider, agent, or error that contributed most, when telemetry.dev can tell.
 
-The **Investigate** button opens the page to start from: the project overview, the trace itself for a runaway trace, the failed spans of the model or tool for model and tool errors, the project's **Setup** page for ingestion errors, or the workspace's **Usage** or **Billing** settings for quota. When the rule watches one environment, the spans are filtered to it. A name longer than 128 characters is left out of the filter.
+The **Investigate** button opens the page to start from: the project overview, the trace itself for a runaway trace, the failed spans of the model or tool for model and tool errors, the project's **Setup** page for ingestion errors, the traces with a fail score of the evaluator for an eval score drop, or the workspace's **Usage** or **Billing** settings for quota. When the rule watches one environment, the spans are filtered to it. A name longer than 128 characters is left out of the filter.
 
 ## Alert history
 

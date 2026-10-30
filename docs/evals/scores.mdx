@@ -1,0 +1,132 @@
+---
+title: Scores
+description: Read the scores of traces and sessions, filter traces by a score, add scores by hand, and send the feedback of your users from your app.
+lastModified: 2026-10-30
+---
+
+A score is one result on a trace, a span, a session, or an experiment item. Scores come from [evaluators](/evals/evaluators), from reviewers in [review queues](/evals/review-queues), from members on the trace page, and from your app.
+
+## Kinds of scores
+
+| Kind | Values | Shown as |
+| --- | --- | --- |
+| Pass / fail | The label `pass` with the value 1, or `fail` with 0 | **Pass** or **Fail** |
+| Number | A number in the range of the evaluator, such as 1 to 5 | The number, such as "4 / 5" |
+| Labels | One label of the evaluator | The label |
+| Up / down | 1 for up, 0 for down | A thumb with **Up** or **Down** |
+
+A score can also show one of these statuses:
+
+- **Not scored**: the evaluator did not apply, such as a code check that returned `null`, or a trace from an environment with prompt capture off.
+- **Judge error**: the evaluator returned an error, such as a provider error.
+
+Pass rates and averages count only the scores with a value. They do not count **Not scored** and **Judge error**.
+
+## Read scores on a trace
+
+Open a trace and select its root span. The **Scores** section of the span panel shows the scores of the trace and of the span. A different span shows the section only when it has scores of its own.
+
+Each row shows the name of the score, the value, the source, and the reason or the comment. The source is one of these:
+
+- The model of an LLM judge, such as "gpt-4o-mini judge".
+- **Code check** or **Rule**.
+- The reviewer of a review queue, such as "Maya Chen · review queue".
+- The name of the member who added the score on the trace page.
+- **From your app**, for a score from the SDK or the API.
+
+## Add a score on a trace
+
+Members can add a human score on a trace. The evaluator must be a human score with **Members on Trace detail** selected. Read [Human scores](/evals/evaluators#human-scores).
+
+<Steps>
+  <Step title="Open Add score">
+    Open the trace, then select **Add score** in the **Scores** section.
+  </Step>
+  <Step title="Give the score">
+    Select the **Score**, then the **Value**. Enter an optional **Comment** of up to 4,000 characters.
+  </Step>
+  <Step title="Save the score">
+    Select **Save score**.
+  </Step>
+</Steps>
+
+The score goes on the span that you look at. If you add the same score again on the same span, your new score replaces your earlier score.
+
+Only the person who added a score on the trace page can remove it. To remove it, select **Remove score** in its row. You cannot remove scores from evaluators, review queues, or your app.
+
+## Read scores on a session
+
+The session page shows the newest score of each name on the session. These include the scores that your app sent with only a session ID, and the reviews of the session. Each turn shows a summary of the scores of its trace.
+
+## Filter traces by a score
+
+The trace list on the **Traces** page has a **Scores** column. Each cell shows one score and its value, and **+N** for the other scores of the trace. Hover over **+N** to see the names of all of them. A trace can have more than one pass or fail score of the same name, such as from two reviewers. The cell then shows the pass rate.
+
+To filter by a score, select a value in the **Scores** column, such as **Fail**. A chip above the table shows the filter, such as "Correctness Fail". Select the chip to clear the filter. You can filter by a pass or fail value, an up or down value, or a label.
+
+The filter has these limits:
+
+- It reads the newest 1,000 scores that match. When more scores match, the list says that traces with older scores do not show.
+- It counts only scores with a value.
+- It leaves out experiment runs, unless the **Environment** filter is `experiment`.
+- The **Spans** view has no score filter.
+
+A score from your app with a name that no evaluator has shows its number or label, and you cannot filter by it.
+
+## Send scores from your app
+
+Use `score` to record a score on a trace, a span, or a session. For example, send the thumbs up or down of a user on a reply:
+
+<CodeGroup>
+
+```ts TypeScript
+import { score, startActiveSpan } from "@telemetry-dev/sdk";
+
+// When the app replies, keep the trace ID of the reply with the message.
+const reply = await startActiveSpan("reply", async (span) => ({
+  text: await replyToCustomer(message),
+  traceId: span.traceId,
+}));
+
+// Later, when the user selects thumbs down:
+await score({ name: "user_feedback", traceId: reply.traceId, value: 0, comment: "Wrong amount" });
+```
+
+```python Python
+import telemetry_dev
+
+# When the app replies, keep the trace ID of the reply with the message.
+with telemetry_dev.start_span("reply") as span:
+    text = reply_to_customer(message)
+    trace_id = f"{span.span.get_span_context().trace_id:032x}"
+
+# Later, when the user selects thumbs down:
+telemetry_dev.score(name="user_feedback", trace_id=trace_id, value=0, comment="Wrong amount")
+```
+
+</CodeGroup>
+
+`score` is in `@telemetry-dev/sdk` 0.2.2 or later, and in `telemetry-dev` 0.3.2 or later. The API key must have **Run experiments** access. Call `score` from your server. Do not put the key in a browser.
+
+- Give `traceId` (`trace_id`), `sessionId` (`session_id`), or the two. To score one span, also give its `spanId` (`span_id`).
+- Give `value`, `label`, or the two. A pass or fail score has the label `pass` with the value 1, or `fail` with 0.
+- `user_feedback` takes the value 1 for up or 0 for down, and no label. The first `user_feedback` score of a project adds the **User feedback** evaluator.
+- A score can have a `comment` of up to 4,000 characters. telemetry.dev applies the [redaction](/platform/privacy#what-built-in-redaction-removes) of the project to the comment.
+
+`score` does not throw errors into your code. It returns the ID of the score, or `undefined` (`None` in Python) after it reports a `ScoreError`. The error goes to the `onError` (`on_error`) of the client, or to the SDK log when no client is initialized. It makes one request, with no retry. In TypeScript, it waits 10 seconds at most. In Python, `score_async` runs the request in a worker thread.
+
+Each call adds a new score. telemetry.dev does not merge a score with an earlier score of the same name. It also does not examine whether the trace exists.
+
+To send a score from a different language, use `POST /v1/scores`. Read [Send a score](/reference/evals-api#send-a-score).
+
+## Get an alert when a pass rate falls
+
+The **Eval score drop** alert sends an email when the pass rate of a pass or fail evaluator over 6 hours becomes less than a limit. Read [Eval score drop](/platform/alerts#eval-score-drop).
+
+## Scores of prompt versions
+
+The **Metrics** tab of a prompt shows two scores for each version of the prompt: the pass rate of a live pass or fail evaluator, and the **User feedback**. Versions newer than the `production` version show the change from it. The tab counts only scores of live traces, not of experiment runs.
+
+## Retention
+
+Scores of traces and sessions follow the retention of the project. When retention deletes a trace, telemetry.dev also deletes its scores. A score without a trace, such as a score of a session, expires by the time that telemetry.dev got it. Scores of experiment items stay with their experiment. Read [Set retention](/platform/privacy#set-retention).

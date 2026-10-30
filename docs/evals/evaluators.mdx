@@ -1,0 +1,246 @@
+---
+title: Evaluators
+description: Score replies with LLM judges, code checks, rules, human scores, and user feedback, on experiments and on a sample of live traces.
+lastModified: 2026-10-30
+---
+
+An evaluator gives a score to a reply. The name of the evaluator is the name of its scores on traces and experiments. The scores of the **User feedback** evaluator have the name `user_feedback`. Evaluators score the items of [experiments](/evals/experiments) and a sample of new traces.
+
+To see the evaluators of a project, select **Evals** in the project sidebar, then the **Evaluators** tab. The list shows each evaluator's **Type**, **Score**, where it **Runs on**, and its results of the **Last 7 days**. Select an evaluator to open its panel.
+
+## Types of evaluators
+
+| Type | What gives the score | Score kinds |
+| --- | --- | --- |
+| **LLM judge** | A model reads the trace and gives a score with a reason. | Pass / fail, 0 to 1, 1 to 5, labels |
+| **Code check** | Your TypeScript or Python function. | Pass / fail, 0 to 1 |
+| **Rule** | Conditions on latency, cost, length, text, JSON, or a tool call. | Pass / fail |
+| **Human score** | Persons, in review queues and on the trace page. | Pass / fail, a number range, labels |
+| **User feedback** | Your app sends the thumbs up or down of your users. | Up / down |
+
+The **New evaluator** dialog also shows **Pairwise judge**: a model that selects the better of two replies from two experiments. At this time, telemetry.dev saves no scores from pairwise judges. You can run one with **Try it** on two experiments of the same dataset.
+
+LLM judges, code checks, and rules can score experiments and live traces. Human scores come from [review queues](/evals/review-queues) and from [**Add score**](/evals/scores#add-a-score-on-a-trace) on a trace. User feedback comes from your app. Read [Send scores from your app](/evals/scores#send-scores-from-your-app).
+
+## Make an evaluator
+
+<Steps>
+  <Step title="Select the type">
+    On the **Evaluators** tab, select **New evaluator**. Select the type, then **Continue**. For **User feedback**, a panel opens with the code that sends feedback. Read [User feedback](#user-feedback).
+  </Step>
+  <Step title="Name the evaluator">
+    Enter a **Name** of up to 64 characters, and an optional **Description** of up to 500 characters. Names are unique in the project. You cannot use the names `User feedback` and `user_feedback`.
+  </Step>
+  <Step title="Set the score">
+    Write the judge prompt, the code, or the conditions, and select the kind of score. Read the section of the type below.
+  </Step>
+  <Step title="Select where it runs">
+    For an LLM judge, a code check, or a rule, select **Experiments, when you pick it**, **Live traces**, or the two under **Where it runs**. Read [Score live traces](#score-live-traces). For a human score, select **Who gives it**.
+  </Step>
+  <Step title="Save the evaluator">
+    Select **Create evaluator**.
+  </Step>
+</Steps>
+
+You cannot change the type of a saved evaluator.
+
+Before you save an LLM judge, a code check, or a rule, use **Try it** to run it on 5 recent traces or on 5 items of a dataset. **Try it** writes no scores and does not count toward the daily limit. Select a row to read the reason of a score.
+
+## LLM judges
+
+An LLM judge sends a prompt to a model and reads a verdict, a number, or a label from the reply. Under **Start from**, select a template:
+
+| Template | What it checks | Score |
+| --- | --- | --- |
+| **Correctness** | The reply against the expected output or the order data. | Pass / fail |
+| **Hallucination** | Claims that the retrieved documents do not hold. | Pass / fail. The list shows the fail rate. |
+| **Helpfulness** | How well the reply solves the problem. | 1 to 5 |
+| **Relevance** | That the reply answers the question of the user. | Pass / fail |
+| **Toxicity** | Replies that are rude, hateful, or harmful. | Pass / fail. The list shows the fail rate. |
+| **Custom** | You write the prompt. | Pass / fail |
+
+The judge prompt can have up to 20,000 characters. Put these variables in it:
+
+| Variable | Value |
+| --- | --- |
+| `{{input}}` | The input of the trace, or of the span when the evaluator scores spans. |
+| `{{output}}` | The output of the trace or the span. |
+| `{{expected}}` | The expected output of the dataset item. It has a value in experiments only. |
+| `{{metadata}}` | The metadata of the dataset item, as JSON. It is `{}` on live traces. The form does not list this variable. |
+
+For example, the **Correctness** template has this prompt:
+
+```text
+Compare the reply with the expected answer and the order data.
+Pass when the reply is correct and does not claim an action that the agent cannot do.
+
+Question: {{input}}
+Reply: {{output}}
+Expected: {{expected}}
+```
+
+Select the **Model** of the judge. You can select only the models of providers that have a key in **Model providers**. The menu shows the models of the other providers with **No key**. Read [Model provider keys](/evals#model-provider-keys). **Ask the judge for its reason** is on by default. The reason shows with the score.
+
+telemetry.dev cuts each variable at 50,000 characters, and all of the variables together at 200,000 characters. A cut value ends with `…[truncated]`.
+
+### Judge errors
+
+If the judge gives no valid score, the score shows **Judge error** with the cause, such as "The judge did not return a verdict." or "OpenAI returned 429. Wait a minute, then run again." telemetry.dev does not send the call again, and it does not score that trace again. Pass rates and averages do not count judge errors.
+
+## Code checks
+
+A code check runs your function on each output. Select **TypeScript** or **Python** and write a function named `check`. The code can have up to 20,000 characters.
+
+<CodeGroup>
+
+```ts TypeScript
+export default function check({ input, output }) {
+  const order = input.customer_message.match(/#?(\d{5})/)?.[1];
+  if (!order) return { score: null, reason: "No order number in the input" };
+  const found = output.includes(order);
+  return {
+    score: found ? 1 : 0,
+    reason: found ? "Has the order number" : "No order number",
+  };
+}
+```
+
+```python Python
+import re
+
+
+def check(input, output):
+    match = re.search(r"#?(\d{5})", input["customer_message"])
+    if not match:
+        return {"score": None, "reason": "No order number in the input"}
+    found = match.group(1) in output
+    return {
+        "score": 1 if found else 0,
+        "reason": "Has the order number" if found else "No order number",
+    }
+```
+
+</CodeGroup>
+
+The function gets these values: `input`, `output`, `expected`, `metadata`, `latencyMs`, `costUsd`, and `tokens`. In Python, the names are `latency_ms` and `cost_usd`, and the function gets only the arguments that it names, unless it takes `**kwargs`. On live traces, `expected` is null and `metadata` is `{}`. In TypeScript, the function can be `async`.
+
+The function returns one of these values:
+
+- A number from 0 to 1.
+- `true` or `false`.
+- `null` (`None` in Python), for an item that the check does not apply to. The score is then **Not scored**.
+- An object with `score` and `reason`.
+
+A pass or fail check passes when the score is 0.5 or more.
+
+The code runs in a sandbox on telemetry.dev servers:
+
+| Limit | TypeScript | Python |
+| --- | --- | --- |
+| Runtime | QuickJS | CPython 3.12 for WASI, with the standard library |
+| Time | 5 seconds | 5 seconds |
+| Memory | 64 MB | 128 MB |
+| Size of the returned JSON | 64 KB | 64 KB |
+
+The code has no network access, no file system, no environment variables, and no timers. A TypeScript check cannot `import` packages. If the check takes too long, uses too much memory, or throws an error, the score shows **Judge error** and the cause.
+
+## Rules
+
+A rule passes when all of its conditions hold. Select **Add a condition** to add up to 10 conditions. Each condition has a metric, an operator, and a value:
+
+| Metric | Operators | Value |
+| --- | --- | --- |
+| **Trace duration** | **is less than**, **is at most**, **is more than**, **is at least** | Seconds |
+| **Cost** | Same as above | USD |
+| **Output tokens** | Same as above | A count |
+| **Output length** | Same as above | Characters |
+| **Output contains** | **is true**, **is false** | Text of up to 1,000 characters |
+| **Output matches a regular expression** | **is true**, **is false** | A pattern of up to 500 characters |
+| **Output is valid JSON** | **is true**, **is false** | None |
+| **Output matches a JSON schema** | **is true**, **is false** | A JSON schema of up to 20,000 bytes |
+| **A tool was called** | **is true**, **is false** | A tool name |
+
+If a trace has no value for a metric, such as no cost, the score is **Not scored**. A fail score has a reason, such as "Trace duration is 7.44 s, not less than 2 s." The JSON schema check ignores keywords that it does not know, such as `$ref` and `format`.
+
+## Human scores
+
+A human score is a score that persons give. Select the kind of score: **Pass / fail**, **Number** with a **From** and a **To** value, or **Labels**. Under **Who gives it**, select **Reviewers in review queues**, **Members on Trace detail**, or the two. Write a **Guide for reviewers** of up to 20,000 characters, if necessary.
+
+Read [Review queues](/evals/review-queues) and [Add a score on a trace](/evals/scores#add-a-score-on-a-trace).
+
+## User feedback
+
+The **User feedback** evaluator shows the thumbs up and down that your app sends with the SDK. telemetry.dev adds it to the list when the project gets its first `user_feedback` score. You cannot delete it. Read [Send scores from your app](/evals/scores#send-scores-from-your-app).
+
+## Score live traces
+
+An LLM judge, a code check, or a rule can score new traces when they arrive. Under **Where it runs**, select **Live traces**, then set the filters:
+
+| Filter | Choices |
+| --- | --- |
+| **Span name** | **Whole traces**, or one span name. With a span name, the evaluator scores each span of that name. |
+| **Environment** | **Any environment**, or one environment. **Any environment** leaves out `experiment` and `playground`, the environment of prompt test runs. |
+| **Sample** | A percentage of traces from 1 to 100. The default is 10. Leave it empty to score each trace. |
+
+The switch in the row of the evaluator turns live scores on or off. Before you turn on an LLM judge, add a key for the provider of its model.
+
+These rules apply to live scores:
+
+- telemetry.dev scores a trace at the earliest 60 seconds after its last span arrived, so that most traces are complete.
+- The sample uses the trace ID. A trace is in the sample of an evaluator or out of it, and the evaluator scores each trace or span one time.
+- Live scores start when you turn them on. Traces from the time when live scores were off get no live scores. To score them, use [Score past traces](#score-past-traces).
+- If the evaluator falls more than 1 hour behind, it skips the older traces. This occurs when it waits for the daily limit or a provider key, or when more traces arrive than it can score.
+
+### Score past traces
+
+To score traces that arrived before you turned on live scores, select **Score past traces** in the panel of the evaluator. Live scores must be on. The evaluator then scores the traces of the last 7 days that match its filters and its sample, and that have no score from it. The evaluator scores the traces in batches, so the scores of many traces take some time to show. An LLM judge also waits while the project is at its daily limit. When you make an LLM judge, you can also select **Also score past traces**. The form shows an estimate of the count of traces. For a saved judge with the same model, it also shows the cost.
+
+### Prompt capture off
+
+An evaluator that reads content cannot score a trace from an environment with prompt capture off. The score is then **Not scored**, with the reason "Prompt capture is off in production, so the judge cannot read this trace."
+
+These evaluators read content:
+
+- An LLM judge whose prompt has `{{input}}` or `{{output}}`.
+- A code check.
+- A rule with an output condition other than **Output tokens**.
+
+## Change or delete an evaluator
+
+Select the evaluator, then **Edit evaluator**. Change the fields, then select **Save changes**. Changes apply to new scores. The scores from before stay. A change of the prompt, the model, the reason setting, the code or its language, the conditions, the guide, or the score settings makes a new version. The trend in the panel marks the day of a new version with a dashed line.
+
+To delete an evaluator, select **Delete** in its panel, then **Delete evaluator**. Its scores stay on the traces, with its name. You cannot delete an evaluator that an experiment uses.
+
+## The evaluator panel
+
+The panel shows these sections:
+
+- The trend of the last 30 days: the pass rate, the fail rate, or the average, with the change from the 30 days before.
+- The configuration: the judge prompt, the code, or the conditions.
+- **Runs on**: the live filters, whether experiments select it by default, the cost of the last 7 days for a judge, and the progress of **Score past traces**.
+- **Recent fails**: up to 3 traces with a fail score. Select **View all traces** to see all of them on the **Traces** page.
+
+## Set the daily limit
+
+Live LLM judges call a model for each trace that they score. The daily limit stops them for the rest of the UTC day when they spent the limit. The default limit is $20.
+
+To change the limit, open **Settings**, select **Model providers** under the project, and go to **Daily limit for live evaluators**. Enter an amount from $0 to $10,000, then select **Save**. Only owners and admins can change the limit. **Spent today** shows the spend of the day. It resets at 00:00 UTC.
+
+The limit applies to live LLM judges and to **Score past traces** with an LLM judge. It does not apply to code checks, rules, **Try it**, or experiments. telemetry.dev examines the spend before each call, so the calls in progress can take the spend a little over the limit. When the judges stop, the **Evaluators** tab shows **Live evaluators stopped for today**.
+
+Your model provider bills the calls of the judges. telemetry.dev calculates the spend from the token counts and the price of the model. A valid score from a model without a price, or from an OpenAI-compatible endpoint, adds $0.01. The **Usage** page of the project settings shows the **Evaluator spend this month** of LLM judges on live and past traces, with the top 10 evaluators.
+
+## What leaves telemetry.dev
+
+An LLM judge sends its prompt to the model provider of the judge. The prompt has the content that its variables hold. On live and past traces, this is the stored content of the trace, after its [redaction](/platform/privacy#what-built-in-redaction-removes). In an experiment, it is the dataset item and the output. telemetry.dev keeps the outputs that your code sends as they are, without redaction. Code checks and rules run on telemetry.dev servers and call no model.
+
+## Limits
+
+| Limit | Value |
+| --- | --- |
+| Name | 64 characters |
+| Description | 500 characters |
+| Judge prompt, code, or guide for reviewers | 20,000 characters |
+| Labels | 20, of 64 characters each |
+| Conditions of a rule | 10 |
+| Daily limit for live evaluators | $0 to $10,000, default $20 |

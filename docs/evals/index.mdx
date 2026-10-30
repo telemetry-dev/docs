@@ -1,0 +1,89 @@
+---
+title: Evals
+description: Test prompts and models on datasets, score live traces with LLM judges, code checks, and rules, and review replies with your team.
+sidebar: { label: "Overview" }
+lastModified: 2026-10-30
+---
+
+Evals measures the quality of the replies of your AI application. You keep test items in datasets and run a prompt version or your code on each item. Then you compare the scores with the scores of an earlier run. The same evaluators can also score the traces of your users when they arrive.
+
+Select **Evals** in the project sidebar. The page has four tabs:
+
+| Tab | Contents |
+| --- | --- |
+| **Experiments** | Runs of a prompt version or of your code on a dataset, with the output and the scores of each item. |
+| **Datasets** | Test items. Each item has an input, an optional expected output, metadata, tags, and a split. |
+| **Evaluators** | The sources of scores: LLM judges, code checks, rules, human scores, and the feedback of your users. |
+| **Review** | Review queues, where persons score traces and write better replies. |
+
+## How the parts work together
+
+1. **Collect test items.** Add traces with bad replies to a dataset, import a CSV file, or add items by hand. Read [Datasets](/evals/datasets).
+2. **Make evaluators.** An LLM judge reads the reply and gives a score with a reason. A code check or a rule gives a score without a model. Read [Evaluators](/evals/evaluators).
+3. **Run an experiment.** Run a saved prompt version from the dashboard, or run your own code with the SDK. Each item gets an output and its scores. Read [Experiments](/evals/experiments).
+4. **Compare.** The experiment page compares each score with the baseline of the dataset and marks the items that became worse.
+5. **Score live traffic.** Turn on **Live traces** for an evaluator to score a sample of new traces. You can also send the thumbs up or down of your users from your app. Read [Scores](/evals/scores).
+6. **Review.** Send traces to a review queue. Reviewers give scores, and their expected outputs can become dataset items. Read [Review queues](/evals/review-queues).
+
+To stop a regression before you merge it, run the experiment in CI. Read [Run experiments in CI](/evals/experiments#run-experiments-in-ci).
+
+## Model provider keys
+
+Experiments of a prompt version and LLM judges call models with the keys of the project. Your model provider bills these calls. Code checks and rules do not call a model.
+
+To add a key:
+
+<Steps>
+  <Step title="Open Model providers">
+    Open **Settings**, then select **Model providers** under the project in the settings sidebar.
+  </Step>
+  <Step title="Add the key">
+    In the row of the provider, select **Add key**. For an OpenAI-compatible endpoint, select **Add endpoint** and enter its **Base URL**.
+  </Step>
+  <Step title="Save the key">
+    Enter the **API key**, then select **Add key** or **Add endpoint**.
+  </Step>
+</Steps>
+
+The providers are OpenAI, Anthropic, Google, and one OpenAI-compatible endpoint. Only owners and admins can add, change, or remove a key. After you save a key, nobody can read it.
+
+Your app keeps its own provider keys. telemetry.dev uses the keys on this page only for test runs of prompts, **Suggest changes** in the prompt editor, experiments, and LLM judges.
+
+## The experiment environment
+
+A prompt experiment records each item run as a trace in the `experiment` environment. The SDKs record the runs of your code in the environment of the client, so call `init` with `environment: "experiment"` before the run. The **Overview**, **Traces**, and **Sessions** pages leave out this environment by default. To see the traces of experiment runs, select `experiment` in the **Environment** filter of **Traces** or **Sessions**. Live evaluators and review queue rules also leave out `experiment`, unless you select it in their filters.
+
+The traces of experiment runs count as ingestion units, as other traces do.
+
+## Who can do what
+
+Each member of the workspace can make, change, and delete datasets, experiments, evaluators, and review queues. Each member can also add scores on a trace.
+
+Only owners and admins can do these tasks:
+
+- Add or change model provider keys.
+- Set the [daily limit for live evaluators](/evals/evaluators#set-the-daily-limit).
+- Make API keys. Read [API keys](/platform/api-keys).
+- Turn on or change alerts, such as [Eval score drop](/platform/alerts#eval-score-drop).
+
+Evals is available on each plan.
+
+## Use Evals from code
+
+An API key with the **Run experiments** access can read datasets, run experiments, and send scores. The SDKs have these functions:
+
+| Task | TypeScript (`@telemetry-dev/sdk` 0.2.2 or later) | Python (`telemetry-dev` 0.3.2 or later) |
+| --- | --- | --- |
+| Run your code on a dataset | `runExperiment` | `run_experiment`, `run_experiment_async` |
+| Send a score, such as user feedback | `score` | `score`, `score_async` |
+
+Other languages can use the HTTP API. Read [Evals API](/reference/evals-api).
+
+<CardGroup cols={2}>
+  <Card title="Datasets" href="/evals/datasets" icon="database">Collect test items from traces, CSV files, and review queues.</Card>
+  <Card title="Experiments" href="/evals/experiments" icon="flask-conical">Run a prompt version or your code on a dataset and compare the scores.</Card>
+  <Card title="Evaluators" href="/evals/evaluators" icon="gavel">Score replies with LLM judges, code checks, rules, and persons.</Card>
+  <Card title="Scores" href="/evals/scores" icon="badge-check">Read scores on traces, filter by them, and send user feedback.</Card>
+  <Card title="Review queues" href="/evals/review-queues" icon="list-checks">Let persons score traces and write expected outputs.</Card>
+  <Card title="Evals API" href="/reference/evals-api" icon="book-open">Read datasets, run experiments, and send scores over HTTP.</Card>
+</CardGroup>

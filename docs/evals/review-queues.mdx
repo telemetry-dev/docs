@@ -1,0 +1,127 @@
+---
+title: Review queues
+description: Send traces to a review queue, let reviewers give scores and better replies, and add the good replies to a dataset.
+lastModified: 2026-10-30
+---
+
+A review queue is a list of traces for persons to score. The scores of reviewers show on the traces, next to the scores of the LLM judges. When a reviewer writes a better reply, the trace can become a [dataset](/evals/datasets) item with that reply as its expected output.
+
+To see the queues of a project, select **Evals** in the project sidebar, then the **Review** tab. The tab shows a count of the items that you can review. The list shows the **Progress**, the **Scores**, and the **Reviewers** of each queue.
+
+## Make a queue
+
+A queue asks for human scores, a better reply, or the two. To ask for a score, first make a human score with **Reviewers in review queues** selected. Read [Human scores](/evals/evaluators#human-scores).
+
+<Steps>
+  <Step title="Open New queue">
+    On the **Review** tab, select **New queue**.
+  </Step>
+  <Step title="Name the queue">
+    Enter a **Name** of up to 128 characters. Enter optional **Instructions** of up to 4,000 characters. Reviewers see them next to each trace.
+  </Step>
+  <Step title="Select the scores">
+    Under **Scores to ask for**, select up to 20 human scores, **Expected output**, or the two. **Expected output** asks reviewers for a better reply.
+  </Step>
+  <Step title="Select how traces come in">
+    Under **How traces come in**, select **By hand** or **By a rule**. Read [Add traces by a rule](#add-traces-by-a-rule).
+  </Step>
+  <Step title="Select the reviewers">
+    Select up to 100 **Reviewers** from the members of the workspace. Leave the field empty to let each member review. Set **Reviews for each trace** (default 1). It cannot be more than the count of reviewers.
+  </Step>
+  <Step title="Select a dataset">
+    Under **Add good replies to**, select a dataset, or **No dataset**. If the queue asks for **Expected output**, you must select a dataset.
+  </Step>
+  <Step title="Save the queue">
+    Select **Create queue**.
+  </Step>
+</Steps>
+
+Queue names are unique in the project.
+
+## Add traces by hand
+
+Send a trace to a queue from one of these places:
+
+- A trace: select **Add to review queue** in the header.
+- **Traces**: select the check boxes of up to 100 rows, then select **Add to review queue**.
+- A session: select **Add to review queue** in the header. The full session becomes one item.
+- An item of an experiment: select **Send to review** in the item panel.
+
+In the dialog, select the **Queue**, and enter an optional **Note for the reviewer** of up to 2,000 characters. Then select **Add to queue**.
+
+A trace or a session can be in a queue one time in each cycle of the queue. An experiment item can be in a queue one time only. telemetry.dev skips the traces that the queue has, and the toast tells you how many.
+
+## Add traces by a rule
+
+A queue with a rule gets a random sample of traces each week. Set the rule with these fields:
+
+- A span name, an environment, and a score, in the menus **Any span name**, **Any environment**, and **Any score**. Select at least one. The score menu has the pass, fail, and label values of the LLM judges, code checks, and rules of the project, such as "Correctness is Fail".
+- The count of traces in each sample, from 1 to 100. The default is 40.
+- The day of the week, such as **Each Monday**.
+
+telemetry.dev examines the rules every 5 minutes. A new rule takes its first sample within about 5 minutes. Later samples come at the first examination after 00:00 UTC on the day that you select. Each sample has traces from the 7 days before the run that match the rule. The sample leaves out the traces that the queue had before, and the `experiment` and `playground` environments, unless the rule selects one of them.
+
+Each sample starts a new cycle of the queue. Open items from the cycle before come first. If no trace matches, the queue keeps its current cycle.
+
+## Send regressions to review
+
+When an experiment compares with a different experiment and has regressed items, its page shows **Send regressions to review**. Read [Regressed and improved items](/evals/experiments#regressed-and-improved-items).
+
+Select **Send regressions to review**, then select **A new queue** or **An existing queue**. A new queue gets the name "\<experiment\> regressions" and asks for **Expected output** by default. Its reviewers are the members of the workspace, with 1 review for each item. It adds good replies to the dataset of the experiment.
+
+The reviewer sees the input, the expected output, the output, and the baseline output of each item.
+
+## Review the items
+
+Select **Start** in the row of a queue. A queue can have a list of reviewers. If you are not on the list, the page tells you to ask the person who made the queue.
+
+The page shows one item at a time:
+
+- The **Note** of the person who added the item.
+- The conversation of the trace: the user messages, the tool calls with their results, and the reply.
+- The scores of LLM judges, code checks, and rules, with their reasons.
+- **Your scores**, with the instructions of the queue.
+
+To review an item:
+
+1. Give a value for each score. Each score is necessary.
+2. If the queue asks for it, enter a better reply in **Expected output**.
+3. Enter an optional **Comment** of up to 4,000 characters. The comment becomes the reason of each score.
+4. Select **Submit and next**, or press `⌘` `Enter` (`Ctrl` `Enter` on Windows and Linux).
+
+Select **Skip** to go to the next item. A skipped item goes away for you only. Other reviewers still get it.
+
+Session items have no **Expected output** and cannot go to a dataset. For other items, when you write an expected output, the box **Add this trace to \<dataset\>** becomes selected. On submit, the trace becomes a dataset item with the expected output that you wrote. If you select the box and leave **Expected output** empty, the reply of the trace becomes the expected output.
+
+### The order of the items
+
+Items come in the order that persons added them. In a queue with a list of reviewers, each reviewer gets a share of each add. When reviewers finish their share, they help with the shares of others. In a queue that each member can review, members start on different items.
+
+You keep the same item until you submit it or skip it. Two reviewers can get the same item. If the other reviews complete the item before you submit, telemetry.dev rejects your submit with "Someone else reviewed this item while you had it open". The page then opens the next item.
+
+### When the queue is done
+
+When no items are left for you, the page shows the count of reviewed traces, and the pass rate or the average of each pass or fail score and number score. It also shows how many items went to the dataset. A queue with a rule shows the day of its next sample. Select **View the scored traces** to open the **Traces** page, or **View the experiment** for a queue of experiment items.
+
+## Change or delete a queue
+
+Open the row menu of the queue on the **Review** tab:
+
+- Select **Edit queue** to change the queue. Then select **Save queue**. If you decrease **Reviews for each trace**, open items that have the new count of reviews close.
+- Select **Delete queue** to delete the queue and its items. The scores that reviewers gave stay on their traces.
+
+Each member of the workspace can make, change, and delete queues.
+
+## Limits
+
+| Limit | Value |
+| --- | --- |
+| Name | 128 characters |
+| Instructions | 4,000 characters |
+| Scores to ask for | 20 |
+| Reviewers | 100 |
+| Reviews for each trace | 1 to 100, and not more than the count of reviewers |
+| Traces in one add | 100 |
+| Traces in one sample of a rule | 1 to 100 |
+| Note for the reviewer | 2,000 characters |
+| Comment of a reviewer | 4,000 characters |
