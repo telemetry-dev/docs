@@ -90,10 +90,10 @@ Names match without regard to letter case. If two projects have the same name, u
 | --- | --- |
 | `telemetry projects` | Lists the workspace's projects. |
 | `telemetry use <name\|id>` | Sets the default project. |
-| `telemetry traces` | Finds traces, newest first. Filter with `--errors`, `--name`, `--env`, `--session`, and `--user`. |
-| `telemetry trace <trace-id>` | Shows a trace's spans as a tree, with duration, tokens, error text, and the trace's logs. |
-| `telemetry sessions` | Finds sessions, most recently active first. Filter with `--range` (`24h`, `72h`, `7d`, or `30d`; default `24h`), `--errors`, `--contains`, `--agent`, `--model`, and `--user`. |
-| `telemetry logs` | Lists the newest logs, with counts per level. Filter with `--level` and `--range` (`7d`, `30d`, or `90d`; default `7d`). |
+| `telemetry traces` | Finds traces, newest first. Filter with `--errors`, `--name`, `--env`, `--session`, and `--user`, and from version 0.1.4 with [`--since` and `--until`](#time-windows), `--framework`, `--service`, `--model`, `--provider`, and `--operation`. |
+| `telemetry trace <trace-id>` | Shows a trace's spans as a tree, with duration, tokens, error text, and the trace's logs. From version 0.1.4 it also prints a link to the trace in the dashboard. |
+| `telemetry sessions` | Finds sessions, most recently active first. Filter with `--range` (`24h`, `72h`, `7d`, or `30d`; default `24h`), `--errors`, `--contains`, `--agent`, `--model`, and `--user`, and from version 0.1.4 with `--since` and `--until`. |
+| `telemetry logs` | Lists the newest logs, with counts per level. Filter with `--level` and `--range` (`7d`, `30d`, or `90d`; default `7d`), and from version 0.1.4 with `--since` and `--until`. |
 | `telemetry usage` | Summarizes requests, errors, p95 latency, tokens, cost, and active users, compared with the period before. Set the period with `--range` and the breakdown with `--by` (`model`, `provider`, `user`, or `operation`; default `model`). |
 | `telemetry payload <trace-id> <span-id>` | Prints a span's captured input and output. |
 | `telemetry status` | Shows who you're signed in as. |
@@ -102,17 +102,36 @@ Names match without regard to letter case. If two projects have the same name, u
 Run `telemetry --help` for the list of commands, and `telemetry <command> --help` for a command's options and examples.
 
 ```sh
-telemetry traces --errors                        # recent failed traces
+telemetry traces --errors --since 2h            # failed traces in the last 2 hours
 telemetry traces --name checkout --env production
+telemetry traces --model gpt-5 --since 2026-10-29 --until 2026-10-30
 telemetry trace 4bf92f3577b34da6a3ce929d0e0e4736
 telemetry sessions --range 7d --errors           # sessions with a failed trace
-telemetry logs --level error
+telemetry logs --level warn --since 30m
 telemetry usage --range 30d --by user
 ```
 
-`traces`, `sessions`, and `logs` return 20 results by default. Use `--limit` for 1 to 50. When `traces` or `sessions` has more results, it prints the same command with `--cursor` for the next page. `logs` has no next page; raise `--limit` or narrow the search with `--level`.
+`traces`, `sessions`, and `logs` return 20 results by default. Use `--limit` for 1 to 50. When there are more results, the command prints the same command with `--cursor` for the next page. Keep the other options as they are; only `--limit` can change between pages. `logs` pages from version 0.1.4; in earlier versions it has no next page, so raise `--limit` or narrow the search with `--level`.
 
 `telemetry trace` reads up to 2,000 spans of a trace and says so when the trace has more.
+
+### Time windows
+
+From version 0.1.4, `traces`, `sessions`, and `logs` take `--since` and `--until` to choose the time they search. Each takes one of these forms:
+
+| Form | Example | Meaning |
+| --- | --- | --- |
+| Duration | `30m`, `2h`, `7d` | That many minutes, hours, or days before now, by telemetry.dev's clock |
+| Date | `2026-10-29` | The start of that day, in your time zone |
+| Time without a zone | `2026-10-29T14:00`, `2026-10-29T14:00:30` | That time in your time zone |
+| Time with a zone | `2026-10-29T14:00:00Z`, `2026-10-29T14:00:00-04:00` | That instant, with seconds |
+| `now` | `--until now` | The same as leaving out `--until` |
+
+The window includes `--since` and excludes `--until`. Without `--since`, `traces` searches the project's whole retention period, `sessions` the last 24 hours, and `logs` the last 7 days. Without `--until`, the window ends now. A date or a time without a zone uses your time zone's offset on that day, so a day when the clocks change still starts at the start of your local day.
+
+telemetry.dev doesn't search past the project's retention period. When `--since` reaches further back, the window starts at the start of the retention period, and the command says so on stderr. `--range` on `sessions` and `logs` can't be combined with `--since` or `--until`.
+
+`--framework` and `--service` match the trace. `--model`, `--provider`, and `--operation` match traces with a span that started in the window. `--framework` takes the name telemetry.dev records, such as `vercel-ai-sdk` or `langchain`.
 
 ### Read prompts and outputs
 
@@ -133,7 +152,7 @@ Captured text comes from your users, models, and tools. Output for people, inclu
 
 Add `--json` to any command for JSON output; `login` and `logout` take it from version 0.1.2. The data goes to stdout, and messages and progress go to stderr, so `telemetry traces --json > traces.json` writes only data.
 
-`projects`, `traces`, `sessions`, `logs`, and `usage` print the result of the matching MCP tool as it is returned, with the fields described in [What an agent can read](/platform/mcp-server#what-an-agent-can-read). `trace` and `payload` read every page of the result and print it as one object, with `complete: false` when they stopped at the limit.
+`projects`, `traces`, `sessions`, `logs`, and `usage` print the result of the matching MCP tool as it is returned, with the fields described in [What an agent can read](/platform/mcp-server#what-an-agent-can-read). From version 0.1.4, the results of `traces`, `sessions`, and `logs` include the `window` telemetry.dev searched, and `trace` includes `trace.url`, the trace's page in the dashboard. `trace` and `payload` read every page of the result and print it as one object, with `complete: false` when they stopped at the limit.
 
 To check whether the command is signed in, run `telemetry status --json`. It exits with code 4 when it isn't.
 
@@ -159,10 +178,10 @@ Branch on `code`, because the wording of `message` can change. `hint` is a comma
 
 | Code | Exit | Meaning |
 | --- | --- | --- |
-| `invalid_arguments` | 2 | An option or argument is not valid |
+| `invalid_arguments` | 2 | An option or argument is not valid, by the command's checks or telemetry.dev's |
 | `unknown_command` | 2 | There is no command with that name |
 | `project_not_found` | 2 | No project in the workspace has that name or ID |
-| `invalid_cursor` | 2 | `--cursor` isn't from an earlier page of this command |
+| `invalid_cursor` | 2 | `--cursor` isn't from an earlier page of this command with the same options |
 | `project_ambiguous` | 2 | Several projects have that name; pass its ID |
 | `project_required` | 2 | The workspace has several projects and none was chosen |
 | `no_projects` | 1 | The workspace has no projects yet |
@@ -179,11 +198,12 @@ Branch on `code`, because the wording of `message` can change. `hint` is a comma
 | `server_error` | 1 | telemetry.dev failed to complete the request; try again |
 | `tool_error` | 1 | telemetry.dev returned another error; `message` says what it was |
 | `result_too_large` | 1 | The result was too large to read; narrow it with filters or `--limit` |
+| `server_unsupported` | 1 | The telemetry.dev deployment doesn't support an option you used and would have ignored it |
 | `request_failed` | 1 | The request failed for another reason |
 | `failed` | 1 | The command failed for another reason |
 | `internal` | 1 | An unexpected error, such as a configuration file the command couldn't read or write |
 
-New codes may be added, and existing codes keep their meaning. Version 0.1.2 added `invalid_cursor`, `access_denied`, `trace_not_found`, `span_not_found`, and `server_error`; version 0.1.1 reports those errors as `tool_error`. `sign_in_failed` and `no_pending_sign_in` appear in JSON only from 0.1.2, when `login` takes `--json`.
+New codes may be added, and existing codes keep their meaning. Version 0.1.2 added `invalid_cursor`, `access_denied`, `trace_not_found`, `span_not_found`, and `server_error`; version 0.1.1 reports those errors as `tool_error`. `sign_in_failed` and `no_pending_sign_in` appear in JSON only from 0.1.2, when `login` takes `--json`. Version 0.1.4 added `server_unsupported`, and from that version a time window that telemetry.dev refuses, such as one that ends before the retention period, is `invalid_arguments` with telemetry.dev's reason.
 
 ## Environment variables
 
