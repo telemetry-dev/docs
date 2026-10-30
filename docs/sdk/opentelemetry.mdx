@@ -84,7 +84,7 @@ Your provider's resource describes your spans, not the processor. Set `service.n
 | Option | Type | Environment fallback | Default | Purpose |
 | --- | --- | --- | --- | --- |
 | `apiKey` | `string` | `TELEMETRY_DEV_API_KEY` | None | Authenticates exports. |
-| `baseUrl` | `string` | `TELEMETRY_DEV_BASE_URL` | `https://ingest.telemetry.dev` | Sets the ingest URL. Trailing slashes are removed. |
+| `baseUrl` | `string` | `TELEMETRY_DEV_BASE_URL` | `https://api.telemetry.dev` | Sets the ingest URL. Trailing slashes are removed. |
 | `exportMode` | `"batched" \| "immediate"` | None | `"batched"` | Uses a `BatchSpanProcessor` or a `SimpleSpanProcessor` inside. |
 | `batch` | `BatchOptions` | None | See the next table | Changes the batch processor limits. |
 | `spanFilter` | `(span: ReadableSpan) => boolean` | None | None | Chooses which ended spans to export. |
@@ -247,7 +247,7 @@ Call `provider.shutdown()` when the process stops, so the last batch is sent.
 | Argument | Environment fallback | Default | Purpose |
 | --- | --- | --- | --- |
 | `api_key` | `TELEMETRY_DEV_API_KEY` | `None` | Authenticates exports. |
-| `base_url` | `TELEMETRY_DEV_BASE_URL` | `https://ingest.telemetry.dev` | Sets the ingest URL. Trailing slashes are removed. |
+| `base_url` | `TELEMETRY_DEV_BASE_URL` | `https://api.telemetry.dev` | Sets the ingest URL. Trailing slashes are removed. |
 | `export_mode` | None | `"batched"` | Uses a `BatchSpanProcessor` or a `SimpleSpanProcessor` inside. |
 | `max_export_batch_size` | None | `64` | Spans per export batch. |
 | `schedule_delay_millis` | None | `1000` | Delay between batch exports. |
@@ -285,7 +285,7 @@ You do not need a telemetry.dev package. Point a standard OTLP/HTTP exporter at 
 https://api.telemetry.dev/v1/traces
 ```
 
-`https://ingest.telemetry.dev`, the default of the processors above, is the earlier name of the same host and stays supported. See the [OTLP ingest API](/reference/otlp).
+`https://ingest.telemetry.dev` is the earlier name of the same host and stays supported. See the [OTLP ingest API](/reference/otlp).
 
 ```text
 Authorization: Bearer td_live_...
