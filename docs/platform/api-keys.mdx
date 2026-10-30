@@ -1,10 +1,10 @@
 ---
 title: API keys
-description: Create a project key, limit it to one environment, and revoke it.
-lastModified: 2026-10-26
+description: Create a project key, select its access, limit it to one environment, and revoke it.
+lastModified: 2026-10-29
 ---
 
-An API key lets an application send traces, logs, and metrics to one project. Each key starts with `td_live_`.
+An API key lets an application send traces, logs, and metrics to one project. A key can also let the application get the prompts of the project. Each key starts with `td_live_`.
 
 A workspace owner or admin can create and revoke keys. Members can see the key list.
 
@@ -17,6 +17,9 @@ A workspace owner or admin can create and revoke keys. Members can see the key l
   <Step title="Describe the key">
     Select **Create key**. Enter an optional **Name** of up to 50 characters and an optional **Environment**.
   </Step>
+  <Step title="Select the access">
+    Under **Access**, select **Send telemetry**, **Read prompts**, or the two. At first, the dialog selects the two. A key must have at least one. Read [Select the access of a key](#select-the-access-of-a-key).
+  </Step>
   <Step title="Create and copy the key">
     Select **Create key**. In the **API key created** dialog, select **Copy**, then **Done**.
   </Step>
@@ -26,9 +29,31 @@ A workspace owner or admin can create and revoke keys. Members can see the key l
 telemetry.dev shows the full key one time. It stores only a SHA-256 hash of the key, so it cannot show the key again. If you lose a key, create a new one and revoke the old one.
 :::
 
-The project's **Setup** page can also create a key. That key is named after the integration you choose, such as `OpenAI`.
+If the **API key created** dialog shows **This key has more access than you chose**, the key has access that you did not select. To limit the access, revoke the key and make a new key.
 
-The key list shows each key's **Name**, the first 16 characters of the **Key**, its **Environment** (or **All environments**), its **Status** (**Active** or **Revoked**), and when it was **Created**.
+The project's **Setup** page can also create a key. That key is named after the integration you choose, such as `OpenAI`. This key has **Send telemetry** and **Read prompts**.
+
+The key list shows each key's **Name**, the first 16 characters of the **Key**, its **Environment** (or **All environments**), its **Access**, its **Status** (**Active** or **Revoked**), and when it was **Created**. For a key with all the access choices, **Access** shows **All**. For a different key, it shows the names of its choices, such as **Read prompts**.
+
+## Select the access of a key
+
+| Access | What the key can do | Necessary for |
+| --- | --- | --- |
+| **Send telemetry** | Send traces, logs, and metrics to the ingest service. The API name of this scope is `telemetry:write`. | Telemetry from the telemetry.dev SDKs and integrations, and from an OTLP/HTTP exporter. |
+| **Read prompts** | Get the prompts of the project from the ingest service. The API name of this scope is `prompts:read`. | An app that gets prompts from telemetry.dev. |
+
+If your app sends telemetry and gets prompts with the same key, the key must have the two access choices.
+
+Keys that were made before the **Access** choices were available have the two choices. You cannot change the access of a key. To change the access, make a new key with the necessary access. Put the new key in your app, then revoke the old key.
+
+### A key without the necessary access
+
+If a key does not have the access for a request, the request gets `403 insufficient_scope`:
+
+- Without **Send telemetry**, the ingest service rejects the request. telemetry.dev stores no data from the request and records the rejection on the project with the diagnostic code `insufficient_scope`.
+- Without **Read prompts**, the ingest service rejects a request for a prompt. The JSON body has the error code `insufficient_scope`.
+
+To correct the error, make a key with the necessary access. Put the new key in your app, then revoke the old key.
 
 ## Send telemetry with the key
 
@@ -44,7 +69,7 @@ The telemetry.dev SDKs read the key from an environment variable:
 export TELEMETRY_DEV_API_KEY="td_live_your_key"
 ```
 
-A missing, malformed, unknown, or revoked key gets `401 invalid_api_key`. For exporter settings, read [Send OTLP/HTTP from any language](/sdk/opentelemetry#send-otlphttp-from-any-language). For all error codes, read [OTLP error responses](/reference/otlp#error-responses).
+A missing, malformed, unknown, or revoked key gets `401 invalid_api_key`. A key without **Send telemetry** gets `403 insufficient_scope`. For exporter settings, read [Send OTLP/HTTP from any language](/sdk/opentelemetry#send-otlphttp-from-any-language). For all error codes, read [OTLP error responses](/reference/otlp#error-responses).
 
 ## Limit a key to one environment
 
