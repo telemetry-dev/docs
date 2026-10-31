@@ -62,7 +62,7 @@ If the page says **telemetry.dev has not verified this app**, the app's name was
 | --- | --- |
 | `list_projects` | The workspace's projects. Every other tool needs a project from this list. |
 | `search_sessions` | Sessions with traces in a time window, newest first, with trace count, errors, tokens, and cost. |
-| `search_traces` | Traces in a time window, newest first, filtered by name, status, environment, framework, service, session, or end user, or by the model, provider, or operation of one of their spans. |
+| `search_traces` | Traces in a time window, newest first, filtered by name, status, environment, framework, service, session, or end user, or by the model, provider, operation, agent, or tool of one of their spans. The tool filter matches a tool call by its recorded tool name, or by the span name when there is none. |
 | `get_trace` | One trace's spans with models, tools, timing, tokens, cost, and error text, and its logs, in pages. It also returns `trace.url`, the trace's page in the dashboard, so an agent can give you a link to the run. |
 | `get_span_payload` | The captured input, output, or error of one span, in pages. Needs the extra permission below. |
 | `list_logs` | Log records in a time window, newest first, filtered by level, with counts per level for the whole window. |
