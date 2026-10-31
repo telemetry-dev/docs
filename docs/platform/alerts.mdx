@@ -1,15 +1,15 @@
 ---
 title: Alerts
-description: Get an email when model cost, traces, model or tool failures, eval scores, ingestion errors, or quota usage need attention.
-lastModified: 2026-10-30
+description: Get an alert by email, Slack, Discord, or webhook when model cost, traces, model or tool failures, eval scores, ingestion errors, or quota usage need attention.
+lastModified: 2026-10-31
 ---
 
-Alerts check your telemetry every 5 minutes and email you when something needs attention: model cost heading over budget, a trace that might be an agent loop, a burst of failed model or tool calls, a drop in the pass rate of an evaluator, or ingestion that is failing or running out of quota.
+Alerts check your telemetry every 5 minutes and tell you when something needs attention: model cost heading over budget, a trace that might be an agent loop, a burst of failed model or tool calls, a drop in the pass rate of an evaluator, or ingestion that is failing or running out of quota.
 
 There are two places to set them up:
 
-- **Project alerts** cover cost, traces, model and tool calls, eval scores, and ingestion errors for one project. Select **Alerts** in the project sidebar. The page has three tabs: **Rules**, **History**, and **Destinations**.
-- **Workspace alerts** cover quota and the mix of data the whole workspace sends. Open **Workspace settings**, select **Usage** in the settings sidebar, and go to the **Alerts** section.
+- **Project alerts** cover cost, traces, model and tool calls, eval scores, and ingestion errors for one project. They go to email, Slack, Discord, and webhooks. Select **Alerts** in the project sidebar. The page has three tabs: **Rules**, **History**, and **Destinations**.
+- **Workspace alerts** cover quota and the mix of data the whole workspace sends. They go to email. Open **Workspace settings**, select **Usage** in the settings sidebar, and go to the **Alerts** section.
 
 Workspace owners and admins can create and change alerts. Other members can see the alerts but cannot change them. Alerts are available on every plan.
 
@@ -42,6 +42,111 @@ Workspace members with a verified email get alerts right away. Any other address
 Until an address confirms, it gets no alert email, and its row shows **Not confirmed**. To ask again, for example after the link expired, select **Resend email**. It sends the email again to every address that has not confirmed. Addresses outside the workspace can unsubscribe from a link at the bottom of each alert email. To stop alerts for a member, remove their address from the list.
 
 When telemetry.dev sends an email, it checks each address again. An address stops getting alerts when its owner leaves the workspace or unsubscribes.
+
+## Slack, Discord, and webhooks
+
+A project's alerts can also post to a Slack channel, a Discord channel, or an HTTPS endpoint of your own. Every alert of the project goes to each of these destinations as well as to its email recipients.
+
+To add one, owners and admins open the **Destinations** tab of the project's **Alerts** page, select **Add destination**, and choose a type:
+
+- **Slack**: create an incoming webhook for the channel in Slack. Paste its **Webhook URL**, which starts with `https://hooks.slack.com/services/`, and enter the **Channel** name to show in the list.
+- **Discord**: in the channel settings, open **Integrations**, then **Webhooks**, and create a webhook. Paste its **Webhook URL**, which starts with `https://discord.com/api/webhooks/`, and enter the **Channel** name.
+- **Webhook**: enter the **URL** of your endpoint. It must use HTTPS and resolve to a public address. telemetry.dev then shows a signing secret that starts with `whsec_`. Copy it, because it is shown only once. See [Check a webhook signature](#check-a-webhook-signature).
+
+Anyone who has a Slack or Discord webhook URL can post to its channel, so telemetry.dev stores the URLs and signing secrets encrypted and never shows them again. The list shows the channel name you entered, or for a webhook its host and the last 4 characters of its path. To change a URL, remove the destination and add it again. To remove a destination, select **Remove** in its row menu. A project can have up to 10 Slack, Discord, and webhook destinations.
+
+A Slack or Discord message has the alert title and the same sections as an [alert email](#alert-emails), with an **Open in telemetry.dev** link to the page to investigate and a **View alert** link to the alert's page. Messages mention nobody, even when telemetry quotes text such as `@everyone`.
+
+### Webhook requests
+
+Each notification is a `POST` request with a JSON body and the `content-type: application/json` and `user-agent: telemetry.dev-alerts/1` headers:
+
+```json
+{
+  "type": "alert.opened",
+  "alert": {
+    "id": "8f2c1a4e-3b7d-4c9a-9e61-0d5b2f7a8c31",
+    "url": "https://telemetry.dev/o/org_4b1e/p/6a0c2d91-7f3e-4b8a-a5c2-1e9d4f6b8a20/alerts/8f2c1a4e-3b7d-4c9a-9e61-0d5b2f7a8c31",
+    "title": "Possible agent loop in support-agent",
+    "whatChanged": "One trace cost $3.82.",
+    "comparedWith": "The limit is $2.00.",
+    "whyItMatters": "It used 18 times the usual spend of a trace.",
+    "likelyCause": "The search_orders tool ran 41 times in one turn.",
+    "investigateUrl": "https://telemetry.dev/o/org_4b1e/p/6a0c2d91-7f3e-4b8a-a5c2-1e9d4f6b8a20/traces/4bf92f3577b34da6a3ce929d0e0e4736"
+  }
+}
+```
+
+| Field | Value |
+| --- | --- |
+| `type` | `alert.opened` when the alert opens and for each reminder, `alert.resolved` when it resolves. |
+| `alert.id` | The ID of the alert. Its reminders and its resolved notification have the same ID. |
+| `alert.url` | The alert's page in telemetry.dev. |
+| `alert.title` | The alert title. A reminder's title starts with `Reminder: `. |
+| `alert.whatChanged`, `alert.comparedWith`, `alert.whyItMatters`, `alert.likelyCause` | The sections of the [alert email](#alert-emails). |
+| `alert.investigateUrl` | The page to start from, the same as the **Investigate** button of the email. |
+
+New fields can be added to the body, so ignore fields you do not know. Each request also has these headers:
+
+| Header | Value |
+| --- | --- |
+| `webhook-id` | The ID of the delivery. It stays the same when telemetry.dev sends the delivery again, so you can use it to drop duplicates. |
+| `webhook-timestamp` | When this request was sent, in Unix seconds. |
+| `webhook-signature` | `v1,` followed by the base64 signature of the request. |
+
+Answer with any `2xx` status within 10 seconds. telemetry.dev does not follow redirects.
+
+### Check a webhook signature
+
+The signature follows the [Standard Webhooks](https://www.standardwebhooks.com) specification, so its libraries can check it. For example, with the [`standardwebhooks`](https://www.npmjs.com/package/standardwebhooks) package for Node.js:
+
+```ts
+import { Webhook } from "standardwebhooks";
+
+const webhook = new Webhook(process.env.ALERTS_SIGNING_SECRET); // whsec_...
+
+// rawBody is the request body exactly as received, before JSON parsing. verify throws when the
+// signature does not match or the timestamp is more than 5 minutes off.
+const event = webhook.verify(rawBody, {
+  "webhook-id": request.headers["webhook-id"],
+  "webhook-timestamp": request.headers["webhook-timestamp"],
+  "webhook-signature": request.headers["webhook-signature"],
+});
+```
+
+To check the signature without a library:
+
+1. Take the part of the signing secret after `whsec_` and decode it from base64. This is the key.
+2. Compute the HMAC-SHA256 of `<webhook-id>.<webhook-timestamp>.<body>` with the key, where `<body>` is the raw request body.
+3. Compare the result with the base64 value after `v1,` in `webhook-signature`, using a constant-time comparison. The header can hold several signatures separated by spaces; accept the request if one of them matches.
+4. Reject the request if `webhook-timestamp` is more than 5 minutes away from your clock, so that a recorded request cannot be sent again later.
+
+```ts
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+function isFromTelemetryDev(secret: string, headers: Record<string, string>, rawBody: string) {
+  const id = headers["webhook-id"];
+  const timestamp = headers["webhook-timestamp"];
+
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 5 * 60) return false;
+
+  const key = Buffer.from(secret.slice("whsec_".length), "base64");
+  const expected = createHmac("sha256", key).update(`${id}.${timestamp}.${rawBody}`).digest();
+
+  return headers["webhook-signature"].split(" ").some((part) => {
+    const [version, signature] = part.split(",");
+    const received = Buffer.from(signature ?? "", "base64");
+
+    return version === "v1" && received.length === expected.length && timingSafeEqual(received, expected);
+  });
+}
+```
+
+### Failed deliveries
+
+When a request to Slack, Discord, or a webhook times out, cannot connect, or gets a `408`, `429`, or `5xx` answer, telemetry.dev sends it again after 1 minute, and then waits twice as long each time, up to 1 hour, for at most 8 tries. A `Retry-After` header can ask for a longer wait, up to 1 hour. Any other answer, such as `401`, `404`, or a redirect, fails the delivery at once.
+
+The **Timeline** of an alert's page shows each delivery, for example "Slack message sent to #oncall", "Webhook to https://hooks.example.com/…a9f2 is waiting to send", or "Discord message to #alerts failed". Rarely, a notification arrives twice; a webhook then gets the same `webhook-id` both times.
 
 ## Project alerts
 
@@ -193,7 +298,8 @@ The **History** tab of a project's **Alerts** page lists alerts newest first, 25
 | --- | --- |
 | Alert rules | 100 per workspace, counting workspace and project rules |
 | Recipients | 50 per rule |
+| Slack, Discord, and webhook destinations | 10 per project |
 | Alert emails | 1,000 per workspace in a 24-hour window, including confirmation requests |
-| Emails per rule per check | 5 alerts |
+| Notifications per rule per check | 5 alerts |
 
-Saving a rule over the first two limits fails with an error. The email limits hold email back instead, and the alerts still appear in the history. A held opening email goes out on a later check if the alert is still breached; an alert that recovers first resolves without email. An alert whose opening email was sent stays open until its resolved email can be sent.
+Saving a rule over the first two limits fails with an error, and so does adding an eleventh Slack, Discord, or webhook destination. The notification limits hold notifications back instead, and the alerts still appear in the history. A notification that the email limit holds back waits for every destination, including Slack, Discord, and webhooks. A held opening email goes out on a later check if the alert is still breached; an alert that recovers first resolves without email. An alert whose opening email was sent stays open until its resolved email can be sent.
