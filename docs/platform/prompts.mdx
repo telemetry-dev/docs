@@ -1,0 +1,180 @@
+---
+title: Prompts
+description: Keep prompts in telemetry.dev, save versions, deploy one with a label, fetch it with getPrompt or get_prompt, and see its calls on traces.
+lastModified: 2026-10-30
+---
+
+Prompts keeps the prompts of your app in telemetry.dev. You save each change as a version, and a label such as `production` says which version your app gets. To deploy a version, you move the label. Your code does not change.
+
+Your app fetches the prompt with `getPrompt` in TypeScript or `get_prompt` in Python, fills in its variables, and calls the model. When the call runs inside `withPrompt` or `with_prompt`, its trace records the prompt name and version.
+
+Select **Prompts** in the project sidebar.
+
+## Create a prompt
+
+<Steps>
+  <Step title="Open New prompt">
+    On the **Prompts** page, select **New prompt**.
+  </Step>
+  <Step title="Name the prompt">
+    Enter a **Name**, such as `support/reply`. Each part between slashes starts with a lowercase letter or a digit, and then has lowercase letters, digits, dots, dashes, and underscores. A slash puts the prompt in a folder: `support/reply` is the prompt `reply` in the folder `support`. A name has at most 128 characters and is unique in the project.
+  </Step>
+  <Step title="Select the type">
+    Select **Chat** for messages with roles (system, user, and assistant) and tools. Select **Text** for one block of text, for a completion or for other prompts to include. You cannot change the type later.
+  </Step>
+  <Step title="Describe it and create it">
+    Enter an optional **Description** of up to 500 characters. The list shows it under the name. Then select **Create prompt**. The prompt opens in the editor with no versions.
+  </Step>
+</Steps>
+
+### Variables and chat history
+
+`{{name}}` in a message or a text is a variable. A variable name starts with a letter or an underscore and has letters, digits, and underscores. Your app gives the values when it compiles the prompt. A variable with no value becomes an empty text.
+
+In a chat prompt, a **Chat history** message stands for a list of messages that your app passes, such as the earlier turns of a conversation. It has the name of the variable that holds the list.
+
+### Include another prompt
+
+`{{> shared/policies}}` puts the text of the text prompt `shared/policies` in place of the tag. To add the tag, select **Insert prompt** in the editor, or type it.
+
+| Tag | Includes |
+| --- | --- |
+| `{{> shared/policies}}` | The version that the `production` label of `shared/policies` points to. |
+| `{{> shared/policies label=staging}}` | The version that the `staging` label points to. |
+| `{{> shared/policies version=3}}` | Version 3. |
+
+Only text prompts can be included. Includes can nest at most 3 levels deep, one version can include at most 50 prompts, and includes can add at most 1,000,000 characters. telemetry.dev puts in the included text when your app fetches the prompt, so a move of a label of the included prompt changes the text that your app gets. A save, a label move, or a rename that makes includes loop back or nest too deep is refused.
+
+## Save versions
+
+Each change to the prompt is a draft until you save it. Select **Save as v**_n_, enter an optional note in **What changed**, and select **Save version**. In the same dialog you can move labels to the new version.
+
+A saved version never changes. If another person saved a version while you edited, the save stops and the page says who saved. Your draft stays, and you can save it as the version after theirs.
+
+The **Versions** tab lists the versions, newest first, with their notes, authors, and labels. Select a version to see what changed from an earlier version. Select **Open in editor** to start a draft from it.
+
+## Deploy a version with a label
+
+A label points to one version of the prompt. Your app fetches the prompt by its label, so you deploy a version when you move the label to it. A label name has the same characters as a part of a prompt name, and at most 64 characters. A prompt can have at most 50 labels.
+
+- **production** is the label that the SDKs and the API fetch when the request has no label and no version. To move it, select **Promote to production** on a version in the **Versions** tab.
+- **latest** is not a label that you set. It always gives the newest version.
+- Other labels, such as `staging`, are yours to name. Open **Manage labels** in the **Versions** tab to add, move, or remove a label.
+
+Until a version has the production label, apps that fetch the prompt without a label get the error `label_not_found`.
+
+### Protected labels
+
+`production` is protected when it is made, so only owners and admins can set it the first time. Only owners and admins can move or remove a protected label, or turn **Protect** on or off. Members can add, move, and remove labels that are not protected. To remove a protected label, turn off **Protect** first.
+
+### Roll out a version gradually
+
+When you promote a version to production, select **Part of the calls** and enter a share from 1 to 99 percent. That share of the calls gets the new version, and the rest get the version that production had. One session keeps one version for all of its calls. Promote the new version again with **All calls** to end the rollout, or roll production back to an earlier version.
+
+## Rename, move, or delete a prompt
+
+Open the prompt menu in the row of the prompt or on the prompt page:
+
+- **Rename** changes the whole name, folders too.
+- **Move to folder** changes only the folder part of the name.
+- **Edit description** changes the description. This works at any time.
+- **Duplicate** makes a new prompt whose version 1 is the newest version of this one. The copy has no labels.
+- **Delete prompt** deletes the prompt and all of its versions. Traces keep the prompt name and version. You cannot undo a delete.
+
+Apps fetch prompts by name. A rename, a move, or a delete is not possible while the prompt has a label, or while another prompt includes it in its newest version or in a version with a label. The dialog lists each of them. Remove the labels in **Manage labels**, and save a version of each including prompt without the include. Then apps that still use the old name get `prompt_not_found`, so change their code first.
+
+## Fetch a prompt in your app
+
+Your app needs an API key with **Read prompts** in its **Access**, the `prompts:read` scope. Read [API keys](/platform/api-keys).
+
+`getPrompt` is in `@telemetry-dev/sdk` 0.1.11 or later. `get_prompt` is in `telemetry-dev` 0.2.12 or later.
+
+<CodeGroup>
+
+```ts TypeScript
+import OpenAI from "openai";
+import { getPrompt, init, withPrompt } from "@telemetry-dev/sdk";
+import { wrapOpenAI } from "@telemetry-dev/openai";
+
+init();
+const openai = wrapOpenAI(new OpenAI());
+
+const prompt = await getPrompt("support/reply", { label: "production" });
+const messages = prompt.compile({ customer_message, tone });
+
+const response = await withPrompt(prompt, () =>
+  openai.chat.completions.create({ model: prompt.model?.name ?? "gpt-4o", messages }),
+);
+```
+
+```python Python
+import telemetry_dev
+from openai import OpenAI
+from telemetry_dev_openai import wrap_openai
+
+telemetry_dev.init()
+client = wrap_openai(OpenAI())
+
+prompt = telemetry_dev.get_prompt("support/reply", label="production")
+messages = prompt.compile(customer_message=customer_message, tone=tone)
+
+with telemetry_dev.with_prompt(prompt):
+    response = client.chat.completions.create(
+        model=prompt.model["name"] if prompt.model else "gpt-4o", messages=messages
+    )
+```
+
+</CodeGroup>
+
+- Pass `label` to fetch the version that a label points to, or `version` to pin one version, as in a test. Not both. With neither, the SDK fetches `production`.
+- A text prompt needs `type: "text"` (`type="text"` in Python). The SDK rejects a prompt of the other type with the code `type_mismatch`.
+- `compile()` puts the values in place of the variables. A value that is not a string becomes JSON. In a chat prompt, a Chat history message becomes the list of messages in its variable. A text prompt compiles to a string.
+- The prompt also has the `model`, `parameters`, `tools`, and `responseFormat` (`response_format` in Python) of its version.
+
+### Caching
+
+The SDK keeps each prompt that it fetches. When its copy is older than 60 seconds, a call returns the copy at once and fetches a new copy in the background. Thus, after you move a label, a running app gets the new version once its copy is 60 seconds old: the first call after that still gets the old version and starts the fetch, and the calls after the fetch get the new one. To change the time, pass `cacheTtlSeconds` (`cache_ttl_seconds` in Python). Only a call with no copy waits for the fetch, for at most 10 seconds.
+
+If a fetch fails, the SDK returns the last copy that it fetched. With no copy, it returns the `fallback` option, if you gave one. Otherwise it fails with a `PromptError` whose `code` says why, such as `prompt_not_found`, `label_not_found`, `insufficient_scope`, `missing_api_key`, or `timeout`. This is the one SDK function that can fail your call: your app cannot run without its prompt.
+
+During a gradual rollout, the SDK chooses the version per session, from the session id that you set with `propagateAttributes` (`propagate_attributes` in Python). Without a session id, each call chooses at random.
+
+## See the calls of each version
+
+`withPrompt` and `with_prompt` record the prompt on each model call inside them: `td.prompt.name`, `td.prompt.version`, and, for a prompt fetched by a label, `td.prompt.label`. When input capture is on, `td.prompt.variables` holds the variables of the last `compile()`.
+
+The **Metrics** tab of the prompt shows the calls of each version from these spans, with their errors, duration, and cost. From a trace, **Test with these inputs** opens the prompt with the variables of that call.
+
+## Fetch a prompt over HTTP
+
+Other languages can call the API directly:
+
+```sh
+curl "https://api.telemetry.dev/v1/prompts?name=support/reply&label=production" \
+  -H "Authorization: Bearer $TELEMETRY_DEV_API_KEY"
+```
+
+| Parameter | Value |
+| --- | --- |
+| `name` | The prompt name. Required. |
+| `label` | A label name, or `latest` for the newest version. Without `label` and `version`, the request gets `production`. |
+| `version` | A version number. Do not send it with `label`. |
+
+The response has the `name`, `type`, `label` (`null` for a request by version), `version`, `messages`, `text`, `model`, `parameters`, `tools`, and `responseFormat` of the version, with the included prompts put in. During a gradual rollout, `rollout` has the `percent` and `version` of the second version and its content. Otherwise `rollout` is `null`. The API does not choose between the two versions: your code does.
+
+An error has the body `{"error": {"code": "...", "message": "..."}}`:
+
+| Status | Code | Reason |
+| --- | --- | --- |
+| 400 | `invalid_request` | A parameter is missing, has a bad value, or is sent more than once. |
+| 401 | `invalid_api_key` | The `Authorization` header has no valid API key. |
+| 403 | `insufficient_scope` | The key does not have **Read prompts**. |
+| 404 | `prompt_not_found` | No prompt has this name, or it has no such version. |
+| 404 | `label_not_found` | The prompt has no such label. |
+| 422 | `include_not_found`, `include_not_text`, `include_too_deep`, `include_too_large` | An include of the version gets no version, names a chat prompt, nests more than 3 levels deep, or adds too much text. |
+| 429 | `rate_limited` | Too many requests. Wait for the time in the `Retry-After` header. |
+| 503 | `prompts_unavailable` | Prompts are unavailable right now. Try again. |
+
+## Who can do what
+
+Each member of the workspace can create, change, save, rename, and delete prompts, and add, move, and remove labels that are not protected. Only owners and admins can change protected labels and create API keys.
