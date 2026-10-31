@@ -90,7 +90,7 @@ Names match without regard to letter case. If two projects have the same name, u
 | --- | --- |
 | `telemetry projects` | Lists the workspace's projects. |
 | `telemetry use <name\|id>` | Sets the default project. |
-| `telemetry traces` | Finds traces, newest first. Filter with `--errors`, `--name`, `--env`, `--session`, and `--user`, and from version 0.1.4 with [`--since` and `--until`](#time-windows), `--framework`, `--service`, `--model`, `--provider`, and `--operation`. |
+| `telemetry traces` | Finds traces, newest first. Filter with `--errors`, `--name`, `--env`, `--session`, and `--user`, and from version 0.1.4 with [`--since` and `--until`](#time-windows), `--framework`, `--service`, `--model`, `--provider`, and `--operation`, and from version 0.1.6 with `--agent` and `--tool`. |
 | `telemetry trace <trace-id>` | Shows a trace's spans as a tree, with duration, tokens, error text, and the trace's logs. From version 0.1.4 it also prints a link to the trace in the dashboard. |
 | `telemetry sessions` | Finds sessions by the start of their latest trace, newest first. Filter with `--range` (`24h`, `72h`, `7d`, or `30d`; default `24h`), `--errors`, `--contains`, `--agent`, `--model`, and `--user`, and from version 0.1.4 with `--since` and `--until`. |
 | `telemetry logs` | Lists the newest logs, with counts per level. Filter with `--level` and `--range` (`7d`, `30d`, or `90d`; default `7d`), and from version 0.1.4 with `--since` and `--until`. |
@@ -105,6 +105,7 @@ Run `telemetry --help` for the list of commands, and `telemetry <command> --help
 telemetry traces --errors --since 2h            # failed traces in the last 2 hours
 telemetry traces --name checkout --env production
 telemetry traces --model gpt-5 --since 2026-10-29 --until 2026-10-30
+telemetry traces --tool search_docs --errors --since 1d
 telemetry trace 4bf92f3577b34da6a3ce929d0e0e4736
 telemetry sessions --range 7d --errors           # sessions with a failed trace
 telemetry logs --level warn --since 30m
@@ -131,7 +132,7 @@ The window includes `--since` and excludes `--until`. Without `--since`, `traces
 
 telemetry.dev doesn't search past the project's retention period. When `--since` reaches further back, the window starts at the start of the retention period, and the command says so on stderr. `--range` on `sessions` and `logs` can't be combined with `--since` or `--until`.
 
-`--framework` and `--service` match the trace. `--model`, `--provider`, and `--operation` match traces with a span that started in the window. `--framework` takes the name telemetry.dev records, such as `vercel-ai-sdk` or `langchain`.
+`--framework` and `--service` match the trace. `--model`, `--provider`, and `--operation`, and from version 0.1.6 `--agent` and `--tool`, match traces with a span that started in the window. `--framework` takes the name telemetry.dev records, such as `vercel-ai-sdk` or `langchain`. `--agent` takes the agent name your app records on its spans. `--tool` matches a tool call by the tool name telemetry.dev records, or by the span name when there is none.
 
 ### Read prompts and outputs
 
@@ -203,7 +204,7 @@ Branch on `code`, because the wording of `message` can change. `hint` is a comma
 | `failed` | 1 | The command failed for another reason |
 | `internal` | 1 | An unexpected error, such as a configuration file the command couldn't read or write |
 
-New codes may be added, and existing codes keep their meaning. Version 0.1.2 added `invalid_cursor`, `access_denied`, `trace_not_found`, `span_not_found`, and `server_error`; version 0.1.1 reports those errors as `tool_error`. `sign_in_failed` and `no_pending_sign_in` appear in JSON only from 0.1.2, when `login` takes `--json`. Version 0.1.4 added `server_unsupported`, and from that version a time window that telemetry.dev refuses, such as one that ends before the retention period, is `invalid_arguments` with telemetry.dev's reason.
+New codes may be added, and existing codes keep their meaning. Version 0.1.2 added `invalid_cursor`, `access_denied`, `trace_not_found`, `span_not_found`, and `server_error`; version 0.1.1 reports those errors as `tool_error`. `sign_in_failed` and `no_pending_sign_in` appear in JSON only from 0.1.2, when `login` takes `--json`. Version 0.1.4 added `server_unsupported`, and from that version a time window that telemetry.dev refuses, such as one that ends before the retention period, is `invalid_arguments` with telemetry.dev's reason. From version 0.1.6, a deployment that refuses `--agent` or `--tool` because it doesn't know them also gives `server_unsupported`.
 
 ## Environment variables
 
