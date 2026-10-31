@@ -1,7 +1,7 @@
 ---
 title: OpenRouter Broadcast
 description: Add telemetry.dev as a destination in OpenRouter Broadcast and get a trace of each OpenRouter request, with no code changes.
-lastModified: 2026-10-29
+lastModified: 2026-10-31
 seo:
   title: "OpenRouter Broadcast OpenTelemetry Traces"
   description: "Add telemetry.dev as an OpenTelemetry Collector destination in OpenRouter Broadcast. Get the model, tokens, cost, user, and session of each OpenRouter request with no code changes."
@@ -16,7 +16,7 @@ Use Broadcast to get a trace of all OpenRouter requests with no code change. Use
 - A trace for each OpenRouter request, with the service name `openrouter`
 - A child span for each provider that OpenRouter tried, named `provider attempt N: <provider>`
 - The model, the provider that OpenRouter sent the request to, the response model, and the finish reason
-- Input, output, cache-read, cache-write, and reasoning token counts
+- Input, output, cache-read, cache-write, reasoning, and audio input token counts
 - The cost that OpenRouter bills for the request (see [Cost](#cost))
 - The time to first chunk
 - The prompt messages and the response, unless **Privacy Mode** is on for the destination
@@ -95,8 +95,9 @@ OpenRouter sends the data of each request as span attributes. telemetry.dev read
 | Response model and finish reason | `gen_ai.response.model`, `gen_ai.response.finish_reason` | The span's response model and finish reason |
 | Input and output tokens | `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens` | The token counts of the span and of the trace |
 | Cache reads | `gen_ai.usage.input_tokens.cached` | The cache-read token count |
-| Cache writes | `gen_ai.usage.input_tokens.cache_write`, `gen_ai.usage.input_tokens.cache_write_1h` | The cache-write token count, and its one-hour part |
+| Cache writes | `gen_ai.usage.input_tokens.cache_write`, `gen_ai.usage.input_tokens.cache_write_1h` | The cache-write token count, and its one-hour part. These names come from the OpenRouter docs. telemetry.dev has not seen them in an export yet. |
 | Reasoning tokens | `gen_ai.usage.output_tokens.reasoning` | The reasoning token count |
+| Audio input tokens | `gen_ai.usage.input_tokens.audio` | The audio input token count |
 | Cost | `gen_ai.usage.total_cost` | The span's cost. See [Cost](#cost). |
 | Time to first chunk | `trace.metadata.openrouter.first_token_ms` | The span's time to first chunk |
 | Prompt | `gen_ai.prompt` | The span's **Input**, as the list of request messages |
@@ -110,11 +111,13 @@ For each field, a standard attribute wins over the OpenRouter attribute. For exa
 
 OpenRouter also sends the completion with `rawRequest`, a copy of the request body. telemetry.dev does not store `rawRequest`. OpenRouter sends the prompt and the completion a second time as `span.input` and `span.output`. telemetry.dev does not store these copies.
 
+OpenRouter also sends each key of the `trace` object two times, as `trace.metadata.<key>` and as `span.metadata.<key>`. It does the same with `provider_responses` and `error_ownership`. When the two values are the same, telemetry.dev stores only the `trace.metadata.<key>` attribute.
+
 OpenRouter adds more keys under `trace.metadata.openrouter.`, such as the provider name and the latency milestones. These keys stay span attributes. They are not trace metadata.
 
 The generation span is the root span of the trace. OpenRouter gives it the name of `generation_name` in the request's `trace` object, or `LLM Generation`. telemetry.dev uses this name as the trace name. OpenRouter sends `trace_name` as the span attribute `trace.name`, and telemetry.dev does not use it as the trace name.
 
-Each `provider attempt` span has the provider and the status of one attempt. These spans are not model calls, so a failed attempt does not count in the [Model errors](/platform/alerts#model-errors) alert. The trace status is `error` if an attempt failed, also when a different provider then answered the request.
+Each `provider attempt` span has the provider and the status of one attempt. These spans are not model calls, so a failed attempt does not count in the [Model errors](/platform/alerts#model-errors) alert. The generation span has the result of the request. If an attempt failed and a later attempt answered the request, the attempt span keeps its `error` status, but the trace status is `success`. The trace status is `error` when the request failed.
 
 For the full list of attributes that telemetry.dev reads, see [Span attributes](/reference/span-attributes).
 
@@ -136,7 +139,7 @@ If you use one OpenRouter workspace for each environment, add the destination on
 
 The span's cost is `gen_ai.usage.total_cost`. This is the total that OpenRouter bills for the request, with OpenRouter fees and plugin costs. If the span also has a standard [client cost](/reference/cost#client-cost) attribute, such as `gen_ai.usage.cost`, telemetry.dev uses that attribute.
 
-A request with your own provider key (BYOK) is different. The provider bills you for the inference, and `gen_ai.usage.total_cost` is only the OpenRouter fee. For these requests, telemetry.dev ignores the fee and calculates the cost from the token counts and its [pricing snapshot](/reference/cost#pricing-snapshot). This cost is an estimate, and it does not include the OpenRouter fee. telemetry.dev finds a BYOK request from the `is_byok` value of the last provider attempt in `span.metadata.provider_responses`.
+A request with your own provider key (BYOK) is different. The provider bills you for the inference, and `gen_ai.usage.total_cost` is only the OpenRouter fee. For these requests, telemetry.dev ignores the fee and calculates the cost from the token counts and its [pricing snapshot](/reference/cost#pricing-snapshot). This cost is an estimate, and it does not include the OpenRouter fee. telemetry.dev finds a BYOK request from the `is_byok` value of the last provider attempt in `span.metadata.provider_responses`. In the exports that telemetry.dev has seen, `is_byok` is `false` for each attempt, so this rule is not yet checked with a BYOK request.
 
 ## Privacy
 

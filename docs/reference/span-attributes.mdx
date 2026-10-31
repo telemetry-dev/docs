@@ -378,6 +378,7 @@ The ingest API reads these attributes only on spans from OpenRouter Broadcast. A
 | Cache-creation tokens | `gen_ai.usage.input_tokens.cache_write` |
 | One-hour cache creation tokens | `gen_ai.usage.input_tokens.cache_write_1h` |
 | Reasoning tokens | `gen_ai.usage.output_tokens.reasoning` |
+| Audio input tokens | `gen_ai.usage.input_tokens.audio` |
 | Cost | `gen_ai.usage.total_cost`, except when the last entry of `span.metadata.provider_responses` has `is_byok: true` |
 | Provider | `gen_ai.provider.name` or `gen_ai.system`, but not the value `unknown` |
 | Time to first chunk, in ms | `trace.metadata.openrouter.first_token_ms` |
@@ -385,6 +386,10 @@ The ingest API reads these attributes only on spans from OpenRouter Broadcast. A
 | Output | One assistant message from `completion`, `reasoning`, and `toolCalls` in `gen_ai.completion` (parsed). `rawRequest` is not stored. |
 | Metadata | `trace.metadata.<key>`, except `user.id`, `session.id`, `provider_responses`, and keys that start with `openrouter.`, `openrouter_`, or `error_ownership`. `trace.metadata.openrouter.api_key_name` is also metadata, as `openrouter.api_key_name`. |
 
-A span with `span.type` set to `span` is a provider attempt. It gets no operation, so it is not a model call. When the ingest API stores the input or the output, it does not store `span.input` and `span.output`, which repeat them.
+The names of the cache-creation attributes come from the OpenRouter docs. The ingest API has not received them in an export yet.
+
+A span with `span.type` set to `span` is a provider attempt. It gets no operation, so it is not a model call. When an attempt that has `span.metadata.attempt_index` failed, its error does not set the trace status or the trace error type. The generation span has the result of the request.
+
+When the ingest API stores the input or the output, it does not store `span.input` and `span.output`, which repeat them. It also does not store a `span.metadata.<key>` attribute when `trace.metadata.<key>` has the same value.
 
 The ingest API answers the OpenRouter **Test Connection** request with `200` and stores nothing. This request has one span, `openrouter-connection-test`, with the trace ID `00000000000000000000000000000001`. For setup, see [OpenRouter Broadcast](/integrations/openrouter-broadcast).
