@@ -10,21 +10,19 @@ Connect an MCP client when you want to ask questions in Claude, ChatGPT, Cursor,
 
 ## Install
 
-The command line needs Node.js 20 or later.
+The command line needs Node.js 20 or later. Install it with your package manager:
 
-<CodeGroup>
-
-```sh npm
+```package-install
 npm install --global @telemetry-dev/cli
 ```
 
-```sh npx
+Or run it without installing:
+
+```package-install
 npx @telemetry-dev/cli login
 ```
 
-</CodeGroup>
-
-`npx` runs it without installing. The examples on this page use the installed `telemetry` command.
+`yarn global add` works in Yarn 1 only. With Yarn 2 or later, use `yarn dlx`. The examples on this page use the installed `telemetry` command.
 
 ## Sign in
 

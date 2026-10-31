@@ -24,12 +24,28 @@ The integration never records embedding vectors or image, audio, and video bytes
 
 <CodeGroup>
 
-```sh TypeScript
-npm i @telemetry-dev/sdk @telemetry-dev/openai openai
+```sh npm
+npm install @telemetry-dev/sdk @telemetry-dev/openai openai
 ```
 
-```sh Python
+```sh pnpm
+pnpm add @telemetry-dev/sdk @telemetry-dev/openai openai
+```
+
+```sh yarn
+yarn add @telemetry-dev/sdk @telemetry-dev/openai openai
+```
+
+```sh bun
+bun add @telemetry-dev/sdk @telemetry-dev/openai openai
+```
+
+```sh pip
 pip install telemetry-dev-openai
+```
+
+```sh uv
+uv add telemetry-dev-openai
 ```
 
 </CodeGroup>
@@ -209,8 +225,11 @@ In TypeScript, wrap each Realtime WebSocket connection with `wrapOpenAIRealtime(
 
 The OpenAI Realtime WebSocket client needs the `ws` package:
 
-```sh
+```package-install
 npm i ws
+```
+
+```package-install
 npm i -D @types/ws
 ```
 
