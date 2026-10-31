@@ -15,17 +15,17 @@ Wrap an MCP transport with `instrumentMcpTransport()` to trace every MCP request
 
 Install the core SDK, this integration, and the official MCP package for your side of the connection:
 
-<CodeGroup>
+For a client:
 
-```sh Client
+```package-install
 npm i @telemetry-dev/sdk @telemetry-dev/mcp @modelcontextprotocol/client
 ```
 
-```sh Server
+For a server:
+
+```package-install
 npm i @telemetry-dev/sdk @telemetry-dev/mcp @modelcontextprotocol/server
 ```
-
-</CodeGroup>
 
 The integration requires `@modelcontextprotocol/client` or `@modelcontextprotocol/server` version 2.x. MCP SDK v1 (`@modelcontextprotocol/sdk`) is not supported.
 

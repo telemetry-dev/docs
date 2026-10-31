@@ -24,19 +24,35 @@ Install the telemetry packages and the Bedrock Runtime client:
 
 <CodeGroup>
 
-```sh TypeScript
-npm i @telemetry-dev/sdk @telemetry-dev/bedrock @aws-sdk/client-bedrock-runtime
+```sh npm
+npm install @telemetry-dev/sdk @telemetry-dev/bedrock @aws-sdk/client-bedrock-runtime
 ```
 
-```sh Python
+```sh pnpm
+pnpm add @telemetry-dev/sdk @telemetry-dev/bedrock @aws-sdk/client-bedrock-runtime
+```
+
+```sh yarn
+yarn add @telemetry-dev/sdk @telemetry-dev/bedrock @aws-sdk/client-bedrock-runtime
+```
+
+```sh bun
+bun add @telemetry-dev/sdk @telemetry-dev/bedrock @aws-sdk/client-bedrock-runtime
+```
+
+```sh pip
 pip install telemetry-dev-bedrock
+```
+
+```sh uv
+uv add telemetry-dev-bedrock
 ```
 
 </CodeGroup>
 
 The Python package also installs `telemetry-dev` and `boto3`. For Agent Runtime in TypeScript, also install the Agent Runtime client:
 
-```sh
+```package-install
 npm i @aws-sdk/client-bedrock-agent-runtime
 ```
 
