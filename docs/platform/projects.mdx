@@ -1,7 +1,7 @@
 ---
 title: Projects
 description: Create a project, connect an application to it, and rename or delete it.
-lastModified: 2026-10-26
+lastModified: 2026-10-31
 seo:
   description: "Use projects to keep telemetry, API keys, environments, and privacy settings separate. Create, set up, rename, or delete a project in telemetry.dev."
 ---
@@ -66,6 +66,19 @@ A workspace owner or admin can rename or delete a project.
 Select **Settings** in the project sidebar to open the project's **General** settings. Change **Project name** and select **Save**, or select **Delete project** under **Danger zone** and confirm.
 
 Deleting a project removes the project and its API keys, so the keys stop working at once. It also deletes the project's stored telemetry. You cannot undo it.
+
+## Stop accepting telemetry
+
+A workspace owner or admin can stop a project from taking new data and keep what it has. Select **Settings** in the project sidebar, and turn off **Accept telemetry** under **Ingestion**.
+
+While it is off:
+
+- The project's API keys get `403 project_not_accepting_telemetry` when they send traces, logs, or metrics, start an experiment, send experiment runs, or send scores, and nothing new is stored. Read [OTLP error responses](/reference/otlp#error-responses) and [Evals API errors](/reference/evals-api#errors).
+- Apps can still fetch prompts and datasets.
+- The project's stored data stays.
+- telemetry.dev does not score the project. Live and session evaluators, backfills, and experiment items wait, and LLM judges start no new model calls, apart from up to a minute of calls in a scoring run that began before you turned it off. An experiment stays queued or running until you turn the setting on again or stop the experiment.
+
+When you turn **Accept telemetry** on again, the waiting evals continue where they stopped. Live and session evaluators look back at most one hour, so if the setting was off for longer, traces that were not scored before it was turned off stay unscored.
 
 <span id="rename-the-organization" />
 

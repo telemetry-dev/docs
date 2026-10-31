@@ -1,7 +1,7 @@
 ---
 title: Prompts
 description: Keep prompts in telemetry.dev, save versions, deploy one with a label, fetch it with getPrompt or get_prompt, and see its calls on traces.
-lastModified: 2026-10-30
+lastModified: 2026-10-31
 ---
 
 Prompts keeps the prompts of your app in telemetry.dev. You save each change as a version, and a label such as `production` says which version your app gets. To deploy a version, you move the label. Your code does not change.
@@ -45,6 +45,8 @@ In a chat prompt, a **Chat history** message stands for a list of messages that 
 
 Only text prompts can be included. Includes can nest at most 3 levels deep, one version can include at most 50 prompts, and includes can add at most 1,000,000 characters. telemetry.dev puts in the included text when your app fetches the prompt, so a move of a label of the included prompt changes the text that your app gets. A save, a label move, or a rename that makes includes loop back or nest too deep is refused.
 
+You can save a version with an include that gets no version, such as one that names a label that does not exist yet, and the editor warns you. A label cannot point to such a version. Apps that fetch it with `latest` or by its version number get `include_not_found` until the include gets a version.
+
 ## Save versions
 
 Each change to the prompt is a draft until you save it. Select **Save as v**_n_, enter an optional note in **What changed**, and select **Save version**. In the same dialog you can move labels to the new version.
@@ -61,6 +63,8 @@ A label points to one version of the prompt. Your app fetches the prompt by its 
 - **latest** is not a label that you set. It always gives the newest version.
 - Other labels, such as `staging`, are yours to name. Open **Manage labels** in the **Versions** tab to add, move, or remove a label.
 
+Removing a label asks first and says which apps will get an error, including old versions of other prompts that include this prompt through that label. The removal is refused while the newest version or a labeled version of another prompt includes this prompt through that label.
+
 Until a version has the production label, apps that fetch the prompt without a label get the error `label_not_found`.
 
 ### Protected labels
@@ -70,6 +74,8 @@ Until a version has the production label, apps that fetch the prompt without a l
 ### Roll out a version gradually
 
 When you promote a version to production, select **Part of the calls** and enter a share from 1 to 99 percent. That share of the calls gets the new version, and the rest get the version that production had. One session keeps one version for all of its calls. Promote the new version again with **All calls** to end the rollout, or roll production back to an earlier version.
+
+Moving the label to one version, or removing it, ends the rollout. **Manage labels**, **Promote to production**, **Roll back**, and the Save dialog show the rollout and say that the change ends it. A rollout reaches only apps that fetch this prompt. A prompt that includes it through the label gets the version that the label had before the rollout.
 
 ## Rename, move, or delete a prompt
 

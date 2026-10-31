@@ -1,7 +1,7 @@
 ---
 title: OTLP ingest API
 description: Send OTLP/HTTP traces, logs, and metrics to telemetry.dev.
-lastModified: 2026-10-29
+lastModified: 2026-10-31
 seo:
   title: "OTLP/HTTP Ingest API (Protobuf and JSON)"
   description: "Send OpenTelemetry traces, logs, and metrics to telemetry.dev over OTLP/HTTP with protobuf or JSON. This page gives endpoints, authentication, limits, and error responses."
@@ -199,6 +199,7 @@ telemetry.dev also records each rejection of an authenticated request on the pro
 | `401` | `invalid_api_key` | `Authorization must be Bearer td_live_xxx` or `API key was not accepted` | The key is missing, malformed, unknown, or revoked. | No |
 | `403` | `environment_mismatch` | `API key is scoped to another environment` | A resource environment, or the stored trace's environment, differs from the key's environment. | No |
 | `403` | `insufficient_scope` | `This API key cannot send telemetry. Create a key with Send telemetry access.` | The **Access** of the key does not have **Send telemetry**. Read [Select the access of a key](/platform/api-keys#select-the-access-of-a-key). | No |
+| `403` | `project_not_accepting_telemetry` | `This project does not accept telemetry. Turn on Accept telemetry in its settings.` | **Accept telemetry** is off in the project's settings. This rejection is not recorded on the project. | No |
 | `409` | `telemetry_deleted` | `Telemetry was deleted` | The project's telemetry, or a trace in the batch, was deleted. | No |
 | `413` | `body_too_large` | `Request body exceeds limit` or `Decompressed request body exceeds limit` | The body is over 16 MiB as sent or after decompression. | No; split the batch |
 | `415` | `unsupported_media_type` | `Content-Type must be application/x-protobuf or application/json` | Missing or unsupported `Content-Type`. | No |

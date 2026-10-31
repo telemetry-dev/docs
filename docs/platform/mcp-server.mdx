@@ -1,7 +1,7 @@
 ---
 title: Connect an AI agent
 description: Let Claude, ChatGPT, Cursor, VS Code, or another MCP client read traces, logs, and usage from one workspace.
-lastModified: 2026-10-30
+lastModified: 2026-10-31
 ---
 
 telemetry.dev runs an MCP server at `https://telemetry.dev/mcp`. An AI agent connected to it can find traces, read a trace's spans and errors, list logs, and summarize token usage and cost, so you can ask questions such as "why did the last checkout run fail?" in your editor or chat app.
@@ -63,7 +63,7 @@ If the page says **telemetry.dev has not verified this app**, the app's name was
 | `list_projects` | The workspace's projects. Every other tool needs a project from this list. |
 | `search_sessions` | Sessions with traces in a time window, newest first, with trace count, errors, tokens, and cost. |
 | `search_traces` | Traces in a time window, newest first, filtered by name, status, environment, framework, service, session, or end user, or by the model, provider, operation, agent, or tool of one of their spans. The tool filter matches a tool call by its recorded tool name, or by the span name when there is none. |
-| `get_trace` | One trace's spans with models, tools, timing, tokens, cost, and error text, and its logs, in pages. It also returns `trace.url`, the trace's page in the dashboard, so an agent can give you a link to the run. |
+| `get_trace` | One trace's spans with models, tools, timing, tokens, cost, and error text, and its logs, in pages. Next to its `cost_usd`, each span has `input_cost_usd`, `cache_read_cost_usd`, `cache_write_cost_usd`, `reasoning_cost_usd`, and `output_cost_usd`, which add up to it; they are null for a span without this split, such as one whose cost the SDK reported. Read [Cost by token class](/reference/cost#cost-by-token-class). It also returns `trace.url`, the trace's page in the dashboard, so an agent can give you a link to the run. |
 | `get_span_payload` | The captured input, output, or error of one span, in pages. Needs the extra permission below. |
 | `list_logs` | Log records in a time window, newest first, filtered by level, with counts per level for the whole window. |
 | `get_usage_summary` | Requests, errors, latency, tokens, cost, and active users for 7, 30, or 90 days, compared with the period before, broken down by model, provider, end user, or operation. The breakdown lists the top 6 groups by requests. |
@@ -91,6 +91,18 @@ The server resolves a duration against its own clock. A `since` before the reten
 While a result's `next_cursor` is not null, pass it as `cursor` to get the next page. The cursor keeps the window of the first page, so a duration such as `2h` covers the same two hours on every page. Pass the same other arguments as the call that returned the cursor; only `limit` can change. A cursor from a call with other arguments returns an error.
 
 `search_sessions` lists sessions by the start of their latest trace in the window. A trace that started before the window ended but reached telemetry.dev after the first page was read can move its session to a page already read, so a session can be missed or listed twice. `list_logs` counts levels over the whole window on every page, so a late log can change the counts between pages.
+
+### Errors
+
+Each tool that takes arguments refuses one that it does not know, so a misspelled filter returns an error instead of results without that filter.
+
+A tool error has a text that the agent reads and, for a client that acts on it, a code in `_meta`:
+
+```json
+"_meta": { "dev.telemetry/error": { "code": "invalid_cursor", "retryable": false } }
+```
+
+The codes are `invalid_cursor`, `payloads_not_allowed`, `access_denied`, `project_not_found`, `trace_not_found`, `span_not_found`, `not_found`, `invalid_arguments`, `plan_limit`, and `server_error`. Only `server_error` is retryable. An argument that fails the tool's input schema returns an error without a code, so treat a missing code as unknown.
 
 ### Usage reads that fail
 
