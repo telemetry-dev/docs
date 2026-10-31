@@ -1,7 +1,7 @@
 ---
 title: Traces, sessions, and logs
 description: Find a request, inspect its spans, follow a conversation, and read related logs.
-lastModified: 2026-10-30
+lastModified: 2026-10-31
 ---
 
 A trace is one request through your application. Each step inside it, such as a model call, a tool call, or an agent step, is a span. Use the trace explorer to find failed or slow requests and to see what each model call received and returned.
@@ -22,11 +22,11 @@ Both lists have these filters:
 | Status | Shows **All statuses**, `success`, or `error`. |
 | Environment | Lists up to 100 environment names from your telemetry. Names match regardless of case and surrounding spaces, so `production` also shows telemetry sent as `Production`. Without a selection, the lists leave out the `experiment` environment of [experiment runs](/evals/experiments). |
 | Framework | Lists the frameworks detected in your telemetry. |
-| Date range | Shows **Last 7 days**, **Last 30 days**, or **Last 90 days**. The default is 30 days. |
+| Date range | Shows **Last 7 days**, **Last 30 days**, or **Last 90 days**. The default is 30 days. Both lists take the traces that started in the range. A long trace that started before the range does not appear, and neither do its spans. |
 | Session | Select a value in the **Session** column. A chip shows the filter; select it to clear the filter. |
 | User | In the trace list, select a value in the **User** column. A chip shows the filter; select it to clear the filter. |
 
-A row of the **Breakdown** table on the [Overview](/platform/analytics#break-traces-down-by-a-dimension) can also open the span list filtered by **Model**, **Provider**, or **Operation**, with a chip for that filter. The **Investigate** button of a [Tool errors](/platform/alerts#tool-errors) alert opens it filtered by **Tool**, which matches tool calls by tool name, or by span name when a span has no tool name.
+A row of the **Breakdown** table on the [Overview](/platform/analytics#break-traces-down-by-a-dimension) can also open the span list filtered by **Model**, **Provider**, or **Operation**, with a chip for that filter and the Overview's date range. A **Model** or **Provider** row also adds the **Operation: model calls** chip, so the list shows only model calls, the spans that the row counts. The **Investigate** button of a [Tool errors](/platform/alerts#tool-errors) alert opens it filtered by **Tool**, which matches tool calls by tool name, or by span name when a span has no tool name.
 
 The filters are part of the page URL, so you can bookmark or share a filtered view.
 
@@ -77,30 +77,35 @@ Focus the span tree, then use these keys:
 | `Home` or `End` | Select the first or last span |
 | `→` | Expand a span, or select its first child |
 | `←` | Collapse a span, or select its parent |
+| `Enter` or `Space` | Select the focused span and open its panel |
+
+When you close the span panel, focus returns to the span's row, so `Enter` opens the panel again.
 
 ### Read a span
 
 Select a span to open its panel. The panel header shows the span's type and name, with **Previous span** and **Next span** buttons. Below it, the panel shows these sections when the span has data for them:
 
 - **Error**: the error message and details, for a failed span.
-- **Metrics**: when the span started, its duration, and its offset from the start of the trace. Model calls also show **First token**, **Output speed**, **Cost**, and their tokens.
+- **Metrics**: when the span started, its duration, its offset from the start of the trace, and its **Span ID**, with a button to copy it. Model calls also show **First token**, **Output speed**, **Cost**, and their **Tokens**, split into **Input**, **Cache write**, **Cached input**, **Reasoning**, and **Output**. An agent span shows how its time splits into **Model**, **Tools**, and **Other**, which add up to its duration; tool calls that run at the same time count once. It also shows the tokens and the **Cost** of the model calls under it, with a note of how many there are. The cost is split into the same five parts when each priced model call under it has the split; read [Cost by token class](/reference/cost#cost-by-token-class).
 - **Scores**: the scores of the trace and the span, with the source and the reason of each. The root span always shows this section, with **Add score**. Read [Read scores on a trace](/evals/scores#read-scores-on-a-trace).
 - A section for the kind of span, such as **Model call** with the **Requested model**, **Response model**, **Provider**, **Finish reason**, and **Response ID**, or **Tool call**, **Agent**, or **MCP**.
 - **Input** and **Output**: the prompt and the reply. In **Output**, a model's reasoning, such as Anthropic thinking or Gemini thoughts, appears as **Reasoning** above the reply when it was captured. A tool call shows **Arguments** and **Result** instead. Where a section offers them, select **Pretty** for a formatted view or **JSON** for the stored value.
-- **Events**: the span events and their attributes.
+- **Events**: the span events, with the level and the attributes of each.
 - **Attributes**: the span attributes.
 
-A **Truncated** badge marks a value that the panel shows only in part.
+The panel shows a value of up to 2,000,000 characters. A **Truncated** badge marks a longer value, which the panel shows only in part. A **Truncated at source** badge in the panel header means that the SDK or integration cut the span's content before sending it: the span has `telemetry.dev.capture.truncated` set to `true`, or its input, output, or error ends with the SDK's `...[truncated]` marker.
 
-If prompt and response capture is off for the environment, the **Input** and **Output** sections say that capture is off, and the span name is `[REDACTED]`. Read [What capture-off removes](/platform/privacy#what-capture-off-removes).
+If prompt and response capture is off for the environment, the **Input** and **Output** sections say "Not captured. Prompt capture is off for the _environment_ environment." with a link to the project's privacy settings, and the span name is `[REDACTED]`. Read [What capture-off removes](/platform/privacy#what-capture-off-removes). If capture is on but the span has no input or output, the section says that capture is off in the SDK.
 
 ## Follow a conversation
 
 Select **Sessions** in the project sidebar to list conversations. A session groups the traces that share a session ID. To set one, read [Add user, session, and metadata](/sdk/typescript#add-user-session-and-metadata) for TypeScript or [Python](/sdk/python#add-user-session-and-metadata).
 
-Select **24h**, **3d**, **7d**, or **30d** to set the time range. You can search by session ID or trace name and filter by agent, user, model, or environment. The list shows each session's **Agent**, **Model**, **Customer**, **Turns**, **Tokens**, **Cost**, and **Last active** time.
+Select **24h**, **3d**, **7d**, or **30d** to set the time range. You can search by session ID or trace name and filter by agent, user, model, or environment. The list shows each session's **Agent**, **Model**, **Customer**, **Turns**, **Tokens**, **Cost**, and **Last active** time. Sessions are listed newest first by the start of their latest trace, so a session whose latest trace started earlier but ran longer can come after one with a later **Last active** time.
 
 Select a session to see its **Customer**, **Agent**, **Models**, **Started** time, **Duration**, **Tokens**, and **Cost**, a list of its **Turns**, and each turn of the conversation. Select **Open in Traces** to list the session's traces, or **Open trace** if the session has one trace. Select **Add to dataset** or **Add to review queue** to send the session to Evals. The session page also shows the [scores](/evals/scores#read-scores-on-a-session) of the session and of each turn.
+
+The session page reads the first 4,000 characters of each stored input and output, so a long prompt or reply can stop short. When you open a tool run or a model's reasoning, the page loads its full value. To read a long prompt or reply in full, open the trace and select the span.
 
 ## Read logs
 
@@ -110,4 +115,4 @@ The level filter starts at `error`. You can also select `warn`, `info`, `debug`,
 
 The table loads the newest 100 matching log records from the last 30 days, or from the retention period if that is shorter. It has no further pages. The search box filters only the message previews in those loaded records.
 
-Select a row to open the log details, with the full message, level, service, environment, the related trace, and the log's data. If the log has trace context, select **Trace** to open the trace with the log's span selected.
+Select a row to open the log details, with the message, level, service, environment, the related trace, and the log's data. The details show the first 1,000 characters of the message, ending with `…` when it is longer, and the first 4,000 characters of the data, marked **Preview truncated** when it is longer. If the log has trace context, select **Trace** to open the trace with the log's span selected.

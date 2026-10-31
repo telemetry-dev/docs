@@ -1,7 +1,7 @@
 ---
 title: Experiments
 description: Run a prompt version or your own code on each item of a dataset, score the outputs, and compare them with the baseline in the dashboard or in CI.
-lastModified: 2026-10-30
+lastModified: 2026-10-31
 ---
 
 An experiment runs a prompt version or your code on each item of a [dataset](/evals/datasets), then scores each output with [evaluators](/evals/evaluators). The experiment page compares the scores with the baseline of the dataset, so you can see which items became better or worse.
@@ -212,7 +212,7 @@ jobs:
         with:
           node-version: 24
       - run: npm ci
-      - uses: telemetry-dev/telemetry/actions/experiment@main
+      - uses: telemetry-dev/telemetry/actions/experiment@experiment-action-v1
         with:
           dataset: support-golden
           script: evals/reply.eval.ts
@@ -235,7 +235,7 @@ The action sets `TELEMETRY_DEV_ENVIRONMENT` to `experiment` if the job does not 
 
 The comment shows the status of each experiment and the count of items that ran. Its table of scores has the **Value**, the **Change**, and the **Pass mark** of each score. The action writes one comment for each workflow, job, and input, and changes that comment on each later push.
 
-To keep a workflow the same when `main` changes, use a commit SHA of `telemetry-dev/telemetry` in place of `@main`.
+The tag `experiment-action-v1` moves to each 1.x release of the action, and a change that can break a workflow gets a new major tag. To keep a workflow the same, use the tag of one release, such as `experiment-action-v1.0.0`, or its commit SHA. The [releases](https://github.com/telemetry-dev/telemetry/releases) of `telemetry-dev/telemetry` list the changes.
 
 ## Stop, run again, or delete an experiment
 

@@ -1,7 +1,7 @@
 ---
 title: Cost calculation
 description: Learn how telemetry.dev calculates model cost from token usage and model prices.
-lastModified: 2026-10-18
+lastModified: 2026-10-31
 seo:
   title: "LLM Cost Calculation from Token Usage"
   description: "telemetry.dev calculates LLM cost at ingest from token usage and a model price snapshot. A valid cost value from your SDK overrides the server calculation."
@@ -66,6 +66,24 @@ The prices below are illustrative. They match the `anthropic:claude-sonnet-4-5` 
 />
 
 The stored cost is `0.03765`. Adding reasoning tokens to this span would not change it, because they are already counted in the 1,500 output tokens.
+
+## Cost by token class
+
+When the server calculates a span's cost, it also stores the part of the cost that comes from each class of token. The five parts add up to the cost:
+
+| Part | Tokens | Rate |
+| --- | --- | --- |
+| Input | Uncached input | `input` |
+| Cache read | Cache-read input | `cachedInput`, or `input` |
+| Cache write | Cache-creation input | `cacheWrite`, or `input`, and `cacheWrite1h` for [one-hour cache writes](#provider-specific-adjustments) |
+| Reasoning | Reasoning tokens, which are part of the output | `output` |
+| Output | Output minus reasoning | `output` |
+
+Image and audio tokens go to the part of their kind at their own rates, as in [Modality pricing](#modality-pricing). In the worked example, the parts are $0.009 of input, $0.0024 of cache reads, $0.00375 of cache writes, and $0.0225 of output. If 500 of the 1,500 output tokens were reasoning, $0.0075 of the output would move to reasoning, and the total would stay `0.03765`.
+
+Each part rounds down to eight decimal places, and the units left over go to the parts with the largest remainders, so the parts always add up to the stored cost.
+
+A span has no parts when its cost is a [client cost](#client-cost) or null, or when it kept a cost that the current prices no longer give. Spans stored before the parts were added, on October 31, 2026, have none. The [trace page](/platform/traces#read-a-span) shows the parts in the **Cost** of an agent span when each priced model call under it has them; otherwise it shows the cost alone. The [MCP tool](/platform/mcp-server#what-an-agent-can-read) `get_trace` returns them for each span.
 
 ## Rounding and precision
 

@@ -1,7 +1,7 @@
 ---
 title: Evals API
 description: Read dataset items, run experiments of your code, and send scores over HTTP, with request fields, limits, and error codes.
-lastModified: 2026-10-30
+lastModified: 2026-10-31
 ---
 
 The Evals API lets your code read the items of a dataset, send the outputs of an experiment, and send scores over HTTP. The TypeScript and Python SDKs use this API in `runExperiment` and `score`. Read [Experiments](/evals/experiments) and [Scores](/evals/scores) first.
@@ -163,7 +163,7 @@ An error has a JSON body with a code and a message:
 
 | HTTP | Code | Cause |
 | --- | --- | --- |
-| `400` | `invalid_request` | The body or a parameter is not valid. The message names the problem. |
+| `400` | `invalid_request` | The body or a parameter is not valid. The message names the problem. Text in the body or a parameter cannot contain U+0000 or a lone UTF-16 surrogate, such as `\u0000` or `\ud800` in JSON. |
 | `400` | `decompression_failed` | The gzip body does not decompress. |
 | `401` | `invalid_api_key` | The key is missing, malformed, unknown, or revoked. |
 | `403` | `insufficient_scope` | The key does not have the scope of the route. |
