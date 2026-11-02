@@ -148,6 +148,10 @@ function isFromTelemetryDev(secret: string, headers: Record<string, string>, raw
 
 When a request to Slack, Discord, or a webhook times out, cannot connect, or gets a `408`, `429`, or `5xx` answer, telemetry.dev sends it again after 1 minute, and then waits twice as long each time, up to 1 hour, for at most 8 tries. A `Retry-After` header can ask for a longer wait, up to 1 hour. Any other answer, such as `401`, `404`, or a redirect, fails the delivery at once.
 
+Each destination gets its notifications one at a time, oldest first, so an alert's opening, reminders, and resolution arrive in order. While a delivery waits to be sent again, later notifications to the same destination wait behind it. A notification that is still not sent 24 hours after the alert queued it fails without being sent, and the alert's **Timeline** shows it as failed with "Not sent within 24 hours of being queued". Email is not limited this way.
+
+After 3 failed deliveries in a row, the destination shows **Failing** on the **Destinations** tab, with the last error, such as "Slack answered 404: no_service" or "The webhook did not answer within 10 seconds". A delivery that is retried counts once, when it fails for good. The next delivery that succeeds sets the destination back to **Active**. A notification that failed only because it waited more than 24 hours does not count.
+
 The **Timeline** of an alert's page shows each delivery, for example "Slack message sent to #oncall", "Webhook to https://…ooks.example.com/…a9f2 is waiting to send", or "Discord message to #alerts failed". Rarely, a notification arrives twice; a webhook then gets the same `webhook-id` both times.
 
 ## Project alerts
