@@ -53,7 +53,7 @@ To add one, owners and admins open the **Destinations** tab of the project's **A
 - **Discord**: in the channel settings, open **Integrations**, then **Webhooks**, and create a webhook. Paste its **Webhook URL**, which starts with `https://discord.com/api/webhooks/`, and enter the **Channel** name.
 - **Webhook**: enter the **URL** of your endpoint. It must use HTTPS and resolve to a public address. telemetry.dev then shows a signing secret that starts with `whsec_`. Copy it, because it is shown only once. See [Check a webhook signature](#check-a-webhook-signature).
 
-Anyone who has a Slack or Discord webhook URL can post to its channel, so telemetry.dev stores the URLs and signing secrets encrypted and never shows them again. The list shows the channel name you entered, or for a webhook its host and the last 4 characters of its path. To change a URL, remove the destination and add it again. To remove a destination, select **Remove** in its row menu. A project can have up to 10 Slack, Discord, and webhook destinations.
+Anyone who has a Slack or Discord webhook URL can post to its channel, so telemetry.dev stores the URLs and signing secrets encrypted and never shows them again. The list shows the channel name you entered. For a webhook it shows the host name with only the last 4 characters of its first part, the port, and the last 4 characters of the path, such as `https://…ooks.example.com/…a9f2` or `https://…k3x9.m.pipedream.net`, because some services put a token in the first part of the host name. An IP address, localhost, a host such as `example.com` that has no part before its domain, or a first part of 4 or fewer characters is shown whole, and a token in a later part of the host name still shows. To change a URL, remove the destination and add it again. To remove a destination, select **Remove** in its row menu. A project can have up to 10 Slack, Discord, and webhook destinations.
 
 A Slack or Discord message has the alert title and the same sections as an [alert email](#alert-emails), with an **Open in telemetry.dev** link to the page to investigate and a **View alert** link to the alert's page. Messages mention nobody, even when telemetry quotes text such as `@everyone`.
 
@@ -64,6 +64,7 @@ Each notification is a `POST` request with a JSON body and the `content-type: ap
 ```json
 {
   "type": "alert.opened",
+  "reminder": false,
   "alert": {
     "id": "8f2c1a4e-3b7d-4c9a-9e61-0d5b2f7a8c31",
     "url": "https://telemetry.dev/o/org_4b1e/p/6a0c2d91-7f3e-4b8a-a5c2-1e9d4f6b8a20/alerts/8f2c1a4e-3b7d-4c9a-9e61-0d5b2f7a8c31",
@@ -80,6 +81,7 @@ Each notification is a `POST` request with a JSON body and the `content-type: ap
 | Field | Value |
 | --- | --- |
 | `type` | `alert.opened` when the alert opens and for each reminder, `alert.resolved` when it resolves. |
+| `reminder` | `true` on the `alert.opened` that telemetry.dev sends again, at most every 6 hours, while the alert stays open. `false` otherwise. A destination added since, or one whose earlier request failed, can get a reminder as its first request for an alert. To open one incident per alert, open one for each new `alert.id`, and use `reminder` only to avoid paging again. |
 | `alert.id` | The ID of the alert. Its reminders and its resolved notification have the same ID. |
 | `alert.url` | The alert's page in telemetry.dev. |
 | `alert.title` | The alert title. A reminder's title starts with `Reminder: `. |
@@ -146,7 +148,7 @@ function isFromTelemetryDev(secret: string, headers: Record<string, string>, raw
 
 When a request to Slack, Discord, or a webhook times out, cannot connect, or gets a `408`, `429`, or `5xx` answer, telemetry.dev sends it again after 1 minute, and then waits twice as long each time, up to 1 hour, for at most 8 tries. A `Retry-After` header can ask for a longer wait, up to 1 hour. Any other answer, such as `401`, `404`, or a redirect, fails the delivery at once.
 
-The **Timeline** of an alert's page shows each delivery, for example "Slack message sent to #oncall", "Webhook to https://hooks.example.com/…a9f2 is waiting to send", or "Discord message to #alerts failed". Rarely, a notification arrives twice; a webhook then gets the same `webhook-id` both times.
+The **Timeline** of an alert's page shows each delivery, for example "Slack message sent to #oncall", "Webhook to https://…ooks.example.com/…a9f2 is waiting to send", or "Discord message to #alerts failed". Rarely, a notification arrives twice; a webhook then gets the same `webhook-id` both times.
 
 ## Project alerts
 
