@@ -2,7 +2,7 @@
 title: Evals
 description: Test prompts and models on datasets, score live traces with LLM judges, code checks, and rules, and review replies with your team.
 sidebar: { label: "Overview" }
-lastModified: 2026-10-30
+lastModified: 2026-11-03
 ---
 
 Evals measures the quality of the replies of your AI application. You keep test items in datasets and run a prompt version or your code on each item. Then you compare the scores with the scores of an earlier run. The same evaluators can also score the traces of your users when they arrive.
@@ -29,7 +29,7 @@ To stop a regression before you merge it, run the experiment in CI. Read [Run ex
 
 ## Model provider keys
 
-Experiments of a prompt version and LLM judges call models with the keys of the project. Your model provider bills these calls. Code checks and rules do not call a model.
+Test runs of prompts, **Suggest changes** in the prompt editor, experiments of a prompt version, and LLM judges call models with the keys of the project. Your model provider bills these calls. Code checks and rules do not call a model.
 
 To add a key:
 
@@ -45,7 +45,7 @@ To add a key:
   </Step>
 </Steps>
 
-The providers are OpenAI, Anthropic, Google, and one OpenAI-compatible endpoint. Only owners and admins can add, change, or remove a key. After you save a key, nobody can read it.
+The providers are OpenAI, Anthropic, Google, and one OpenAI-compatible endpoint. Only owners and admins can add, change, or remove a key. telemetry.dev stores the key encrypted and does not show it again; the list shows only its known prefix and last 4 characters, such as `sk-ant-…9f3c`, or the address of the OpenAI-compatible endpoint. Its servers decrypt the key when they call the model.
 
 Your app keeps its own provider keys. telemetry.dev uses the keys on this page only for test runs of prompts, **Suggest changes** in the prompt editor, experiments, and LLM judges.
 
