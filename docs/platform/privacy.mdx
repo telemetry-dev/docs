@@ -1,7 +1,7 @@
 ---
 title: Privacy and retention
 description: Choose what telemetry.dev stores, what it redacts, and how long it keeps telemetry.
-lastModified: 2026-10-30
+lastModified: 2026-11-03
 ---
 
 telemetry.dev stores prompts and responses by default. You can limit what it keeps in three places:
@@ -97,7 +97,7 @@ Capture settings do not apply to the outputs that your code sends with `runExper
 
 ## Content that Evals sends to model providers
 
-An LLM judge sends its prompt to the model provider of the judge, with the project's provider key. On live and past traces, the prompt has the stored trace content that its variables hold, after redaction. In an experiment, the prompt has the dataset item and the output, and the outputs that your code sends get no redaction. A prompt experiment sends each dataset item to the model of the experiment. Code checks and rules run on telemetry.dev servers and send no content to a model provider. Read [What leaves telemetry.dev](/evals/evaluators#what-leaves-telemetrydev).
+An LLM judge sends its prompt to the model provider of the judge, with the project's provider key. On live and past traces, the prompt has the stored trace content that its variables hold, after redaction. In an experiment, the prompt has the dataset item and the output, and the outputs that your code sends get no redaction. A prompt experiment sends each dataset item to the model of the experiment. A test run of a prompt sends the prompt, the prompts it includes, its tools, and the inputs you entered to its model. **Suggest changes** sends the draft prompt, the instruction you type, and up to 20 failed items of the experiment you select, with their outputs, expected outputs, and the reasons of their failing scores, to the model of the draft. Code checks and rules run on telemetry.dev servers and send no content to a model provider. Read [What leaves telemetry.dev](/evals/evaluators#what-leaves-telemetrydev).
 
 ## What built-in redaction removes
 
@@ -185,6 +185,6 @@ A new project starts at **Data retention** under **Defaults for new projects** i
 
 Dashboard views show only telemetry inside the retention window, so a shorter retention hides older data right away. A cleanup job then deletes telemetry older than the project's retention. It runs about once a day.
 
-Retention also deletes the scores of the traces that it deletes. Datasets and experiments do not follow retention. A dataset item that came from a trace is a copy, and it stays until you delete it or its dataset. An experiment keeps its outputs and scores until you delete it or its dataset.
+Retention also deletes the scores of the traces that it deletes. Datasets and experiments do not follow retention. A dataset item that came from a trace is a copy. Deleting or editing an item changes only new versions of the dataset; the earlier versions, and the experiments on them, keep the item as it was until you delete the dataset or its project. An experiment keeps its outputs and scores until you delete it or its dataset.
 
 The storage layer also deletes all telemetry after 90 days, whatever the project setting.
