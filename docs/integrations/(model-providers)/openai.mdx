@@ -1,13 +1,15 @@
 ---
 title: OpenAI
 description: Trace OpenAI chat, Responses API, embedding, media, batch, and stream calls from TypeScript or Python.
-lastModified: 2026-10-26
+lastModified: 2026-11-05
 seo:
   title: "OpenAI API Tracing and Token Usage"
   description: "Trace OpenAI chat completions, Responses API, embedding, and stream calls from TypeScript or Python, with token usage, errors, and time to first chunk."
 ---
 
 Wrap your OpenAI client, and each call you make with it becomes a span in telemetry.dev. Your calls and their return values don't change.
+
+To trace runs of the TypeScript OpenAI Agents SDK, see [OpenAI Agents SDK](/integrations/openai-agents); don't wrap the client the Agents SDK uses or call `instrumentOpenAI()` in a process that runs the Agents SDK, or each model call is recorded twice.
 
 ## What you get
 
