@@ -66,7 +66,7 @@ The judge prompt can have up to 20,000 characters. Put these variables in it:
 | `{{input}}` | The input of the trace, or of the span when the evaluator scores spans. |
 | `{{output}}` | The output of the trace or the span. |
 | `{{expected}}` | The expected output of the dataset item. It has a value in experiments only. |
-| `{{metadata}}` | The metadata of the dataset item, as JSON. It is `{}` on live traces. The form does not list this variable. |
+| `{{metadata}}` | The metadata of the dataset item, as JSON. It is `{}` on live traces. |
 
 For example, the **Correctness** template has this prompt:
 
@@ -82,6 +82,14 @@ Expected: {{expected}}
 Select the **Model** of the judge. You can select only the models of providers that have a key in **Model providers**. The menu shows the models of the other providers with **No key**. Read [Model provider keys](/evals#model-provider-keys). **Ask the judge for its reason** is on by default. The reason shows with the score.
 
 telemetry.dev cuts each variable at 50,000 characters, and all of the variables together at 200,000 characters. A cut value ends with `…[truncated]`.
+
+### Compare with reviewers
+
+To see how often a judge agrees with people, select a [human score](#human-scores) under **Compare with reviewers**. The human score must have the same kind of score as the judge: pass or fail, a number on the same scale, or the same labels. When people have scored traces that the judge scored, the panel of the judge shows **Agrees with reviewers**, such as "45 of 50 items (90%)". When it runs on recent traces, **Try it** shows the same count for its sample traces that people scored.
+
+The count takes the newest 1,000 scores of the judge on traces in the last 30 days. Scores of experiment items and judge errors do not count. It compares each score with the newest score that a person gave on the same trace, in a review queue or on the trace page. Pass or fail and labels agree when they are the same. Numbers agree when they differ by less than one step: 1, or 0.1 on a scale of 1 or less.
+
+When most replies pass, a high count can hide a judge that never fails. If reviewers pass 95% of the replies, a judge that passes each reply agrees 95% of the time. Open the traces that reviewers failed and check that the judge failed them too.
 
 ### Judge errors
 
@@ -218,6 +226,7 @@ The panel shows these sections:
 - The trend of the last 30 days: the pass rate, the fail rate, or the average, with the change from the 30 days before.
 - The configuration: the judge prompt, the code, or the conditions.
 - **Runs on**: the live filters, whether experiments select it by default, the cost of the last 7 days for a judge, and the progress of **Score past traces**.
+- **Agrees with reviewers**: for an LLM judge with a human score under **Compare with reviewers**. Read [Compare with reviewers](#compare-with-reviewers).
 - **Recent fails**: up to 3 traces with a fail score. Select **View all traces** to see all of them on the **Traces** page.
 
 ## Set the daily limit
