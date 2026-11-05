@@ -66,7 +66,12 @@ Run your agent once and open [Traces](/platform/traces) in your project. A run c
 - A span for each tool call, named after the tool
 - Handoff, guardrail, and MCP tool-listing spans when the run has them
 
-A run without a `groupId` is one trace. When runs set a `groupId`, the processor sends it as the session ID (`gen_ai.conversation.id`), and the runs of that `groupId` land in [one trace per session](/sdk/typescript#one-trace-per-session), each run as a root span.
+How runs group into traces:
+
+- A run is one trace by default.
+- A run that starts inside an active OpenTelemetry span, such as an HTTP request span, joins that span's trace.
+- Runs that share a `groupId` share a session: the processor sends the `groupId` as the session ID (`gen_ai.conversation.id`). Runs inside the same [`propagateAttributes({ sessionId })`](/sdk/typescript#add-user-session-and-metadata) session (from `@telemetry-dev/sdk`) do too; a `groupId` takes precedence. Outside an active span, the runs of a session land in [one trace per session](/sdk/typescript#one-trace-per-session), each run as a root span.
+- With `telemetryDevProcessor({ sessionMode: "process" })`, runs without a session of their own share the process's [generated session](/sdk/typescript#process-sessions) in the same way. Use this in a CLI or script that holds one conversation per process, not in a long-running server.
 
 In short-lived runtimes such as serverless functions, flush at the end of each request:
 
