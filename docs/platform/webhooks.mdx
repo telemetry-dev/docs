@@ -1,0 +1,93 @@
+---
+title: Webhooks
+description: Store E2B sandbox lifecycle events as logs in your project, with the sandbox ID that your agent's traces carry.
+lastModified: 2026-11-06
+---
+
+E2B sends an event each time a sandbox is created, updated, paused, resumed, checkpointed, or killed. With a webhook endpoint, telemetry.dev stores each event as a log record in your project. The record has the E2B sandbox ID in `sandbox.id`, the same attribute that the [OpenAI Agents SDK integration](/integrations/openai-agents#record-the-providers-sandbox-id) puts on the spans of a sandbox agent, so you can match a sandbox's events to the commands that ran in it.
+
+A workspace owner or admin can add and revoke endpoints. Members can see the list. To send alerts to a webhook of your own, read [Slack, Discord, and webhooks](/platform/alerts#slack-discord-and-webhooks).
+
+## Add an E2B endpoint
+
+<Steps>
+  <Step title="Open Webhooks">
+    In the project, select **Settings** in the sidebar. Then select **Webhooks** under the project in the settings sidebar.
+  </Step>
+  <Step title="Describe the endpoint">
+    Select **Add endpoint**. Enter an optional **Name** of up to 50 characters and an optional **Environment**. Read [Environment and privacy](#environment-and-privacy).
+  </Step>
+  <Step title="Copy the URL and the secret">
+    Select **Add endpoint**. The **Endpoint added** dialog shows the endpoint's **URL** and **Signing secret**, and a `curl` command that registers both with E2B.
+  </Step>
+  <Step title="Register the webhook with E2B">
+    Run the command with your E2B API key in `E2B_API_KEY`. It subscribes the URL to every sandbox lifecycle event. To register it another way, give E2B the URL as the webhook `url` and the secret as its `signatureSecret`. Read [E2B's webhook docs](https://e2b.dev/docs/sandbox/lifecycle-events-webhooks).
+  </Step>
+</Steps>
+
+:::warning[Copy the secret now]
+telemetry.dev shows the signing secret one time. If you lose it, add a new endpoint, register it with E2B, and revoke the old one.
+:::
+
+A project can have 10 active endpoints. The list shows each endpoint's name, URL, environment, and when it was added.
+
+## What an event records
+
+Each event is one log record. Its message names the event, such as `E2B sandbox paused`, and a kill also names its reason, such as `E2B sandbox killed (timeout)`. Its event name is E2B's event type, such as `sandbox.lifecycle.killed`. The record belongs to no trace, so its log details show no service, environment, or trace.
+
+| Event | Level |
+| --- | --- |
+| A kill after an E2B failure: `base_template_missing`, `seal_failed`, `resume_failed`, `thaw_failed`, or `upload_failed` | `error` |
+| A kill for another reason, such as `admin`, `orphaned`, or `unknown` | `warn` |
+| A kill by request or timeout, a kill without a reason, and every other event | `info` |
+
+The record has these attributes when the event includes them:
+
+| Attribute | Value |
+| --- | --- |
+| `sandbox.id` | The E2B sandbox ID |
+| `sandbox.backend` | `e2b` |
+| `sandbox.kill_reason` | Why E2B killed the sandbox |
+| `sandbox.pause_mode`, `sandbox.resume_mode` | How the sandbox paused or resumed |
+| `sandbox.started_at` | When the sandbox's current run started |
+| `sandbox.vcpu_count`, `sandbox.memory_mb` | The vCPUs and memory of the sandbox |
+| `sandbox.execution_time_ms` | How long the sandbox ran, in milliseconds |
+| `e2b.event.id` | E2B's event ID |
+| `e2b.sandbox.execution.id`, `e2b.template.id`, `e2b.template.build.id`, `e2b.team.id` | E2B's IDs of the run, the template and its build, and the team |
+| `e2b.sandbox.metadata.<key>` | Each key of the sandbox's metadata, as text |
+
+E2B includes the run's start, vCPUs, memory, and run time on `killed` and `paused` events.
+
+## Find the events
+
+Select **Logs** in the project sidebar. The level filter starts at `error`, which shows the kills after an E2B failure. Select **All levels** to see every event, and search for `E2B sandbox`. The table loads only the newest 100 records, and the search filters only those, so in a busy project older events may not show. Read [Read logs](/platform/traces#read-logs).
+
+## Environment and privacy
+
+The endpoint's **Environment** chooses the [capture settings](/platform/privacy#turn-off-prompt-and-response-capture-for-an-environment) that its events follow. Without an environment, they use the `default` environment: its row under **Prompt capture** if the project has one, and **Capture by default** otherwise. The log records don't show the environment.
+
+No attribute of an E2B event has a prompt or response key, so capture-off removes nothing from these events. Sandbox metadata is kept too: a metadata key such as `prompt` arrives as `e2b.sandbox.metadata.prompt`, which is not a recognized key. Read [What capture-off keeps](/platform/privacy#what-capture-off-keeps).
+
+[Built-in redaction](/platform/privacy#what-built-in-redaction-removes) still applies. telemetry.dev drops metadata whose key looks like a secret, such as `e2b.sandbox.metadata.api_key`, and runs built-in and custom redaction on the other values. If your sandbox metadata can hold private text, leave it out of the metadata.
+
+## Retries and usage
+
+Each event uses one [ingestion unit](/platform/billing#how-ingestion-units-are-counted). When a delivery gets any status other than `200`, times out, or fails to connect, E2B tries it again a limited number of times, 10 seconds apart, and then drops the event. Read [E2B's delivery and retry rules](https://e2b.dev/docs/sandbox/lifecycle-events-webhooks#delivery-and-retries). When a retry carries an event that is already stored, telemetry.dev stores nothing new and counts no more usage.
+
+## Responses
+
+| Status | Message | Cause |
+| --- | --- | --- |
+| `200` | `{}` | The event is stored, or it was already stored. |
+| `400` | `Invalid E2B webhook payload: …` | The signature matches, but the body is not an E2B sandbox lifecycle event. telemetry.dev records the rejection on the project. |
+| `401` | `Webhook endpoint was not accepted` | The URL names no endpoint, or a revoked one. |
+| `401` | `Webhook signature does not match the secret of endpoint …` | The `signatureSecret` registered with E2B is not this endpoint's secret. telemetry.dev records the rejection on the project with the diagnostic code `webhook_signature_invalid`, which [ingestion error alerts](/platform/alerts#ingestion-errors) name. |
+| `403` | `This project does not accept telemetry. …` | The project's **Accept telemetry** setting is off. |
+| `413` | | The body is larger than 64 KiB. |
+| `429` | | Too many deliveries or failed deliveries for the endpoint or the project, or the workspace is out of [quota](/platform/billing#what-happens-at-the-free-limit). |
+| `500` | | The project's custom redaction patterns are invalid, or telemetry.dev had an internal error. |
+| `503` | | telemetry.dev is busy or briefly unavailable, or an earlier delivery of the same event is still being stored. |
+
+## Revoke an endpoint
+
+Select **Revoke** next to the endpoint, then **Revoke endpoint**. From then on, its URL gets `401` and its events are not stored. You cannot undo it. Delete the webhook in E2B too, so E2B stops sending to the URL.

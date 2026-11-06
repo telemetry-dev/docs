@@ -11,6 +11,7 @@ export default defineMeta({
     "traces",
     "analytics",
     "alerts",
+    "webhooks",
     "prompts",
     "privacy",
     "mcp-server",

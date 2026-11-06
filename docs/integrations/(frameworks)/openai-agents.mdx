@@ -1,7 +1,7 @@
 ---
 title: OpenAI Agents SDK
 description: Trace TypeScript OpenAI Agents SDK runs, model calls, tool calls, and sandbox commands with their exit codes.
-lastModified: 2026-11-05
+lastModified: 2026-11-06
 seo:
   title: "OpenAI Agents SDK Tracing and Observability"
   description: "Send TypeScript OpenAI Agents SDK traces to telemetry.dev: agents, turns, model calls with token usage and cost, tool calls, and sandbox commands with exit codes and sandbox IDs."
@@ -132,6 +132,10 @@ The session, command, and tool spans of that agent then carry `sandbox.id`. The 
 All of these clients still get `sandbox.backend`.
 
 The backend and the ID come from the span that creates or resumes the session. A session that your app passes in with `sandbox: { session }`, or that a resumed run reuses while it is still live in the same process, has no such span, so the spans of that run have neither.
+
+### Add E2B lifecycle events
+
+E2B can send an event each time a sandbox is created, paused, resumed, or killed, with the reason for a kill. Add a [webhook endpoint](/platform/webhooks) to store these events as logs in your project. Each log record has the same `sandbox.id` as the spans above when they record one, so you can match why a sandbox stopped to the commands that ran in it.
 
 ## Control captured content
 
