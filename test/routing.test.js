@@ -338,7 +338,7 @@ test("the integration catalog and guide-title markup reference available branded
   assert.deepEqual(cardRoutes.toSorted(), Object.keys(integrationMarks).toSorted());
   assert.ok(
     markdown.includes(
-      "- [LangChain and LangGraph](/docs/integrations/langchain-langgraph) — Trace chains, model calls, and tools through OpenTelemetry.",
+      "- [LangChain and LangGraph](/docs/integrations/langchain-langgraph) — Trace graphs, chains, model calls, and tools with a callback handler in TypeScript, or OpenTelemetry in Python.",
     ),
   );
   assert.ok(
