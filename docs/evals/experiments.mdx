@@ -231,11 +231,11 @@ jobs:
 | `comment` | Set to `false` to write only the job summary. |
 | `github-token` | The token that writes the comment. The default is `github.token`, which must have the `pull-requests: write` permission. |
 
-The action sets `TELEMETRY_DEV_ENVIRONMENT` to `experiment` if the job does not set it. It has two outputs: `check-status` (`passed`, `failed`, or `none`) and `url`. The job fails when the script exits with an error. In CI mode, the SDK makes the script exit with an error when the check fails or when the experiment does not complete, unless the script catches the error.
+The action sets `TELEMETRY_DEV_ENVIRONMENT` to `experiment` if the job does not set it. It has two outputs: `check-status` (`passed`, `failed`, or `none`) and `url`. The job fails when the script exits with an error. In CI mode, the SDK makes the script exit with an error when the check fails or when the experiment does not complete. With `@telemetry-dev/sdk` 0.2.3 or later, or `telemetry-dev` 0.3.3 or later, and the action 1.0.1 or later, the job also fails when the script catches that error and goes on. An experiment that runs with `ci: false` (`ci=False` in Python) shows its result but does not fail the job.
 
 The comment shows the status of each experiment and the count of items that ran. Its table of scores has the **Value**, the **Change**, and the **Pass mark** of each score. The action writes one comment for each workflow, job, and input, and changes that comment on each later push.
 
-The tag `experiment-action-v1` moves to each 1.x release of the action, and a change that can break a workflow gets a new major tag. To keep a workflow the same, use the tag of one release, such as `experiment-action-v1.0.0`, or its commit SHA. The [releases](https://github.com/telemetry-dev/telemetry/releases) of `telemetry-dev/telemetry` list the changes.
+The tag `experiment-action-v1` moves to each 1.x release of the action, and a change that can break a workflow gets a new major tag. To keep a workflow the same, use the tag of one release, such as `experiment-action-v1.0.2`, or its commit SHA. The [releases](https://github.com/telemetry-dev/telemetry/releases) of `telemetry-dev/telemetry` list the changes.
 
 ## Stop, run again, or delete an experiment
 
