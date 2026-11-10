@@ -8,6 +8,7 @@ export default defineMeta({
     "langchain-langgraph",
     "crewai",
     "pydantic-ai",
+    "openai-agents",
     "eve",
     "mcp",
   ],

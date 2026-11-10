@@ -24,6 +24,7 @@ const integrationMarks = {
   "/docs/integrations/mcp": "/docs/integrations/model-context-protocol.svg",
   "/docs/integrations/omp": "/docs/integrations/oh-my-pi.svg",
   "/docs/integrations/openai": "/docs/integrations/openai.svg",
+  "/docs/integrations/openai-agents": "/docs/integrations/openai.svg",
   "/docs/integrations/openclaw": "/docs/integrations/openclaw.svg",
   "/docs/integrations/opencode": "/docs/integrations/opencode.svg",
   "/docs/integrations/openrouter": "/docs/integrations/openrouter.svg",
