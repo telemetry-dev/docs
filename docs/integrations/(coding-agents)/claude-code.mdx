@@ -1,7 +1,7 @@
 ---
 title: Claude Code
 description: Monitor Claude Code token usage, cost, sessions, tool activity, and traces for one developer or a full team through built-in OpenTelemetry.
-lastModified: 2026-10-29
+lastModified: 2026-11-14
 seo:
   title: "Claude Code Monitoring & Telemetry with OpenTelemetry"
   description: "Monitor Claude Code for one developer or a team with built-in OpenTelemetry. Track token usage, cost, sessions, tool activity, and traces."
@@ -9,7 +9,7 @@ seo:
 
 Claude Code has OpenTelemetry export built in. You turn it on with environment variables, and Claude Code sends metrics, events, and (optionally) traces straight to `https://api.telemetry.dev` over OTLP/HTTP. There is nothing to install.
 
-By default Claude Code does not send your prompts, Claude's responses, tool arguments, file contents, or command output. It does send metadata such as token counts, tool names, and your account email. See [What leaves your machine](#what-leaves-your-machine).
+By default Claude Code does not send your prompts, Claude's responses, tool arguments, file contents, or command output. The setup below turns on tool details, so you can see what each tool call did: its arguments, which can include the start of the text an Edit or Write call replaces or writes, and the full error message of a failed call. Claude Code always sends metadata such as token counts, tool names, and your account email. See [What leaves your machine](#what-leaves-your-machine).
 
 ## What you get
 
@@ -37,6 +37,7 @@ TELEMETRY_DEV_API_KEY="td_live_..."
 export CLAUDE_CODE_ENABLE_TELEMETRY=1
 export OTEL_METRICS_EXPORTER=otlp
 export OTEL_LOGS_EXPORTER=otlp
+export OTEL_LOG_TOOL_DETAILS=1
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 export OTEL_EXPORTER_OTLP_ENDPOINT="https://api.telemetry.dev"
 export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer $TELEMETRY_DEV_API_KEY"
@@ -50,6 +51,7 @@ export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=development"
     "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
     "OTEL_METRICS_EXPORTER": "otlp",
     "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_LOG_TOOL_DETAILS": "1",
     "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
     "OTEL_EXPORTER_OTLP_ENDPOINT": "https://api.telemetry.dev",
     "OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer td_live_...",
@@ -63,6 +65,7 @@ export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=development"
 - The header variable holds the key, so the last line removes `TELEMETRY_DEV_API_KEY` from the shell. Programs that Claude Code starts then can't inherit your key.
 - Put a literal space between `Bearer` and the key, not `%20`. Claude Code sends `%20` unchanged, and telemetry.dev rejects the export with `401 Unauthorized`.
 - `OTEL_EXPORTER_OTLP_PROTOCOL` is required because Claude Code has no default protocol. Keep it at `http/protobuf`; telemetry.dev doesn't accept `grpc`.
+- `OTEL_LOG_TOOL_DETAILS` sends the arguments of each tool call, such as Bash commands, file paths, URLs, and the start of the text an Edit or Write call replaces or writes, and the full error message of a failed call, so traces and logs show what each tool did. Remove it to send only tool names. See [What leaves your machine](#what-leaves-your-machine).
 - `OTEL_RESOURCE_ATTRIBUTES` sets the telemetry.dev environment. Use any name you like.
 - Your shell doesn't read `settings.json`, so write the key itself into the header there. The file then holds your API key in plain text.
 
@@ -163,6 +166,7 @@ A managed settings file turns on telemetry for every developer on a machine. Cla
        "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
        "OTEL_METRICS_EXPORTER": "otlp",
        "OTEL_LOGS_EXPORTER": "otlp",
+       "OTEL_LOG_TOOL_DETAILS": "1",
        "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://api.telemetry.dev",
        "OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer td_live_...",
@@ -170,6 +174,8 @@ A managed settings file turns on telemetry for every developer on a machine. Cla
      }
    }
    ```
+
+   `OTEL_LOG_TOOL_DETAILS` sends every developer's tool arguments, such as Bash commands, file paths, and the start of the text written to files, and the full error message of each failed tool call, which can include command output. Managed settings keep developers from turning it off. Remove it to send only tool names. See [What leaves your machine](#what-leaves-your-machine).
 
 2. Put the file in the system directory of each operating system:
 
@@ -252,17 +258,17 @@ To use fewer units, keep traces off, or set `OTEL_METRIC_EXPORT_INTERVAL` to a l
 
 ## What leaves your machine
 
-With the setup above, Claude Code sends no prompt text, response text, tool arguments, file contents, or command output. Each kind of content has its own opt-in variable, and all of them are off by default:
+With the setup above, Claude Code sends tool details but no prompt text, response text, or the output of successful tool calls. Each kind of content has its own opt-in variable, and all of them are off unless you set them. The setup above sets only `OTEL_LOG_TOOL_DETAILS`:
 
 | Variable | What it adds |
 | --- | --- |
 | `OTEL_LOG_USER_PROMPTS=1` | Prompt text on `user_prompt` events and on the `claude_code.interaction` span. Also turns on assistant response text unless you set `OTEL_LOG_ASSISTANT_RESPONSES=0`. |
 | `OTEL_LOG_ASSISTANT_RESPONSES=1` | Claude's response text on `assistant_response` events. |
-| `OTEL_LOG_TOOL_DETAILS=1` | Tool arguments: Bash commands, file paths, URLs, search patterns, and MCP server and tool names, on events and tool spans. |
+| `OTEL_LOG_TOOL_DETAILS=1` | Tool arguments on events and tool spans: full Bash commands, file paths, URLs, and search patterns, and the input of each tool call, including the text an Edit or Write call replaces or writes. In that input, each value is cut at 512 characters and the whole input at about 4,000 characters. Also the full error message of a failed tool call, which can include command output; the real names of MCP servers and tools, skills, plugins, and agents; and the commit SHA and branch of a `git commit` that a tool ran. |
 | `OTEL_LOG_TOOL_CONTENT=1` | File contents, command output, and web results, on a `tool.output` event of each tool span. Needs tracing. |
 | `OTEL_LOG_RAW_API_BODIES=1` | API request and response bodies, on `api_request_body` and `api_response_body` events. They contain the conversation so far, including the system prompt and tool results, so they reveal what the other variables would. Each body is cut at about 60 KB by default, and Claude Code always redacts extended-thinking content. |
 
-Even with all of these unset, Claude Code sends:
+Even with all of these unset, including `OTEL_LOG_TOOL_DETAILS`, Claude Code sends:
 
 - Prompt and response lengths, model names, token counts, costs, durations, and success or failure.
 - Tool names and permission decisions. On events, Claude Code replaces the names of tools from your own MCP servers with `mcp_tool`.

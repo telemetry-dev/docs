@@ -1,7 +1,7 @@
 ---
 title: Vercel AI SDK
 description: Trace AI SDK calls, model steps, tools, and decisions with @telemetry-dev/ai-sdk.
-lastModified: 2026-10-26
+lastModified: 2026-11-14
 seo:
   title: "Vercel AI SDK Telemetry and Tracing"
   description: "Trace Vercel AI SDK 6 and 7 calls, model steps, and tool calls with @telemetry-dev/ai-sdk, through the telemetry integrations API or experimental_telemetry."
@@ -126,7 +126,7 @@ AI SDK 6 always records message and output content. It has no option to leave ou
 
 | AI SDK operation | What telemetry.dev records |
 | --- | --- |
-| `generateText`, `streamText`, and `Agent` | A root span with operation `chat`, or `invoke_agent` once the call uses tools. One `chat` span per model step, with messages, model, finish reason, token usage, sampling settings, and errors. |
+| `generateText`, `streamText`, and `Agent` | A root span with operation `chat`, or `invoke_agent` once the call uses tools. One `chat` span per model step, with the step's instructions (`system` in AI SDK 6, from version 0.2.5), messages, model, finish reason, token usage, sampling settings, and errors. |
 | `generateObject` and `streamObject` | A `chat` operation with `gen_ai.output.type: "json"`, the JSON input and output, usage, and errors |
 | Local tools with an `execute` function | An `execute_tool` span with the tool name, call ID, arguments, result, duration, and errors |
 | Provider-executed tools | A zero-duration `execute_tool` span with `gen_ai.tool.type: "extension"`, recorded when the result arrives. The AI SDK does not report how long these tools ran. |
@@ -205,7 +205,7 @@ telemetry: {
 }
 ```
 
-These options leave out prompts, responses, tool arguments, tool results, and detailed error messages. Tool names, status, error types, token usage, and other metadata are still recorded. Model warning messages are replaced with a generic `Model warning` unless both options are on.
+These options leave out prompts, instructions, responses, tool arguments, tool results, and detailed error messages. Tool names, status, error types, token usage, and other metadata are still recorded. Model warning messages are replaced with a generic `Model warning` unless both options are on.
 
 AI SDK 6 ignores these options and always records content.
 
