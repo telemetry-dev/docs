@@ -1,7 +1,7 @@
 ---
 title: Oh My Pi
 description: Trace Oh My Pi sessions, prompts, model calls, tools, token usage, timing, retries, and compaction.
-lastModified: 2026-10-18
+lastModified: 2026-11-14
 seo:
   title: "Oh My Pi Telemetry and OpenTelemetry Tracing"
   description: "Add telemetry to Oh My Pi with an extension. Trace each prompt with its model calls, tool calls, token usage, timing, retries, and compaction in telemetry.dev."
@@ -9,7 +9,7 @@ seo:
 
 `@telemetry-dev/omp` is an extension for [Oh My Pi](https://github.com/can1357/oh-my-pi) (`omp`). Install it as an omp package, set an API key, and each omp session appears in telemetry.dev as a trace with its prompts, model calls, tool calls, and token usage.
 
-By default the extension sends your prompts, the model's text responses, and every tool call's arguments and results, which include file contents and command output. You can turn content off with two options; see [What leaves your machine](#what-leaves-your-machine).
+By default the extension sends your prompts, the session's system prompt, the model's text responses, and every tool call's arguments and results, which include file contents and command output. You can turn content off with two options; see [What leaves your machine](#what-leaves-your-machine).
 
 ## Before you start
 
@@ -83,7 +83,7 @@ invoke_agent
 ```
 
 - `invoke_agent` covers one prompt, including retries, compaction, and queued continuations. It records the prompt and the final assistant text.
-- `chat {model}` records the provider, model, response ID, finish reason, token usage, duration, time to first token, assistant text, and errors. Timing comes from omp's own message timestamps.
+- `chat {model}` records the provider, model, the session's system prompt (from version 0.2.8), response ID, finish reason, token usage, duration, time to first token, assistant text, and errors. Timing comes from omp's own message timestamps.
 - `execute_tool {toolName}` records the tool call ID, arguments, result, and error. It sits under the `chat` span that issued the call, or under `invoke_agent` when no message matches.
 - Session start, switch, branch, compaction, retry, and shutdown events become logs.
 
@@ -96,6 +96,7 @@ omp doesn't report cost for these messages, so the extension sends none. telemet
 By default the extension sends:
 
 - Your prompts (`captureInput`).
+- The session's system prompt on each model call (`captureInput`), which includes your `AGENTS.md` and other instruction files.
 - Tool arguments (`captureInput`), such as shell commands and file paths.
 - The model's text responses (`captureOutput`).
 - Tool results (`captureOutput`), such as file contents and command output.
@@ -131,7 +132,7 @@ In an extension file, `telemetryDevExtension()` accepts these options, which ove
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `captureInput` | `boolean` | `true` | Send prompts and tool arguments. |
+| `captureInput` | `boolean` | `true` | Send prompts, system prompts, and tool arguments. |
 | `captureOutput` | `boolean` | `true` | Send assistant text and tool results. |
 | `mask` | `(value, { key }) => unknown` | None | Change or drop captured content before it is sent. |
 | `maxAttributeLength` | `number` | `65536` | Maximum length of a content attribute. |

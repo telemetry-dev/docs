@@ -1,7 +1,7 @@
 ---
 title: OpenAI
 description: Trace OpenAI chat, Responses API, embedding, media, batch, and stream calls from TypeScript or Python.
-lastModified: 2026-10-26
+lastModified: 2026-11-14
 seo:
   title: "OpenAI API Tracing and Token Usage"
   description: "Trace OpenAI chat completions, Responses API, embedding, and stream calls from TypeScript or Python, with token usage, errors, and time to first chunk."
@@ -244,6 +244,8 @@ const realtime = wrapOpenAIRealtime(
 ```
 
 Each `response.create` event starts one generation span. The span ends on `response.done`, a transport error, or the connection closing, and it records output timing and token usage by modality.
+
+From version 0.2.8 of `@telemetry-dev/openai`, the span records the instructions the response uses: its own `instructions`, or else the session's, from your last `session.update` or, until you send one, from the server's session events. Its input is the response's own `input` items or, for a response in the default conversation, the items you added with `conversation.item.create` since the previous response, such as the user's message and `function_call_output` tool results. At most 1,000 items are kept, and more mark the capture as truncated. A response with `conversation: "none"` and no `input` records no input. Audio and image bytes are left out. Responses that the server starts by itself, such as with voice activity detection, get no span, but they use up the items you added before them.
 
 To match responses that finish out of order, the wrapper adds a private correlation field to `response.metadata` and keeps your fields. OpenAI allows at most 16 metadata fields. If you already send 16, the request goes out unchanged and its span fails at once, because the wrapper can't match its events.
 

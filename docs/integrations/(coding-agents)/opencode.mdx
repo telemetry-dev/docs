@@ -1,7 +1,7 @@
 ---
 title: opencode
 description: Trace opencode agent turns, model calls, tools, subagents, usage, cost, and session events.
-lastModified: 2026-10-18
+lastModified: 2026-11-14
 seo:
   title: "opencode Telemetry: OpenTelemetry Plugin"
   description: "Trace opencode with an OpenTelemetry plugin. Record agent turns, model calls, tool calls, subagents, token usage, cost, and session events in telemetry.dev."
@@ -9,7 +9,7 @@ seo:
 
 `@telemetry-dev/opencode` is an opencode plugin. Add it to your opencode config, set an API key, and each prompt appears in telemetry.dev as a trace with its model calls, tool calls, subagents, token usage, and cost.
 
-By default the plugin sends the text of your prompts and every tool call's arguments and results, which include file contents and command output. It doesn't send the model's response text. You can turn content off with two options; see [What leaves your machine](#what-leaves-your-machine).
+By default the plugin sends the text of your prompts, the system prompt of each model call, and every tool call's arguments and results, which include file contents and command output. It doesn't send the model's response text. You can turn content off with two options; see [What leaves your machine](#what-leaves-your-machine).
 
 ## Before you start
 
@@ -109,7 +109,7 @@ invoke_agent
 ```
 
 - `invoke_agent` records the text of the prompt, the agent name, and the opencode session ID.
-- `chat {model}` records the provider, model, finish reason, token usage, the cost opencode reports, and errors. Reasoning tokens count as output tokens; the span also keeps separate reasoning, cache-read, and cache-write counts.
+- `chat {model}` records the provider, model, the system prompt opencode built for the call (from version 0.2.8; when opencode generates the session's title on the same model as the first call, which it does when the provider has no smaller model, that call can show the title prompt), finish reason, token usage, the cost opencode reports, and errors. Reasoning tokens count as output tokens; the span also keeps separate reasoning, cache-read, and cache-write counts.
 - `execute_tool {tool}` records the tool call ID, arguments, result, duration, and error.
 - Task subagents appear as an `invoke_agent` span under the tool call that started them.
 - Session creation, compaction, and errors become logs.
@@ -121,6 +121,7 @@ The plugin doesn't record the model's response text: the opencode event for a fi
 By default the plugin sends:
 
 - The text of your prompts (`captureInput`).
+- The system prompt of each model call (`captureInput`), which includes your `AGENTS.md` and other instruction files.
 - Tool arguments (`captureInput`), such as shell commands and file paths.
 - Tool results (`captureOutput`): the tool's title, output, and metadata, such as file contents and command output.
 
@@ -157,7 +158,7 @@ Options override the environment variables. Options in `opencode.json` override 
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `captureInput` | `boolean` | `true` | Send prompt text and tool arguments. |
+| `captureInput` | `boolean` | `true` | Send prompt text, system prompts, and tool arguments. |
 | `captureOutput` | `boolean` | `true` | Send tool results. |
 | `mask` | `(value, { key }) => unknown` | None | Change or drop captured content before it is sent. Plugin file only. |
 | `maxAttributeLength` | `number` | `65536` | Maximum length of a content attribute. |
