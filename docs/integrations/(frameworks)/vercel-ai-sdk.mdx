@@ -209,9 +209,9 @@ These options leave out prompts, instructions, responses, tool arguments, tool r
 
 AI SDK 6 ignores these options and always records content.
 
-:::warning[Recording off means no problem detection]
+:::warning[Recording off limits problem detection]
 
-The Issues page reads the instructions, messages, and tool calls of a run. With `recordInputs` or `recordOutputs` off, those runs have none of that content, and the Issues page cannot find problems in them.
+With `recordInputs` or `recordOutputs` off, the Issues page still finds failed model calls, cut-off replies, failing tools, spend jumps, and stopped traffic. Possible issues come from what the person asked, what the agent did and said, and the person's next message. With `recordInputs` off, the Issues page finds none in those runs. With `recordOutputs` off, it reads them without what the agent said.
 
 :::
 
