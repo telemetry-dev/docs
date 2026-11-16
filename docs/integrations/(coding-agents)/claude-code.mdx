@@ -1,21 +1,21 @@
 ---
 title: Claude Code
 description: Monitor Claude Code token usage, cost, sessions, tool activity, and traces for one developer or a full team through built-in OpenTelemetry.
-lastModified: 2026-11-14
+lastModified: 2026-11-16
 seo:
   title: "Claude Code Monitoring & Telemetry with OpenTelemetry"
   description: "Monitor Claude Code for one developer or a team with built-in OpenTelemetry. Track token usage, cost, sessions, tool activity, and traces."
 ---
 
-Claude Code has OpenTelemetry export built in. You turn it on with environment variables, and Claude Code sends metrics, events, and (optionally) traces straight to `https://api.telemetry.dev` over OTLP/HTTP. There is nothing to install.
+Claude Code has OpenTelemetry export built in. You turn it on with environment variables, and Claude Code sends metrics, events, and traces straight to `https://api.telemetry.dev` over OTLP/HTTP. There is nothing to install.
 
-By default Claude Code does not send your prompts, Claude's responses, tool arguments, file contents, or command output. The setup below turns on tool details, so you can see what each tool call did: its arguments, which can include the start of the text an Edit or Write call replaces or writes, and the full error message of a failed call. Claude Code always sends metadata such as token counts, tool names, and your account email. See [What leaves your machine](#what-leaves-your-machine).
+By default Claude Code does not send your prompts, Claude's responses, tool arguments, file contents, or command output. The setup below turns on your prompts, Claude's responses, and tool details, so you can see what you asked, what Claude answered, and what each tool call did: its arguments, which can include the start of the text an Edit or Write call replaces or writes, and the full error message of a failed call. It doesn't send the output of successful tool calls, such as the files Claude reads or what a command prints, though Claude's responses can quote that output. Claude Code always sends metadata such as token counts, tool names, and your account email. See [What leaves your machine](#what-leaves-your-machine).
 
 ## What you get
 
 - **Metrics:** token usage, cost, session count, active time, lines of code changed, commits, and pull requests. telemetry.dev charts each metric series under **Metric series** on the project **Overview**.
 - **Events:** one log record per prompt, API request, API error, tool result, and permission decision. They appear in **Logs**.
-- **Traces (beta, off by default):** one trace per prompt, with a span for each model request and tool call. telemetry.dev reads the token usage on each model request and calculates its cost.
+- **Traces (beta):** one trace per prompt, with a span for each model request and tool call. telemetry.dev reads the token usage on each model request and calculates its cost.
 
 ## Set up
 
@@ -35,8 +35,11 @@ Set the variables in your shell, or save them in the `env` object of `~/.claude/
 ```sh Shell
 TELEMETRY_DEV_API_KEY="td_live_..."
 export CLAUDE_CODE_ENABLE_TELEMETRY=1
+export CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1
 export OTEL_METRICS_EXPORTER=otlp
 export OTEL_LOGS_EXPORTER=otlp
+export OTEL_TRACES_EXPORTER=otlp
+export OTEL_LOG_USER_PROMPTS=1
 export OTEL_LOG_TOOL_DETAILS=1
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 export OTEL_EXPORTER_OTLP_ENDPOINT="https://api.telemetry.dev"
@@ -49,8 +52,11 @@ export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=development"
 {
   "env": {
     "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA": "1",
     "OTEL_METRICS_EXPORTER": "otlp",
     "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_TRACES_EXPORTER": "otlp",
+    "OTEL_LOG_USER_PROMPTS": "1",
     "OTEL_LOG_TOOL_DETAILS": "1",
     "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
     "OTEL_EXPORTER_OTLP_ENDPOINT": "https://api.telemetry.dev",
@@ -65,6 +71,8 @@ export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=development"
 - The header variable holds the key, so the last line removes `TELEMETRY_DEV_API_KEY` from the shell. Programs that Claude Code starts then can't inherit your key.
 - Put a literal space between `Bearer` and the key, not `%20`. Claude Code sends `%20` unchanged, and telemetry.dev rejects the export with `401 Unauthorized`.
 - `OTEL_EXPORTER_OTLP_PROTOCOL` is required because Claude Code has no default protocol. Keep it at `http/protobuf`; telemetry.dev doesn't accept `grpc`.
+- `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA` and `OTEL_TRACES_EXPORTER` turn on traces, which are a Claude Code beta. Remove them to send only metrics and events. See [Traces (beta)](#traces-beta).
+- `OTEL_LOG_USER_PROMPTS` sends the text of each prompt, and also turns on the text of Claude's responses. Remove it to send only their lengths, or add `OTEL_LOG_ASSISTANT_RESPONSES=0` to keep the prompts and drop the responses. See [What leaves your machine](#what-leaves-your-machine).
 - `OTEL_LOG_TOOL_DETAILS` sends the arguments of each tool call, such as Bash commands, file paths, URLs, and the start of the text an Edit or Write call replaces or writes, and the full error message of a failed call, so traces and logs show what each tool did. Remove it to send only tool names. See [What leaves your machine](#what-leaves-your-machine).
 - `OTEL_RESOURCE_ATTRIBUTES` sets the telemetry.dev environment. Use any name you like.
 - Your shell doesn't read `settings.json`, so write the key itself into the header there. The file then holds your API key in plain text.
@@ -86,6 +94,7 @@ Claude Code sends metrics every 60 seconds and events every 5 seconds. Set `OTEL
 
 1. Open the project **Overview**. Claude Code sends `claude_code.session.count` when a session starts, and it appears under **Metric series** after the first export. Select **View all metrics (_n_)** if it isn't among the first charts.
 2. Submit a prompt, then open **Logs**. The level filter starts at `error`, so select **All levels** to see the `claude_code.user_prompt` and `claude_code.api_request` events.
+3. Open **Traces**. Each prompt that you submit becomes one `claude_code.interaction` trace.
 
 If nothing arrives, start Claude Code with `claude --debug-file /tmp/claude-debug.log` and search the file for `[3P telemetry]` errors. Lines that start with `[Anthropic telemetry]` are about Anthropic's own operational telemetry, not your export.
 
@@ -111,7 +120,7 @@ Claude Code exports eight metrics and a set of events. telemetry.dev shows each 
 | `claude_code.api_error` | A model request returns an error after its last retry | Which requests do not complete, and with which status code? |
 | `claude_code.api_retries_exhausted` | A request stops after more than one attempt | How long do developers wait on retries? |
 | `claude_code.api_refusal` | The model refuses a request | How frequently does the model refuse? |
-| `claude_code.assistant_response` | A model response contains text | What text did the model return? The text is redacted by default. |
+| `claude_code.assistant_response` | A model response contains text | What text did the model return? The text is redacted unless `OTEL_LOG_USER_PROMPTS` or `OTEL_LOG_ASSISTANT_RESPONSES` is set. The setup above sets the first. |
 | `claude_code.tool_decision` | A tool permission is accepted or rejected | Which tools do developers permit, and does each decision come from a setting, a hook, or the developer? |
 | `claude_code.tool_result` | A tool call completes | Which tools run, how long do they take, and do they complete correctly? |
 | `claude_code.subagent_completed` | A subagent returns its result | Which subagent types run, and for how long? |
@@ -124,18 +133,13 @@ Claude Code also sends inventory and maintenance events: `managed_settings_resol
 
 Claude Code calculates `claude_code.cost.usage` itself, and Anthropic describes it as an approximation. telemetry.dev charts the metric as Claude Code reports it.
 
-The **Overview** summary cards are built from traces. Without [traces](#add-traces-beta), Claude Code's usage appears only under **Metric series**.
+The **Overview** summary cards are built from traces. Without [traces](#traces-beta), Claude Code's usage appears only under **Metric series**.
 
-## Add traces (beta)
+## Traces (beta)
 
-Claude Code's tracing is a beta and is off by default. To turn it on, add two variables to the ones above:
+Claude Code's tracing is a beta. The setup above turns it on with `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA` and `OTEL_TRACES_EXPORTER`, and traces use the same endpoint and headers as metrics and events. To turn traces off, remove those two variables.
 
-```sh
-export CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1
-export OTEL_TRACES_EXPORTER=otlp
-```
-
-In `settings.json`, add `"CLAUDE_CODE_ENHANCED_TELEMETRY_BETA": "1"` and `"OTEL_TRACES_EXPORTER": "otlp"` to the `env` object. Traces use the same endpoint and headers as metrics and events.
+Anthropic can change or remove these spans in a Claude Code update. If traces stop arriving after an update, metrics and events keep working, and you can remove the two variables to stop exporting traces.
 
 Each prompt becomes one trace:
 
@@ -164,8 +168,11 @@ A managed settings file turns on telemetry for every developer on a machine. Cla
    {
      "env": {
        "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+       "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA": "1",
        "OTEL_METRICS_EXPORTER": "otlp",
        "OTEL_LOGS_EXPORTER": "otlp",
+       "OTEL_TRACES_EXPORTER": "otlp",
+       "OTEL_LOG_USER_PROMPTS": "1",
        "OTEL_LOG_TOOL_DETAILS": "1",
        "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://api.telemetry.dev",
@@ -175,7 +182,7 @@ A managed settings file turns on telemetry for every developer on a machine. Cla
    }
    ```
 
-   `OTEL_LOG_TOOL_DETAILS` sends every developer's tool arguments, such as Bash commands, file paths, and the start of the text written to files, and the full error message of each failed tool call, which can include command output. Managed settings keep developers from turning it off. Remove it to send only tool names. See [What leaves your machine](#what-leaves-your-machine).
+   `OTEL_LOG_USER_PROMPTS` sends every developer's prompts and Claude's responses. `OTEL_LOG_TOOL_DETAILS` sends their tool arguments, such as Bash commands, file paths, and the start of the text written to files, and the full error message of each failed tool call, which can include command output. Managed settings keep developers from turning them off, though a developer can still set `OTEL_LOG_ASSISTANT_RESPONSES=0` to drop response text. Remove `OTEL_LOG_USER_PROMPTS` to send only prompt and response lengths, and `OTEL_LOG_TOOL_DETAILS` to send only tool names. See [What leaves your machine](#what-leaves-your-machine).
 
 2. Put the file in the system directory of each operating system:
 
@@ -254,11 +261,11 @@ For 21 days, this developer uses approximately 41,000 units a month for metrics 
 
 A developer who only sends telemetry does not use a seat. Seats are for the members who open telemetry.dev. For the price and limits of each plan, refer to [telemetry.dev/pricing](https://telemetry.dev/pricing).
 
-To use fewer units, keep traces off, or set `OTEL_METRIC_EXPORT_INTERVAL` to a longer interval, for example `300000` for 5 minutes. Each export sends one data point for each changed series, so fewer exports send fewer data points. To see the real count, open **Workspace settings → Usage**.
+To use fewer units, turn traces off, or set `OTEL_METRIC_EXPORT_INTERVAL` to a longer interval, for example `300000` for 5 minutes. Each export sends one data point for each changed series, so fewer exports send fewer data points. To see the real count, open **Workspace settings → Usage**.
 
 ## What leaves your machine
 
-With the setup above, Claude Code sends tool details but no prompt text, response text, or the output of successful tool calls. Each kind of content has its own opt-in variable, and all of them are off unless you set them. The setup above sets only `OTEL_LOG_TOOL_DETAILS`:
+With the setup above, Claude Code sends your prompts, Claude's responses, and tool details, but not the output of successful tool calls. Claude's responses can still quote file contents or command output. Each kind of content has its own opt-in variable, and all of them are off unless you set them. The setup above sets `OTEL_LOG_USER_PROMPTS` and `OTEL_LOG_TOOL_DETAILS`:
 
 | Variable | What it adds |
 | --- | --- |
@@ -268,7 +275,7 @@ With the setup above, Claude Code sends tool details but no prompt text, respons
 | `OTEL_LOG_TOOL_CONTENT=1` | File contents, command output, and web results, on a `tool.output` event of each tool span. Needs tracing. |
 | `OTEL_LOG_RAW_API_BODIES=1` | API request and response bodies, on `api_request_body` and `api_response_body` events. They contain the conversation so far, including the system prompt and tool results, so they reveal what the other variables would. Each body is cut at about 60 KB by default, and Claude Code always redacts extended-thinking content. |
 
-Even with all of these unset, including `OTEL_LOG_TOOL_DETAILS`, Claude Code sends:
+Even with all of these unset, including `OTEL_LOG_USER_PROMPTS` and `OTEL_LOG_TOOL_DETAILS`, Claude Code sends:
 
 - Prompt and response lengths, model names, token counts, costs, durations, and success or failure.
 - Tool names and permission decisions. On events, Claude Code replaces the names of tools from your own MCP servers with `mcp_tool`.
