@@ -300,6 +300,53 @@ Some providers price text, image, and audio tokens differently. For those, `Toke
 
 Modality counts are parts of `inputTokens` and `outputTokens`, not additions to them. Send the totals too, and keep the sum of each kind's modality counts at or below its total. See [Cost](https://telemetry.dev/docs/reference/cost#modality-pricing) for how the server prices modality counts.
 
+## Record what your agent sees and does
+
+The Issues page of a project finds problems in a run by reading what the agent was told and what it did: its system prompt, the user's messages, and each tool call with its arguments and result. Provider and framework integrations record these for you. When you build spans by hand, pass them in the span fields. Spans that carry only `metadata` or raw `attributes` give the Issues page nothing to read.
+
+- Put the system prompt in `systemInstructions` on a `"generation"` or `"agent"` span. Other span types keep it as an attribute but do not show it as part of the input.
+- Put the messages the model received in `input`, and its reply, including any tool calls it asked for, in `output`.
+- Give each tool call its own `"tool"` span, with the arguments in `input`, the result in `output`, the tool's name in `toolName`, and the model's call ID in `toolCallId`.
+
+```ts
+const instructions = "You are a support agent. Refund only delivered orders.";
+
+const agent = { type: "agent", agentName: "support" } as const;
+
+await startActiveSpan("support-agent", agent, async (span) => {
+  span.update({ systemInstructions: instructions, input: userMessage });
+
+  const chat = startSpan("chat gpt-4o", {
+    type: "generation",
+    model: "gpt-4o",
+    provider: "openai",
+    systemInstructions: instructions,
+    input: messages,
+  });
+  const response = await callModel(instructions, messages);
+  chat.end({ output: response.message, usage: response.usage });
+
+  for (const call of response.message.toolCalls ?? []) {
+    const options = {
+      type: "tool",
+      toolName: call.name,
+      toolCallId: call.id,
+      input: call.arguments,
+    } as const;
+
+    await startActiveSpan(call.name, options, async (tool) => {
+      const result = await runTool(call.name, call.arguments);
+      tool.update({ output: result });
+      return result;
+    });
+  }
+});
+```
+
+`observe()` records a function's arguments and return value the same way, so wrapping each tool function with `{ type: "tool", toolName }` covers its arguments and result.
+
+These fields follow `captureInput`, `captureOutput`, and `mask` like any other content. See [Control captured content](#control-captured-content).
+
 ## Add user, session, and metadata
 
 `propagateAttributes()` adds correlation attributes to every span and log created inside its callback:
@@ -388,6 +435,12 @@ To read or write the headers on a carrier object, use `injectW3cContext(context,
 ## Control captured content
 
 By default the SDK records span input and output. Turn either off for all spans in `init()`, or for one span with the `captureInput` and `captureOutput` options of `startSpan()` and `observe()`.
+
+:::warning[Capture off means no problem detection]
+
+The Issues page reads the system prompt, messages, and tool calls of a run. With `captureInput` or `captureOutput` off, those runs have none of that content, and the Issues page cannot find problems in them. A `mask` that replaces content has the same effect on what it replaces.
+
+:::
 
 To redact content instead of dropping it, pass a `mask` function. This example keeps outputs but replaces every model input:
 

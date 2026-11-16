@@ -209,6 +209,12 @@ These options leave out prompts, instructions, responses, tool arguments, tool r
 
 AI SDK 6 ignores these options and always records content.
 
+:::warning[Recording off means no problem detection]
+
+The Issues page reads the instructions, messages, and tool calls of a run. With `recordInputs` or `recordOutputs` off, those runs have none of that content, and the Issues page cannot find problems in them.
+
+:::
+
 ## Options
 
 Pass options to `telemetryDev()`. Explicit options take precedence over environment variables, which take precedence over defaults.

@@ -294,6 +294,50 @@ Modality counts are parts of `input_tokens` and `output_tokens`, not additions t
 
 The SDK drops unknown keys and logs a debug message.
 
+## Record what your agent sees and does
+
+The Issues page of a project finds problems in a run by reading what the agent was told and what it did: its system prompt, the user's messages, and each tool call with its arguments and result. Provider integrations record these for you. When you build spans by hand, pass them in the span fields. Spans that carry only `metadata` or raw `attributes` give the Issues page nothing to read.
+
+- Put the system prompt in `system_instructions` on a `"generation"` or `"agent"` span. Other span types keep it as an attribute but do not show it as part of the input.
+- Put the messages the model received in `input`, and its reply, including any tool calls it asked for, in `output`.
+- Give each tool call its own `"tool"` span, with the arguments in `input`, the result in `output`, and the model's call ID in `tool_call_id`. The span name is the tool name unless you pass `tool_name`.
+
+```python
+from telemetry_dev import start_span
+
+instructions = "You are a support agent. Refund only delivered orders."
+
+with start_span(
+    "support",
+    type="agent",
+    system_instructions=instructions,
+    input=user_message,
+):
+    with start_span(
+        "chat gpt-4o",
+        type="generation",
+        model="gpt-4o",
+        provider="openai",
+        system_instructions=instructions,
+        input=messages,
+    ) as span:
+        response = call_model(instructions, messages)
+        span.update(output=response.message, usage=response.usage)
+
+    for call in response.message.tool_calls or []:
+        with start_span(
+            call.name,
+            type="tool",
+            tool_call_id=call.id,
+            input=call.arguments,
+        ) as tool:
+            tool.update(output=run_tool(call.name, call.arguments))
+```
+
+`@observe(type="tool")` records a function's arguments and return value the same way. Inside an observed function, `update_current_span(system_instructions=...)` adds the system prompt to its span.
+
+These fields follow `capture_input`, `capture_output`, and `mask` like any other content. See [Control captured content](#control-captured-content).
+
 ## Add user, session, and metadata
 
 `propagate_attributes()` is a context manager. It adds correlation attributes to every span and log created inside its block:
@@ -379,6 +423,12 @@ with start_span("downstream-work", parent=request.headers.get("traceparent")):
 ## Control captured content
 
 By default the SDK records span input and output. Turn either off for all spans in `init()`, or for one span with the `capture_input` and `capture_output` arguments of `@observe` and `start_span()`.
+
+:::warning[Capture off means no problem detection]
+
+The Issues page reads the system prompt, messages, and tool calls of a run. With `capture_input` or `capture_output` off, those runs have none of that content, and the Issues page cannot find problems in them. A `mask` that replaces content has the same effect on what it replaces.
+
+:::
 
 To redact content instead of dropping it, pass a `mask` function. This example keeps outputs but replaces every model input:
 
