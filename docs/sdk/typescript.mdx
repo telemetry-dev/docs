@@ -1,7 +1,7 @@
 ---
 title: TypeScript SDK
 description: Add spans, logs, metrics, and trace context to TypeScript applications.
-lastModified: 2026-10-30
+lastModified: 2026-11-16
 seo:
   title: "TypeScript SDK for LLM Tracing"
   description: "Install @telemetry-dev/sdk to add OpenTelemetry spans, logs, metrics, and trace context to TypeScript AI applications and send them to telemetry.dev over OTLP."
@@ -304,9 +304,9 @@ Modality counts are parts of `inputTokens` and `outputTokens`, not additions to 
 
 When you build spans by hand, pass the content of each run in the span fields, so its trace shows what the agent was told and what it did. Provider and framework integrations do this for you. Content in `metadata` or under attribute keys of your own is not read as input or output.
 
-The Issues page reads this content to find possible issues: runs after which the person's next message says the agent failed. It reads what the person asked, which tools the agent called and whether they failed, the agent's last messages, and the person's next message in the same session. Set a session ID with [`propagateAttributes()`](#add-user-session-and-metadata) so it can link the runs of one conversation.
+The Issues page reads this content to find possible issues: runs after which the person's next message says the agent failed. It reads what the person asked, which tools the agent called and whether they failed, the agent's last messages, and the person's next message in the same session. It also checks the agent's tool calls against its system prompt. Set a session ID with [`propagateAttributes()`](#add-user-session-and-metadata) so it can link the runs of one conversation.
 
-- Put the system prompt in `systemInstructions` on a `"generation"` or `"agent"` span. Other span types keep it as an attribute but do not show it as part of the input.
+- Put the system prompt in `systemInstructions` on the `"generation"` span of each model call. The Issues page reads it only there. An `"agent"` span also shows it as part of its input, and tool and plain spans keep it as an attribute without showing it.
 - Put the messages the model received in `input`, and its reply, including any tool calls it asked for, in `output`.
 - Give each tool call its own `"tool"` span, with the arguments in `input`, the result in `output`, and the model's call ID in `toolCallId`. The span name is the tool name unless you pass `toolName`.
 
