@@ -8,6 +8,7 @@ export default defineMeta({
     "projects",
     "api-keys",
     "environments",
+    "issues",
     "traces",
     "analytics",
     "alerts",

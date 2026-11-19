@@ -1,25 +1,24 @@
 ---
 title: Alerts
-description: Get an alert by email, Slack, Discord, or webhook when model cost, traces, model or tool failures, eval scores, ingestion errors, or quota usage need attention.
-lastModified: 2026-11-02
+description: Get an alert by email, Slack, Discord, or webhook when model cost, traces, model or tool failures, stopped traffic, eval scores, ingestion errors, or quota usage need attention.
+lastModified: 2026-11-19
 ---
 
-Alerts check your telemetry every 5 minutes and tell you when something needs attention: model cost heading over budget, a trace that might be an agent loop, a burst of failed model or tool calls, a drop in the pass rate of an evaluator, or ingestion that is failing or running out of quota.
+Alerts check your telemetry every 5 minutes and tell you when something needs attention: model cost heading over budget, a trace that might be an agent loop, a burst of failed model or tool calls, an app that stops sending traces, a drop in the pass rate of an evaluator, or ingestion that is failing or running out of quota.
 
-There are two places to set them up:
+Every alert belongs to a project and goes to the project's email recipients, Slack, Discord, and webhooks. Select **Alerts** in the project sidebar. The page has three tabs: **Rules**, **History**, and **Destinations**.
 
-- **Project alerts** cover cost, traces, model and tool calls, eval scores, and ingestion errors for one project. They go to email, Slack, Discord, and webhooks. Select **Alerts** in the project sidebar. The page has three tabs: **Rules**, **History**, and **Destinations**.
-- **Workspace alerts** cover quota and the mix of data the whole workspace sends. They go to email. Open **Workspace settings**, select **Usage** in the settings sidebar, and go to the **Alerts** section.
+**Quota running out** and **Data mix shift** can also be set for every project at once, because the quota is shared by the whole workspace. Open **Workspace settings**, select **Usage** in the settings sidebar, and go to the **Alerts** section. Turning one on or off there, or saving its limits, changes it in every project, and a new project starts with that setting. A project can still change its own on its **Rules** tab. Read [Quota and data mix alerts](#quota-and-data-mix-alerts).
 
 Workspace owners and admins can create and change alerts. Other members can see the alerts but cannot change them. Alerts are available on every plan.
 
 ## Turn on an alert
 
-The **Rules** tab lists every kind of project alert, and the workspace's **Alerts** section lists the workspace alerts. Each row says in one sentence when the alert opens.
+The **Rules** tab lists every kind of alert, and the **Alerts** section of the workspace's **Usage** settings lists **Quota running out** and **Data mix shift**. Each row says in one sentence when the alert opens.
 
-To turn an alert on, select its switch. It starts with the defaults listed below and checks within 5 minutes. **Monthly budget** has no default budget, so its switch opens the settings instead; enter a budget and select **Turn on**. **Eval score drop** has no default evaluator, so its switch also opens the settings. A project with no alerts also shows **Turn on 6 alerts**, which turns on six recommended alerts with their default limits. A project that already has other alerts and a destination, but no **Tool errors** alert, shows owners and admins **New: Tool errors**; select **Turn on Tool errors** to add it with its defaults and the project's email recipients. Adding it does not change the other alerts. Turning **Tool errors** off removes the prompt.
+To turn an alert on, select its switch. It starts with the defaults listed below and checks within 5 minutes. **Monthly budget** has no default budget, so its switch opens the settings instead; enter a budget and select **Turn on**. **Eval score drop** has no default evaluator, so its switch also opens the settings. A project with no alerts other than **Quota running out** and **Data mix shift** also shows owners and admins **Turn on 6 alerts**, which turns on the [recommended alerts](#recommended-alerts) with their default limits. A project that already has other alerts and a destination, but no **Tool errors** alert, shows owners and admins **New: Tool errors**; select **Turn on Tool errors** to add it with its defaults and the project's email recipients. Adding it does not change the other alerts. Turning **Tool errors** off removes the prompt.
 
-To change an alert's settings, select its row on the **Rules** tab, or its name in the workspace's **Alerts** section. Edit the fields under **Alert when** and select **Save changes**. **Current data** runs the alert against your current telemetry and says whether it would alert now (**Would alert now**, **All clear now**, or **Needs more data**), with the measurement an email would report. It sends no email.
+To change an alert's settings, select its row on the **Rules** tab, or its name in the **Alerts** section of the **Usage** settings. Edit the fields under **Alert when** and select **Save changes**. **Current data** runs the alert against your current telemetry and says whether it would alert now (**Would alert now**, **All clear now**, or **Needs more data**), with the measurement an email would report. It sends no email.
 
 Turning the switch off stops checks and email but keeps the settings and history. To delete a project alert and its history, select **Remove** at the bottom of its panel, then **Remove alert**.
 
@@ -33,11 +32,26 @@ On the **Rules** tab, the **Status** column shows each alert's status:
 
 The **Last 7 days** column shows how many times the alert went off in the last 7 days.
 
+### Recommended alerts
+
+The recommended alerts are **Cost per trace jump**, **Model errors**, **Tool errors**, **Traffic stopped**, **Ingestion errors**, and **Missing prices**, with their default limits. **Monthly budget** and **Eval score drop** are not among them because they have no defaults. **Agent loop** is not either; see [Agent loop](#agent-loop).
+
+You usually do not have to turn them on. telemetry.dev turns them on by itself for a new project once it sends traces, if that happens within 30 days of its creation. Projects created before November 7, 2026 got them the same way if they had sent traces in the 30 days before November 10, 2026, or within their retention period if that is shorter. Otherwise, select **Turn on 6 alerts**.
+
+For these automatic alerts:
+
+- A new project's creator is its email recipient from the start, so its alerts go to them.
+- A project created before November 7, 2026 that gets the alerts and has no destination gets an owner of the workspace as its email recipient.
+- A project whose traces come mostly from a coding agent integration, such as Cursor or opencode, gets none.
+- A project that already has alerts of its own keeps them as they are and gets none, and so does a project in a workspace with fewer than 6 rules left under its [alert rule limit](#limits).
+
+This happens once per project, so an alert you turn off or remove stays that way. If a project had any of the other recommended alerts on, **Traffic stopped** was also turned on for it, unless the workspace was at its rule limit.
+
 ## Email recipients
 
-Every alert on a page emails the same list of addresses. For a project, the list is on the **Destinations** tab. For the workspace, owners and admins select **Destinations** in the **Alerts** section. Select **Add destination** and enter an **Email address** to add one, or select **Remove** in an address's row menu. A change updates every alert on the page. When the page has no alerts yet, the list starts with your own address. Leave it empty to record alerts on the page without sending email.
+Every alert of a project emails the same list of addresses, which is on the **Destinations** tab. Select **Add destination** and enter an **Email address** to add one, or select **Remove** in an address's row menu. A change updates every alert of the project. When the project has no alerts yet, the list starts with your own address. Leave it empty to record alerts on the project's **Alerts** page without sending email.
 
-Workspace members with a verified email get alerts right away. Any other address has to confirm first. When you add it, or when you turn on the page's first alert if none is on yet, it gets an email titled "Confirm alert emails from telemetry.dev". The recipient selects **Review and confirm**, then **Confirm alert emails**. The link expires after 7 days.
+Workspace members with a verified email get alerts right away. Any other address has to confirm first. When you add it, or when you turn on the project's first alert if none is on yet, it gets an email titled "Confirm alert emails from telemetry.dev". The recipient selects **Review and confirm**, then **Confirm alert emails**. The link expires after 7 days.
 
 Until an address confirms, it gets no alert email, and its row shows **Not confirmed**. To ask again, for example after the link expired, select **Resend email**. It sends the email again to every address that has not confirmed. Addresses outside the workspace can unsubscribe from a link at the bottom of each alert email. To stop alerts for a member, remove their address from the list.
 
@@ -154,7 +168,9 @@ After 3 failed deliveries in a row, a Slack, Discord, or webhook destination sho
 
 The **Timeline** of an alert's page shows each delivery, for example "Slack message sent to #oncall", "Webhook to https://…ooks.example.com/…a9f2 is waiting to send", or "Discord message to #alerts failed". Rarely, a notification arrives twice; a webhook then gets the same `webhook-id` both times.
 
-## Project alerts
+<span id="project-alerts" />
+
+## Alert kinds
 
 ### Monthly budget
 
@@ -174,20 +190,22 @@ Opens when model cost per successful trace in the last hour is at least 1.5 time
 
 ### Agent loop
 
-**Settings:** **Cost limit per turn** in USD (default $2), and **Raise the limits when turns in this project are usually large** (on by default).
+**Settings:** **Cost limit per turn** in USD (default $2), and **Raise the limits to fit each agent's usual turns, or the project's while an agent is new** (off by default).
 
-A runaway trace is often an agent stuck in a loop, so the rule checks both cost and span count. It opens when a trace that finished in the last hour costs more than the cost limit or has more spans than the span limit. Traces are grouped by agent.
+Not one of the [recommended alerts](#recommended-alerts), so it is on only when someone turns it on. Before November 10, 2026 it was one of them, so a project that got the recommended alerts before then may have it on.
+
+A runaway turn is often an agent stuck in a loop, so the rule checks both cost and span count. A turn is a trace, or one agent span of a session trace with the spans below it. The rule opens when a turn that finished in the last hour costs more than the cost limit or has more spans than the span limit. Turns are grouped by agent.
 
 | Limit | Raising the limits off | Raising the limits on |
 | --- | --- | --- |
-| Cost | **Cost limit per turn** | The higher of **Cost limit per turn** and 3 times the project's 99th percentile trace cost |
-| Spans | 30 | The higher of 30 and 2 times the project's 99th percentile span count |
+| Cost | **Cost limit per turn** | The higher of **Cost limit per turn** and 3 times the 99th percentile turn cost |
+| Spans | 30 | The higher of 30 and 2 times the 99th percentile span count |
 
-The baseline that raises the limits comes from the 6 hours before the last hour, or the 24 hours before it when the project had fewer than 100 traces. The baseline only raises the limits, for projects whose traces are usually large. It never adds alerts.
+With raising the limits on, an agent with at least 100 turns in the 24 hours before the last hour gets percentiles from its own turns: from the last 6 of those hours when they hold 100 turns, and from all 24 otherwise. An agent with fewer turns uses the whole project's turns, counted the same way. The percentiles only raise the limits, for agents whose turns are usually large. They never add alerts.
 
 ### Model errors
 
-**Settings:** **Environments**, separated by commas (default `production`), and **Minimum calls** (default 50).
+**Settings:** **Environments**, separated by commas, and **Minimum calls** (default 50). Left empty, the default, **Environments** watches every environment except `development`, `dev`, `local`, and `experiment`. Rules saved with the earlier default, `production`, now use this one.
 
 Opens when calls to one provider and model fail with the same error type often enough: at least 10 failures, a failure rate above 5%, and at least 3 times the usual rate. When the last hour has fewer calls than **Minimum calls**, the rule uses the last 6 hours.
 
@@ -197,7 +215,7 @@ A provider and model without enough history to have a usual rate, such as a mode
 
 ### Tool errors
 
-**Settings:** **Environments**, separated by commas (default `production`), and **Minimum calls** (default 50).
+**Settings:** **Environments**, separated by commas, and **Minimum calls** (default 50). As for **Model errors**, an empty **Environments**, the default, watches every environment except `development`, `dev`, `local`, and `experiment`.
 
 Watches `execute_tool` spans, grouped by tool name and error type. It counts failed tool calls even when the model calls or the overall trace succeed. If a span has no tool name, the rule uses its span name.
 
@@ -213,11 +231,26 @@ The email names the tool and error type and reports failed calls and affected tr
 
 Reminders repeat the likely cause of the opening email. **Investigate** opens that tool's failed spans of the last 7 days in the project's traces page.
 
+### Traffic stopped
+
+**Settings:** none. Each project's own history sets the limits.
+
+Opens when a project with steady traffic stops sending spans, which often means the app stopped running: a crash, a failed deploy, a revoked API key, or a job that no longer runs. A project is steady when, in the 14 days before it went quiet, it never went more than 6 hours without spans, and it has at least 7 days of that history. The rule opens once no spans have arrived for twice the longest gap of those 14 days, and for at least 3 hours. For example, a project whose longest gap was 2 hours opens after 4 hours without spans, and one that sent spans every hour opens after 3. For a project that is not steady, the rule never opens: it shows **Needs more data** while the project is quiet, and **All clear** while it sends spans.
+
+The rule counts the spans that ingestion accepted each hour, in every environment. It does not count these as quiet, either in the history or as a stop:
+
+- Time in which ingestion refused the project's spans, such as when the workspace was over its [quota](#quota-running-out).
+- Time in which telemetry.dev's ingestion was down.
+
+A stop that began more than 7 days ago is not reported, so turning the rule on for a project that stopped long ago does not alert.
+
+One hour of spans does not end a stop, because a stopped app can still send a retry or a run by hand. The alert resolves on the first check after spans arrive in two hours that are at most 7 hours apart, without waiting for three healthy checks. It sends no reminders. **Investigate** opens the project's [Issues](/platform/issues) page, which shows the same stop.
+
 ### Ingestion errors
 
 **Settings:** **Minimum occurrences** (default 3, at most 100).
 
-Opens when telemetry.dev records at least that many diagnostics with the same [diagnostic code](https://telemetry.dev/docs/reference/otlp#error-responses) within 5 minutes, from API keys for the same environment or from unscoped keys. It counts recorded diagnostics, not requests. Quota rejections are covered by the workspace's [Quota running out](#quota-running-out) alert instead.
+Opens when telemetry.dev records at least that many diagnostics with the same [diagnostic code](https://telemetry.dev/docs/reference/otlp#error-responses) within 5 minutes, from API keys for the same environment or from unscoped keys. It counts recorded diagnostics, not requests. Quota rejections are covered by the [Quota running out](#quota-running-out) alert instead.
 
 ### Missing prices
 
@@ -237,7 +270,11 @@ The rule opens when the pass rate of these traces is less than the limit. With f
 
 <span id="organization-alerts" />
 
-## Workspace alerts
+<span id="workspace-alerts" />
+
+## Quota and data mix alerts
+
+Every project has a **Quota running out** and a **Data mix shift** rule, which the **Alerts** section of the workspace's **Usage** settings turns on, turns off, and sets for all projects at once. Below it, **Earlier alerts** lists the workspace's quota alerts and the alerts of the workspace-wide rules from before each project had its own.
 
 ### Quota running out
 
@@ -249,13 +286,17 @@ The rule uses the workspace's average ingestion rate over the last 6 hours. It o
 - On the Free plan, ingestion is likely to reach the hard stop within the critical number of hours.
 - On a paid plan, projected usage for the month is over 125% of the allowance.
 
-It also emails once a month when usage passes 80% and 100% of the allowance, and right away when the ingest API rejects a batch because of the monthly cap or a gift budget. Rejection emails go out at most once every 5 minutes. For plan allowances and the hard stop, see [Plans and billing](https://telemetry.dev/docs/platform/billing).
+It also emails once a month when usage passes 80% and 100% of the allowance, and right away when the ingest API rejects a batch because of the monthly cap or a gift budget. Rejection emails go out at most once every 5 minutes.
+
+The quota is shared, so the quota rules of all projects share each alert: one quota problem opens one alert, not one per project. It goes to the destinations of one project, usually the one whose ingestion grew the most in the last 6 hours compared with its usual rate, or of another project when that one has no destination. An open alert stays with the project that has it.
+
+For plan allowances and the hard stop, see [Plans and billing](https://telemetry.dev/docs/platform/billing).
 
 ### Data mix shift
 
-**Settings:** none. The rule compares with the workspace's history.
+**Settings:** none. The rule compares with the project's history.
 
-Opens when spans, log records, or metric points suddenly make up most of the workspace's ingestion. In the last hour, one of them has to be more than half of all records, at least 500 records, more than 3 times its usual count for that hour of the day, and a larger share than usual.
+Opens when spans, log records, or metric points suddenly make up most of what the project sends. In the last hour, one of them has to be more than half of the project's records, at least 500 records, more than 3 times its usual count for that hour of the day, and a larger share than usual. The usual count and share are the medians of the same hour on the last 7 days.
 
 ## When an alert opens and resolves
 
@@ -267,15 +308,15 @@ Each check reports every rule as breached, healthy, or still needing more data.
 />
 
 - **Opening.** An alert opens after two breached checks in a row, about 10 minutes. Some opens are immediate: a runaway trace over the cost limit, a rejected batch, and ingestion errors whose HTTP status means a retry would fail too (anything other than `429`, `502`, `503`, and `504`).
-- **Reminders.** While an alert stays open, recipients get a reminder every 6 hours.
-- **Resolving.** An alert resolves after three healthy checks in a row, about 15 minutes. Recipients get a resolved email if they got the opening email.
+- **Reminders.** While an alert stays open, recipients get a reminder every 6 hours. **Traffic stopped** sends none.
+- **Resolving.** An alert resolves after three healthy checks in a row, about 15 minutes. **Traffic stopped** resolves on its first healthy check. Recipients get a resolved email if they got the opening email.
 - **Quiet period.** For 30 minutes after an alert resolves, the same thing opening again still appears on the page, but its opening email is held. It goes out on the first check after the 30 minutes if the alert is still breached. An alert that resolves before then sends no email. The quiet period applies only to the thing that resolved: a different environment, model, or trace opening in that time is emailed as usual. Immediate opens are not held.
 
-A rule can have several alerts open at once, one for each thing it watches: each environment for a budget, each provider and model for model failures, each tool and error type for tool failures, each diagnostic code and API key environment for ingestion errors. An **Eval score drop** rule watches one evaluator in one environment, so it has at most one open alert.
+A rule can have several alerts open at once, one for each thing it watches: each environment for a budget, each provider and model for model failures, each tool and error type for tool failures, each diagnostic code and API key environment for ingestion errors. An **Eval score drop** rule watches one evaluator in one environment, and a **Traffic stopped** rule watches the whole project, so each has at most one open alert.
 
 ### Needs more data
 
-Rules that compare with your usual traffic need history before they can decide. **Cost per trace jump**, **Model errors**, and **Tool errors** need at least 7 comparable hours from the last 30 days, and **Data mix shift** needs 7 samples of the same hour of the day. **Missing prices** needs at least **Minimum calls** calls in the last 6 hours, **Eval score drop** needs at least **Minimum scored traces** scored traces in the last 6 hours, and **Monthly budget** needs the first 24 hours of the month. Until then the rule shows **Needs more data**, except that **Model errors** and **Tool errors** can open without history when half or more of the calls fail, subject to their count minimums. An existing model or tool failure alert can recover when fewer than 10 calls fail, including when traffic stops.
+Rules that compare with your usual traffic need history before they can decide. **Cost per trace jump**, **Model errors**, and **Tool errors** need at least 7 comparable hours from the last 30 days, and **Data mix shift** needs 5 samples of the same hour of the day from the last 7 days. **Missing prices** needs at least **Minimum calls** calls in the last 6 hours, **Eval score drop** needs at least **Minimum scored traces** scored traces in the last 6 hours, **Monthly budget** needs the first 24 hours of the month, and **Traffic stopped** needs 7 days of steady traffic; a project whose traffic is not steady keeps showing **Needs more data** while it is quiet. Until then the rule shows **Needs more data**, except that **Model errors** and **Tool errors** can open without history when half or more of the calls fail, subject to their count minimums. An existing model or tool failure alert can recover when fewer than 10 calls fail, including when traffic stops.
 
 A rule with nothing to judge is **All clear**, not **Needs more data**. For example, **Model errors** is all clear when no calls are failing at all.
 
@@ -292,7 +333,7 @@ Each email has these sections:
 - **Why it matters**: what the problem means for your application or bill.
 - **Likely cause**: the model, provider, agent, or error that contributed most, when telemetry.dev can tell.
 
-The **Investigate** button opens the page to start from: the project overview, the trace itself for a runaway trace, the failed spans of the model or tool for model and tool errors, the project's **Setup** page for ingestion errors, the traces with a fail score of the evaluator for an eval score drop, or the workspace's **Usage** or **Billing** settings for quota. When the rule watches one environment, the spans are filtered to it. A name longer than 128 characters is left out of the filter.
+The **Investigate** button opens the page to start from: the project overview, the trace itself for a runaway trace, the failed spans of the model or tool for model and tool errors, the project's **Issues** page for stopped traffic, the project's **Setup** page for ingestion errors, the traces with a fail score of the evaluator for an eval score drop, or the workspace's **Usage** or **Billing** settings for quota. When the rule watches one environment, the spans are filtered to it. A name longer than 128 characters is left out of the filter.
 
 ## Alert history
 
@@ -302,10 +343,10 @@ The **History** tab of a project's **Alerts** page lists alerts newest first, 25
 
 | Limit | Value |
 | --- | --- |
-| Alert rules | 100 per workspace, counting workspace and project rules |
-| Recipients | 50 per rule |
+| Alert rules | 100 per workspace, counting the rules of all its projects except **Quota running out** and **Data mix shift** |
+| Email recipients | 50 per project |
 | Slack, Discord, and webhook destinations | 10 per project |
 | Alert emails | 1,000 per workspace in a 24-hour window, including confirmation requests |
 | Notifications per rule per check | 5 alerts |
 
-Saving a rule over the first two limits fails with an error, and so does adding an eleventh Slack, Discord, or webhook destination. The notification limits hold notifications back instead, and the alerts still appear in the history. A notification that the email limit holds back waits for every destination, including Slack, Discord, and webhooks. A held opening email goes out on a later check if the alert is still breached; an alert that recovers first resolves without email. An alert whose opening email was sent stays open until its resolved email can be sent.
+Saving a rule over the alert rule limit fails with an error, and so does adding a 51st email address or an eleventh Slack, Discord, or webhook destination. The notification limits hold notifications back instead, and the alerts still appear in the history. A notification that the email limit holds back waits for every destination, including Slack, Discord, and webhooks. A held opening email goes out on a later check if the alert is still breached; an alert that recovers first resolves without email. An alert whose opening email was sent stays open until its resolved email can be sent.
