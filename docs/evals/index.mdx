@@ -2,7 +2,7 @@
 title: Evals
 description: Test prompts and models on datasets, score live traces with LLM judges, code checks, and rules, and review replies with your team.
 sidebar: { label: "Overview" }
-lastModified: 2026-11-03
+lastModified: 2026-11-19
 ---
 
 Evals measures the quality of the replies of your AI application. You keep test items in datasets and run a prompt version or your code on each item. Then you compare the scores with the scores of an earlier run. The same evaluators can also score the traces of your users when they arrive.
@@ -29,7 +29,7 @@ To stop a regression before you merge it, run the experiment in CI. Read [Run ex
 
 ## Model provider keys
 
-Test runs of prompts, **Suggest changes** in the prompt editor, experiments of a prompt version, and LLM judges call models with the keys of the project. Your model provider bills these calls. Code checks and rules do not call a model.
+Test runs of prompts, **Suggest changes** in the prompt editor, experiments of a prompt version, and LLM judges call models with the keys of the project. Your model provider bills these calls. The exception is an LLM judge on a model marked **telemetry.dev** in the model menu, which runs on our AI provider at no cost to you. Read [LLM judges](/evals/evaluators#llm-judges). Code checks and rules do not call a model.
 
 To add a key:
 
@@ -47,7 +47,7 @@ To add a key:
 
 The providers are OpenAI, Anthropic, Google, and one OpenAI-compatible endpoint. Only owners and admins can add, change, or remove a key. telemetry.dev stores the key encrypted and does not show it again; the list shows only its known prefix and last 4 characters, such as `sk-ant-…9f3c`, or the address of the OpenAI-compatible endpoint. Its servers decrypt the key when they call the model.
 
-Your app keeps its own provider keys. telemetry.dev uses the keys on this page only for test runs of prompts, **Suggest changes** in the prompt editor, experiments, and LLM judges.
+Your app keeps its own provider keys. telemetry.dev uses the keys on this page for test runs of prompts, **Suggest changes** in the prompt editor, experiments, and LLM judges. Two kinds of model call run on our AI provider instead, at no cost to you and without these keys: an LLM judge on a model marked **telemetry.dev** in the model menu, and the [Issue checks](/platform/privacy#issue-checks), which run by default.
 
 ## The experiment environment
 
@@ -62,7 +62,7 @@ Each member of the workspace can make, change, and delete datasets, experiments,
 Only owners and admins can do these tasks:
 
 - Add or change model provider keys.
-- Set the [daily limit for live evaluators](/evals/evaluators#set-the-daily-limit).
+- Set the [daily limit for live LLM judges](/evals/evaluators#set-the-daily-limit).
 - Make API keys. Read [API keys](/platform/api-keys).
 - Turn on or change alerts, such as [Eval score drop](/platform/alerts#eval-score-drop).
 
