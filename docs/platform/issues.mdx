@@ -1,0 +1,58 @@
+---
+title: Issues
+description: See what broke in a project's agent in the last 7 days, from failed model calls to stopped traffic, and mark each issue fixed or not a problem.
+lastModified: 2026-11-19
+---
+
+The **Issues** page lists what broke in a project's agent in the last 7 days: model calls that failed, replies that were cut off, tools that fail more than usual, spend that jumped, and traffic that stopped. It is the project's home page, so opening a project shows it. You can also select **Issues** in the project sidebar.
+
+There is nothing to set up. Issues checks every project, and its checks read only what the traces state, such as an error status or a finish reason. The model call and cut-off reply checks need model calls.
+
+## Read the page
+
+The title of the page is its verdict, such as "2 things are broken in your agent" or "Nothing broken in the last 7 days". When every issue of the week is marked, it says "Nothing broken right now". Under the title are the totals of the last 7 days: **Runs**, **Model calls**, **Failed model calls** with their share of all model calls, and **Spend**. A run is one trace.
+
+The issues are in three tabs: **Open**, **Not a problem**, and **Fixed**. Each issue shows:
+
+- Its title, such as **Model calls failing**, and what it is about, such as the model and the error type.
+- A summary with the numbers behind it, such as "Failed in 12 runs, 4% of the runs that call gpt-4.1." When the error says what went wrong, such as a rate limit or an invalid API key, the issue also says what to do.
+- A bar for each of the 7 days, with the runs or the spend of that day.
+- When it was first and last seen, and up to 3 example runs.
+- A link to the matching runs or spans on the [traces page](/platform/traces), such as **See failed calls**.
+
+A project with no issues and no runs in the last 7 days shows "No runs in the last 7 days", and one whose runs call no model shows "No model calls in the last 7 days". Both have **Open Setup**, which shows how to send them.
+
+## What Issues checks
+
+| Issue | When it appears |
+| --- | --- |
+| **Model calls failing** | Model calls to one provider and model fail with the same error type. Only model-call spans count, not the agent and workflow spans around them. Calls whose error type says they were aborted or cancelled are left out. |
+| **Replies cut off** | The provider stopped replies at the output limit, with a finish reason of `length`, `max_tokens`, or `max_output_tokens`. Replies that stopped because the conversation filled the model's context window (`model_context_window_exceeded`) are a separate issue. |
+| **Tool failing more than usual** | On one day, a tool failed in at least 3 runs, and its failure rate was at least twice that of the 7 days before and at least 5 points higher. |
+| **Tool failing** | A tool with fewer than 50 calls in the 7 days before failed in at least 3 runs, at least 10 calls, and half of its calls on one day. |
+| **Spend jumped** | The runs that started on one day cost at least 2.5 times the median day of the 7 days before, at least $20 more, and more than any of those 7 days that did not jump itself, so a weekly batch day is not a jump. A day is judged only once the project had runs 7 days before it. When one model added at least half of the extra spend, the issue names it. |
+| **Traffic stopped** | The project stopped sending spans after steady traffic. It is judged as the [Traffic stopped](/platform/alerts#traffic-stopped) alert judges it, whether or not that alert is on. |
+
+The checks count runs, not spans, so an SDK that records one call in two spans counts it once. They read every environment except `development`, `dev`, `local`, and `experiment`. The traffic check counts the spans that ingestion accepted, in every environment. Days are UTC days, and the last of the 7 is today.
+
+The tool and spend checks compare each day with the 7 days before it, so they read 14 days of telemetry. A project that keeps its telemetry for 7 days finds failing tools only as **Tool failing**, and no spend jumps. See [Set retention](/platform/privacy#set-retention).
+
+The error type of a failed model call is the `error.type` attribute of its span. From TypeScript SDK 0.2.7 and Python SDK 0.3.8, the telemetry.dev SDKs record the provider's error code or HTTP status there when the error has one, such as `insufficient_quota` or `429`; older versions record the error's class name. See the [TypeScript](/sdk/typescript#errors-and-fail-open-behavior) and [Python](/sdk/python#span-fields) SDK pages.
+
+## Mark an issue
+
+Any member of the workspace can mark an issue. Select **Fixed** when you fixed it, or **Not a problem** when it needs no fix. The issue moves to that tab and shows who marked it and when. To move it back to **Open**, select **Reopen**.
+
+A fixed issue that happens again goes back to **Open** with the badge **Back after fixed**. An issue marked **Not a problem** stays in its tab.
+
+## Copy a fix prompt
+
+**Copy fix prompt** copies a prompt for a coding agent, such as Claude Code or Cursor. It has the issue's title, summary, and fix, a link to an example run, and asks the agent to find the cause in your codebase and fix it. Paste it into the agent in your project's repository. **Traffic stopped** has no fix prompt.
+
+## Possible issues
+
+Under **Possible**, the page can also list runs that might have gone wrong but that the traces do not state as failures. One kind is a run after which the person's next message in the same session said the agent's work failed. It shows the person's words, with **See the run** and **See the message**.
+
+Possible issues are a guess from the conversation, and many are wrong. Check the run before you act on one, then mark it **Fixed** if it was a real problem or **Not a problem** if it was not. The group says how many of those marked in the last 90 days were real problems. Possible issues do not count in the verdict at the top of the page.
+
+Finding possible issues needs the content of your runs, such as what the person asked and what the agent did and said, and a session ID that links the runs of one conversation. When your newest runs leave some of this out, a **Not recorded** section names what is missing (**Prompts**, **Instructions**, **Tool calls**, or **Session ID**) and how to record it. Read Record what your agent sees and does for [TypeScript](/sdk/typescript#record-what-your-agent-sees-and-does) or [Python](/sdk/python#record-what-your-agent-sees-and-does).
