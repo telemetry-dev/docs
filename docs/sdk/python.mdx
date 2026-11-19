@@ -1,7 +1,7 @@
 ---
 title: Python SDK
 description: Add spans, logs, metrics, and trace context to Python applications.
-lastModified: 2026-11-16
+lastModified: 2026-11-19
 seo:
   title: "Python SDK for LLM Tracing"
   description: "Install telemetry-dev to add OpenTelemetry traces, logs, metrics, and trace context to Python AI applications. The SDK sends data to telemetry.dev over OTLP."
@@ -255,7 +255,7 @@ The fields map to the same attributes as in the TypeScript SDK. See [Span fields
 - `cost_usd` overrides the server's cost calculation. Without it, the server estimates cost from token usage when it has pricing for the model. See [Cost](/reference/cost).
 - `metadata` becomes `td.metadata.<key>` on this span. The SDK drops the keys `userId`, `sessionId`, `user_id`, and `session_id`; set the user and session with [`propagate_attributes()`](#add-user-session-and-metadata) instead.
 - `attributes` are applied last and can replace mapped attributes.
-- `error` sets the span status to `ERROR`, sets `error.type` to the exception's class name, and records an `exception` event with the message and stack trace.
+- `error` sets the span status to `ERROR`, sets `error.type`, and records an `exception` event with the message and stack trace. `error.type` is usually the exception's class name. From version 0.3.8, it is the provider's error code when the error has an HTTP status and a code, such as `insufficient_quota` on an OpenAI `RateLimitError`. A generic provider error (`Exception`, `APIError`, `APIStatusError`, `ClientError`, `ServerError`, or `EventStreamError`) records its code, else its HTTP status, such as `429`, else the provider's error type, such as `overloaded_error`, else the AWS error code of a botocore error, such as `ThrottlingException`.
 
 `start_span()` also accepts these arguments:
 

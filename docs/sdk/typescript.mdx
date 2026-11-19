@@ -1,7 +1,7 @@
 ---
 title: TypeScript SDK
 description: Add spans, logs, metrics, and trace context to TypeScript applications.
-lastModified: 2026-11-16
+lastModified: 2026-11-19
 seo:
   title: "TypeScript SDK for LLM Tracing"
   description: "Install @telemetry-dev/sdk to add OpenTelemetry spans, logs, metrics, and trace context to TypeScript AI applications and send them to telemetry.dev over OTLP."
@@ -482,7 +482,9 @@ See [Privacy](/platform/privacy) for server-side capture and redaction controls.
 
 ## Errors and fail-open behavior
 
-To mark a span as failed, pass `error` to `update()` or `end()`. An observed function does this for you. The SDK sets the span status to `ERROR`, sets `error.type` to the error's name, and records an `exception` event with the message and stack trace.
+To mark a span as failed, pass `error` to `update()` or `end()`. An observed function does this for you. The SDK sets the span status to `ERROR`, sets `error.type`, and records an `exception` event with the message and stack trace.
+
+`error.type` is usually the error's class name. From version 0.2.7, it is the provider's error code when the error has an HTTP status and a code, such as `insufficient_quota` on an OpenAI `RateLimitError`. A generic provider error (`Error`, `APIError`, `ApiError`, `AI_APICallError`, or `AI_StreamProviderError`) records its code, else its HTTP status, such as `429`, else the provider's error type, such as `overloaded_error`. The AI SDK's `AI_RetryError` records the type of the last error it retried. A thrown value that is not an `Error` records `Error`.
 
 The SDK never throws its own errors into your code. Failures during initialization, export, masking, and filtering go to `onError`. If `onError` itself throws, the SDK ignores that error. `flush()` and `shutdown()` never reject.
 
