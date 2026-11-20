@@ -57,6 +57,14 @@ Until an address confirms, it gets no alert email, and its row shows **Not confi
 
 When telemetry.dev sends an email, it checks each address again. An address stops getting alerts when its owner leaves the workspace or unsubscribes.
 
+### Weekly findings email
+
+Early each week, telemetry.dev emails a summary of the week before, Monday to Sunday in UTC, for each project that had findings that week. A finding is an alert that opened, or a failed check: a fail score from a pass/fail LLM judge, code check, or rule on a trace, outside experiments. The email gives the counts of the week and lists the latest 3 findings, each with a link. A week without findings sends no email.
+
+The email goes to the project's email recipients who are members of the workspace with a verified email. Addresses outside the workspace get alerts but not this email.
+
+To stop it, select **Unsubscribe** at the bottom of the email, then **Unsubscribe** on the page that opens. This stops the weekly email of that project for your address only; its alerts still reach you. The same page has **Resubscribe** to undo it.
+
 ## Slack, Discord, and webhooks
 
 A project's alerts can also post to a Slack channel, a Discord channel, or an HTTPS endpoint of your own. Every alert of the project goes to each of these destinations as well as to its email recipients.

@@ -53,6 +53,8 @@ A fixed issue that happens again goes back to **Open** with the badge **Back aft
 
 Under **Possible**, the page can also list runs that might have gone wrong but that the traces do not state as failures. One kind is a run after which the person's next message in the same session said the agent's work failed. It shows the person's words, with **See the run** and **See the message**.
 
+An AI model finds possible issues by reading your runs, on our AI provider, at no cost to you and without your provider keys. These checks run by default, and an owner or admin can turn them off in the project's Privacy settings. Read [Issue checks](/platform/privacy#issue-checks).
+
 Possible issues are a guess from the conversation, and many are wrong. Check the run before you act on one, then mark it **Fixed** if it was a real problem or **Not a problem** if it was not. The group says how many of those marked in the last 90 days were real problems. Possible issues do not count in the verdict at the top of the page.
 
 Finding possible issues needs the content of your runs, such as what the person asked and what the agent did and said, and a session ID that links the runs of one conversation. When your newest runs leave some of this out, a **Not recorded** section names what is missing (**Prompts**, **Instructions**, **Tool calls**, or **Session ID**) and how to record it. Read Record what your agent sees and does for [TypeScript](/sdk/typescript#record-what-your-agent-sees-and-does) or [Python](/sdk/python#record-what-your-agent-sees-and-does).
