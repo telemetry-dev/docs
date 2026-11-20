@@ -1,7 +1,7 @@
 ---
 title: Privacy and retention
-description: Choose what telemetry.dev stores, what it redacts, and how long it keeps telemetry.
-lastModified: 2026-11-03
+description: Choose what telemetry.dev stores, what it redacts, and how long it keeps telemetry, and see what AI checks and support can read.
+lastModified: 2026-11-19
 ---
 
 telemetry.dev stores prompts and responses by default. You can limit what it keeps in three places:
@@ -66,7 +66,7 @@ A project can have at most 100 environment rows, and each name can have at most 
 When capture is off for an environment, telemetry.dev removes these items from that environment's telemetry:
 
 - The span input and output that appear in the span's **Input** and **Output** sections and in the trace table's **Input** and **Output** columns.
-- Attributes with recognized prompt or response keys, at any depth. These include `gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions`, `gen_ai.prompt.*`, `gen_ai.completion.*`, the Vercel AI SDK `ai.prompt`, `ai.prompt.*`, `ai.response.*`, `ai.toolCall.args`, and `ai.toolCall.result` keys, `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result`, `llm.prompts`, `llm.completions`, `traceloop.entity.input`, `traceloop.entity.output`, `langchain.inputs`, `langchain.outputs`, `span.input`, `span.output`, `trace.input`, `trace.output`, and Anthropic tool-result content.
+- Attributes with recognized prompt or response keys, at any depth. These include `gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions`, `gen_ai.prompt.*`, `gen_ai.completion.*`, the Vercel AI SDK `ai.prompt`, `ai.prompt.*`, `ai.response.*`, `ai.toolCall.args`, and `ai.toolCall.result` keys, `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result`, `llm.prompts`, `llm.completions`, `traceloop.entity.input`, `traceloop.entity.output`, `langchain.inputs`, `langchain.outputs`, `span.input`, `span.output`, `trace.input`, `trace.output`, Amazon Bedrock agent traces (`td.metadata.agent_trace`), and Anthropic tool-result content.
 - Attributes whose whole key is one of these words: `input`, `inputs`, `prompt`, `prompts`, `messages`, `request`, `request_body`, `question`, `output`, `outputs`, `response`, `responses`, `completion`, `completions`, `answer`, or `result`.
 - The span name. telemetry.dev stores `[REDACTED]` instead, so the trace name is also `[REDACTED]` and name search cannot find it.
 - The message text and content attributes of GenAI message log events (`gen_ai.system.message`, `gen_ai.user.message`, `gen_ai.assistant.message`, `gen_ai.tool.message`, and `gen_ai.choice`).
@@ -95,9 +95,35 @@ When capture is off for an environment, Evals cannot read the content of its tra
 
 Capture settings do not apply to the outputs that your code sends with `runExperiment` or `run_experiment`. telemetry.dev keeps them with the experiment. Read [Run your code](/evals/experiments#run-your-code).
 
+## Issue checks
+
+The [Issues](/platform/issues#possible-issues) page also lists problems that your traces do not mark as errors. To find them, two checks have an AI model read your runs. They run on every project by default, with nothing to set up:
+
+- **The person's next message.** For a run in a session, a model reads the run, the person's next message in that session, and other runs of the session, and decides whether the message says the agent's work failed.
+- **The agent's instructions.** For a run that called a tool, a model reads the run's instructions and the run, with up to 12 earlier runs of its session, and decides whether a tool call broke the instructions or what the person asked.
+
+The checks read the content that telemetry.dev stored, after capture settings and redaction: inputs and outputs, system prompts, and tool calls with their arguments and results. They send it to our AI provider, named on the [sub-processor page](https://telemetry.dev/subprocessors), at no cost to you and without your provider keys. The [DPA](https://telemetry.dev/dpa) says what the provider may keep and for how long. An environment with capture off gives the checks nothing new to read, because they read only stored content.
+
+Only members of your workspace see what the checks find. A result, with the words it quotes, is deleted once the oldest run it quotes is 14 days old, or as old as the project's retention if that is shorter. It is also deleted when you delete a trace it quotes, or the project.
+
+### Turn off Issue checks
+
+A workspace owner or admin can turn the checks off for a project. Members can see the setting.
+
+<Steps>
+  <Step title="Open privacy settings">
+    In the project, select **Settings**, then **Privacy** under the project in the settings sidebar.
+  </Step>
+  <Step title="Turn off the switch">
+    Under **Issue checks**, turn off **Check runs with AI**. The row then says "Off. Nothing from this project is sent to our AI provider for these checks, and Issues lists no new failures that only these checks find. Those already found stay on Issues until they expire."
+  </Step>
+</Steps>
+
+From then on, telemetry.dev sends nothing more from the project to our AI provider for these checks, except a call already under way. The **Open** tab of the Issues page says that the checks are off. The switch does not stop LLM judges that run on a model marked **telemetry.dev**; see the next section.
+
 ## Content that Evals sends to model providers
 
-An LLM judge sends its prompt to the model provider of the judge, with the project's provider key. On live and past traces, the prompt has the stored trace content that its variables hold, after redaction. In an experiment, the prompt has the dataset item and the output, and the outputs that your code sends get no redaction. A prompt experiment sends each dataset item to the model of the experiment. A test run of a prompt sends the prompt, the prompts it includes, its tools, and the inputs you entered to its model. **Suggest changes** sends the draft prompt, the instruction you type, and up to 20 failed items of the experiment you select, with their outputs, expected outputs, and the reasons of their failing scores, to the model of the draft. Code checks and rules run on telemetry.dev servers and send no content to a model provider. Read [What leaves telemetry.dev](/evals/evaluators#what-leaves-telemetrydev).
+An LLM judge sends its prompt to the model provider of the judge, with the project's provider key. In a project with no key of its own for a model's provider, an LLM judge on live or past traces can run on one of the models that telemetry.dev offers, marked **telemetry.dev** in the model menu. Such a judge runs on our AI provider, named on the [sub-processor page](https://telemetry.dev/subprocessors), at no cost to you, and sends it the same prompt. The **Issue checks** switch does not stop it. On live and past traces, the prompt has the stored trace content that its variables hold, after redaction. In an experiment, the prompt has the dataset item and the output, and the outputs that your code sends get no redaction. A prompt experiment sends each dataset item to the model of the experiment. A test run of a prompt sends the prompt, the prompts it includes, its tools, and the inputs you entered to its model. **Suggest changes** sends the draft prompt, the instruction you type, and up to 20 failed items of the experiment you select, with their outputs, expected outputs, and the reasons of their failing scores, to the model of the draft. Code checks and rules run on telemetry.dev servers and send no content to a model provider. Read [What leaves telemetry.dev](/evals/evaluators#what-leaves-telemetrydev).
 
 ## What built-in redaction removes
 
@@ -188,3 +214,50 @@ Dashboard views show only telemetry inside the retention window, so a shorter re
 Retention also deletes the scores of the traces that it deletes. Datasets and experiments do not follow retention. A dataset item that came from a trace is a copy. Deleting or editing an item changes only new versions of the dataset; the earlier versions, and the experiments on them, keep the item as it was until you delete the dataset or its project. An experiment keeps its outputs and scores until you delete it or its dataset.
 
 The storage layer also deletes all telemetry after 90 days, whatever the project setting.
+
+## Share telemetry with support
+
+The product shows telemetry.dev support a project's telemetry only when a member of the workspace shares it with **Report a problem**. Each member can send a report.
+
+<Steps>
+  <Step title="Open the trace or session">
+    Open the trace or the session with the problem, and select **Report a problem** in its header. On a narrow screen, the button shows only a flag icon.
+  </Step>
+  <Step title="Describe the problem">
+    Optionally, write what went wrong under **What went wrong**, in up to 2,000 characters.
+  </Step>
+  <Step title="Choose what support can see">
+    Under **What support can see**, select a level. The dialog previews what support will see at that level.
+  </Step>
+  <Step title="Choose when access ends">
+    Under **Access ends**, select **In 7 days**, which is the default, **In 1 day**, or **When resolved or revoked**.
+  </Step>
+  <Step title="Send it">
+    Select **Send report**.
+  </Step>
+</Steps>
+
+| Level | What support can see |
+| --- | --- |
+| **Metadata** | Timings, token counts, costs, models, statuses, and IDs, and fields such as error types and environment names. |
+| **Names** | Metadata, and the names of traces, services, spans, agents, and tools, and your user, session, conversation, and response IDs. This is the default. The **Support access** page calls it **Metadata and names**. |
+| **Everything** | Everything in the shared telemetry, including inputs, outputs, messages, and attributes. Only owners and admins can share it. |
+
+A report from a trace shares that trace. A report from a session shares the traces the session has when you send it, up to 250; traces that join the session later stay out. For a larger session, report the trace with the problem from its own page. Either way, support sees only spans and logs that started before you sent the report, and only telemetry inside the project's retention. A workspace can send 20 reports in 24 hours.
+
+When you send a report, the workspace's owners and admins get an email that says who shared what, at which level, and until when. The member who sent it gets an email when support picks it up and when support resolves it with a reply.
+
+Support's access ends at the first of these:
+
+- Support resolves the report.
+- The time you chose under **Access ends** passes.
+- Someone in the workspace revokes it.
+- The project moves to another workspace.
+
+### Review and revoke support access
+
+Open **Settings**, then select **Support access** under the project in the settings sidebar. Each member can see this page. It lists each report of the project with what it shares, its status (**Open**, **In progress**, or **Resolved**), its level, who shared it, when its access ends, the note, and support's reply.
+
+telemetry.dev records each read that support makes, and each row shows how many reads there were and when the last one was. To end access sooner, select **Revoke** in the row, then **Revoke** again to confirm. Any member of the workspace can revoke. The read count stays on the page.
+
+A report and the record of its reads are deleted a year after its access ends, or when you delete the project.

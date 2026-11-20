@@ -1,17 +1,147 @@
 ---
 title: LangChain and LangGraph
-description: Trace LangChain and LangGraph chains, model calls, and tool steps over OpenTelemetry.
-lastModified: 2026-10-29
+description: Trace LangChain and LangGraph graphs, chains, model calls, and tool steps, with a callback handler in TypeScript or OpenTelemetry in Python.
+lastModified: 2026-11-07
 seo:
-  title: "LangChain & LangGraph OpenTelemetry Tracing"
-  description: "Trace LangChain and LangGraph with OpenTelemetry instrumentation, for example OpenLLMetry. Monitor chains, model calls, tools, token usage, and cost."
+  title: "LangChain & LangGraph Tracing"
+  description: "Trace LangChain.js and LangGraph.js agents with the @telemetry-dev/langchain callback handler, or Python LangChain with OpenTelemetry. Monitor graphs, model calls, tools, token usage, and cost."
 ---
 
-LangChain and LangGraph do not send traces to telemetry.dev by themselves. Add an OpenTelemetry instrumentation for LangChain, such as [OpenLLMetry](https://www.traceloop.com/docs/openllmetry/getting-started-python), and point its OTLP exporter at telemetry.dev. Chains, graph nodes, model calls, and tool steps then arrive as spans, and telemetry.dev computes cost from the token usage on model spans.
+In TypeScript, the `@telemetry-dev/langchain` callback handler records LangChain.js and LangGraph.js runs. You add it where you build a graph or a chain, and your agent code does not change. In Python, add an OpenTelemetry instrumentation for LangChain, such as OpenLLMetry, and point its exporter at telemetry.dev.
 
-This guide uses OpenLLMetry. It was checked with `traceloop-sdk` 0.62.4, `langchain` 1.4.6, `langchain-openai` 1.7.2, and `langgraph`.
+Graph nodes, chains, model calls, and tool steps arrive as spans, and telemetry.dev computes cost from the token usage on model spans.
 
-## Install
+## TypeScript
+
+The TypeScript setup was checked with `@telemetry-dev/langchain` 0.1.0, `@langchain/core` 1.3.5, `@langchain/langgraph` 1.7.2, `langchain` 1.6.3, and `@langchain/anthropic` 1.6.1.
+
+### Install
+
+```package-install
+npm i @telemetry-dev/sdk @telemetry-dev/langchain
+```
+
+`@telemetry-dev/langchain` needs `@langchain/core` 1.x. `@telemetry-dev/sdk` needs Node.js 20.19.0 or later.
+
+### Set the API key
+
+Create a project at telemetry.dev, then create an API key on the project's **Setup** page:
+
+```sh
+export TELEMETRY_DEV_API_KEY="td_live_..."
+export OTEL_SERVICE_NAME="support-agent"
+```
+
+Without an API key, `init()` does nothing and the handler records nothing. Your runs continue as usual.
+
+### Trace an agent
+
+Call `init()` once at startup, then give a `TelemetryDevCallbackHandler` to the run. LangChain hands the handler down to each child run: graph nodes, model calls, and tools.
+
+This example sends real requests to Anthropic, so Anthropic charges apply. It needs `langchain`, `@langchain/anthropic`, `zod`, and `ANTHROPIC_API_KEY`:
+
+```ts agent.ts
+import { createAgent, tool } from "langchain";
+import * as z from "zod";
+import { init, shutdown } from "@telemetry-dev/sdk";
+import { TelemetryDevCallbackHandler } from "@telemetry-dev/langchain";
+
+init({ serviceName: "langchain-create-agent" });
+
+const getWeather = tool(({ city }) => `It is 21°C and sunny in ${city}.`, {
+  name: "get_weather",
+  description: "Get the weather for a city",
+  schema: z.object({ city: z.string() }),
+});
+
+const agent = createAgent({
+  model: "anthropic:claude-sonnet-4-6",
+  tools: [getWeather],
+  systemPrompt: "You are a helpful assistant.",
+});
+
+const result = await agent.invoke(
+  { messages: [{ role: "user", content: "What is the weather in Accra?" }] },
+  {
+    callbacks: [new TelemetryDevCallbackHandler()],
+    configurable: { thread_id: "thread-1" },
+    metadata: { userId: "user-1" },
+  },
+);
+console.log(result.messages.at(-1)?.text);
+
+await shutdown();
+```
+
+`await shutdown()` sends the last spans before a short script exits. A long-running server does not need it.
+
+### Add the handler to a graph or chain you have
+
+To trace each run of a compiled graph, attach the handler one time:
+
+```ts
+const agent = graph.compile().withConfig({
+  callbacks: [new TelemetryDevCallbackHandler()],
+});
+```
+
+To trace one run, pass the handler in the config of that run, as in the example above. The same handler operates on chains, for example `prompt.pipe(model)`, and on single model or tool calls.
+
+### Check the trace
+
+Open your telemetry.dev project and find the trace. The agent example produces these spans:
+
+| Span | What it is |
+| --- | --- |
+| `invoke_agent LangGraph` | The graph run, with operation `invoke_agent` and agent name `LangGraph` |
+| `model_request`, `tools` | The nodes of the graph |
+| `chat claude-sonnet-4-6` | Each model call, with model names, provider, messages, finish reason, token usage, and the names of the bound tools |
+| `execute_tool get_weather` | The tool call, with its arguments, call ID, and result |
+| `RunnableLambda` | The routing function of the graph, which picks the next node |
+
+LangChain marks some internal runs as hidden, such as the `__start__` step of LangGraph. The handler does not record them, and their child runs go under the nearest recorded run.
+
+If the state of a graph has a `messages` list, the output of the graph span is the last message, which is the answer of the agent. The trace list shows that answer as the output of the trace.
+
+Each span has `langchain.run.id`, the ID of its LangChain run. telemetry.dev uses it to show the trace as a LangChain trace.
+
+### Sessions, users, and metadata
+
+The handler reads these keys from the metadata of a run:
+
+| Metadata key | Span attribute |
+| --- | --- |
+| `thread_id`, `sessionId`, `session_id`, or `conversation_id` | `gen_ai.conversation.id` |
+| `userId` or `user_id` | `user.id` |
+| Any other key from your app | `td.metadata.<key>`, on the top span only |
+
+LangGraph copies `configurable.thread_id` into the metadata of each run, so a graph with a checkpointer gets one session for each thread. The handler ignores the metadata keys that LangChain and LangGraph add, such as `ls_*`, `langgraph_*`, and `checkpoint_ns`.
+
+[`propagateAttributes()`](/sdk/typescript) from `@telemetry-dev/sdk` also sets the user and the session. Metadata keys on the run take priority.
+
+### Streaming
+
+Model calls that stream, for example through `agent.stream(input, { streamMode: "messages" })`, also record the time to the first chunk and the time between chunks.
+
+### Control captured content
+
+The `captureInput`, `captureOutput`, `mask`, and `maxAttributeLength` options of `init()` apply to the messages, inputs, and outputs that the handler records. With capture off, spans keep the span names, models, token usage, and errors. The run names, the tool names, the names of the bound tools, and the metadata of your app are still sent.
+
+### Use it next to LangSmith
+
+LangSmith tracing and the telemetry.dev handler are two separate LangChain callback handlers. You can keep `LANGSMITH_TRACING=true` and add the handler to compare the two products on the same runs.
+
+### Do not also instrument the model client
+
+LangChain makes its model calls through the provider SDKs. If you also call `instrumentAnthropic()` or `instrumentOpenAI()`, or wrap the client that LangChain uses, each model call is recorded twice: once in the LangChain trace and once as a separate `chat` trace. The token usage and cost of the project then count these calls two times. Use the handler for LangChain calls, and the provider integrations for model calls outside LangChain.
+
+Spans that other code starts during a LangChain run, such as spans of a wrapped client, do not go under the LangChain spans. They go under the active span of your app, or start their own trace when there is none.
+
+## Python
+
+This setup uses OpenLLMetry. It was checked with `traceloop-sdk` 0.62.4, `langchain` 1.4.6, `langchain-openai` 1.7.2, and `langgraph`.
+
+### Install
 
 Use Python 3.10 or later. Install the packages in a virtual environment:
 
@@ -23,7 +153,7 @@ python -m pip install traceloop-sdk langchain langchain-openai
 
 You do not need a Traceloop account.
 
-## Set the API key and exporter
+### Set the API key and exporter
 
 Get a project API key from telemetry.dev. Then set the keys and the OpenLLMetry exporter configuration:
 
@@ -36,7 +166,7 @@ export TRACELOOP_HEADERS="Authorization=Bearer%20$TELEMETRY_DEV_API_KEY"
 
 OpenLLMetry sends traces to `https://api.telemetry.dev/v1/traces`, and metrics to `/v1/metrics`. The `%20` is the space in `Bearer <key>`; header values in this variable are URL-encoded. Keep these keys out of version control.
 
-## Trace a chain
+### Trace a chain
 
 This example sends one real request to OpenAI, so OpenAI charges apply. Save it as `first_trace.py`. Call `Traceloop.init()` before you build the chain:
 
@@ -79,7 +209,7 @@ The `Traceloop.init()` arguments do the following:
 
 For other settings, see the [OpenLLMetry configuration guide](https://www.traceloop.com/docs/openllmetry/configuration).
 
-## Trace a LangGraph graph
+### Trace a LangGraph graph
 
 LangGraph runs on LangChain's callback system, so the same setup traces graphs. Initialize OpenLLMetry the same way, then build and run the graph:
 
@@ -111,7 +241,7 @@ print(graph.compile().invoke({"question": "What is OTLP?"}))
 
 Install `langgraph` first with `python -m pip install langgraph`.
 
-## Check the trace
+### Check the trace
 
 Open your telemetry.dev project, select the `development` environment, and find the trace from `langchain-first-trace`. The chain example produces three spans:
 
@@ -125,7 +255,7 @@ A graph run shows `LangGraph.workflow` and `invoke_agent LangGraph` spans, one `
 
 telemetry.dev computes cost for each model span from its token counts and the model's price. The workflow and task spans carry no token usage, so they add nothing to the trace's token or cost totals.
 
-## Control captured content
+### Control captured content
 
 By default, OpenLLMetry records prompts, completions, and chain inputs and outputs in span attributes. To stop recording them, set this variable before you start the app:
 
@@ -135,7 +265,7 @@ export TRACELOOP_TRACE_CONTENT=false
 
 With content off, model spans keep token usage, model names, and other metadata. This is not a general redaction control: chain and tool names, model parameters, and any metadata your app attaches are still exported. To turn content back on for selected calls, see the [OpenLLMetry privacy guide](https://www.traceloop.com/docs/openllmetry/privacy/traces).
 
-## Send from an existing OpenTelemetry setup
+### Send from an existing OpenTelemetry setup
 
 If your app already emits LangChain spans through the OpenTelemetry SDK, point its OTLP/HTTP exporter at telemetry.dev:
 
@@ -147,13 +277,13 @@ export OTEL_SERVICE_NAME="your-service-name"
 export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
 ```
 
-These variables configure an exporter only. They do not install or start any LangChain instrumentation. For a new app, use the OpenLLMetry setup above.
+These variables configure an exporter only. They do not install or start any LangChain instrumentation. For a new Python app, use the OpenLLMetry setup above.
 
 ## What telemetry.dev reads
 
-telemetry.dev reads the OpenTelemetry GenAI attributes these instrumentations emit:
+telemetry.dev reads the OpenTelemetry GenAI attributes that `@telemetry-dev/langchain` and the Python instrumentations send:
 
-- Spans whose instrumentation scope name contains `langchain` are marked as LangChain spans.
+- Spans that have a `langchain.run.id` attribute, which `@telemetry-dev/langchain` sets, or whose instrumentation scope name contains `langchain`, are marked as LangChain spans.
 - Token usage comes from `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens`, or the older `gen_ai.usage.prompt_tokens` and `gen_ai.usage.completion_tokens`.
 - The model comes from `gen_ai.request.model` and `gen_ai.response.model`, and the provider from `gen_ai.provider.name` or `gen_ai.system`.
 - Messages come from `gen_ai.input.messages` and `gen_ai.output.messages`, the older indexed `gen_ai.prompt.*` and `gen_ai.completion.*` attributes, or `traceloop.entity.input` and `traceloop.entity.output`.
@@ -161,6 +291,14 @@ telemetry.dev reads the OpenTelemetry GenAI attributes these instrumentations em
 For the full list, see [span attributes](/reference/span-attributes).
 
 ## Troubleshooting
+
+TypeScript:
+
+- **No trace appears.** Check that `TELEMETRY_DEV_API_KEY` is set in the process that runs the graph and that `init()` runs before the first run. A short script must `await shutdown()` or `await flush()` before it exits.
+- **Some runs are missing.** The handler records only the runs that have it in their callbacks. Attach it with `withConfig()` on each graph or chain that your app starts, or pass it in the config of each run.
+- **Model calls appear twice.** Remove `instrumentAnthropic()`, `instrumentOpenAI()`, or the wrapper from the client that LangChain uses. See [Do not also instrument the model client](#do-not-also-instrument-the-model-client).
+
+Python:
 
 - **No trace appears.** Check that `TRACELOOP_HEADERS` contains your key and that `Traceloop.init()` runs before LangChain builds the chain. A short script without `disable_batch=True` can exit before its spans are sent.
 - **The trace has no token usage or cost.** OpenLLMetry records usage only when the provider response includes it. Cost also needs a model that telemetry.dev has pricing for.

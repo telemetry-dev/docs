@@ -284,7 +284,7 @@ Each span gets a framework from its instrumentation scope name and attributes. T
 | 2 | Scope `ai` or `@telemetry-dev/ai-sdk`, or a scope that starts with `@ai-sdk` | `vercel-ai-sdk` |
 | 3 | Scope `@telemetry-dev/tanstack-ai` or `@tanstack/ai`, or a scope that starts with `@tanstack/ai/` | `tanstack-ai` |
 | 4 | Any span attribute starts with `ai.` | `vercel-ai-sdk` |
-| 5 | The scope name contains `langchain` | `langchain` |
+| 5 | The scope name contains `langchain`, or the span has a `langchain.run.id` attribute | `langchain` |
 | 6 | No rule matches | `otel` |
 
 A trace takes the first framework other than `otel` that the ingest API sees among its spans, or `otel` if there is none.
@@ -295,6 +295,8 @@ The first-party core SDKs use exact scope names:
 | --- | --- | --- |
 | TypeScript | `@telemetry-dev/sdk` | `otel` |
 | Python | `telemetry_dev` | `otel` |
+
+`@telemetry-dev/langchain` sends its spans through `@telemetry-dev/sdk` and sets `langchain.run.id` on each span, so its spans get framework `langchain`.
 
 ## Compatibility attributes by framework
 

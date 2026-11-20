@@ -1,7 +1,7 @@
 ---
 title: Python SDK
 description: Add spans, logs, metrics, and trace context to Python applications.
-lastModified: 2026-10-30
+lastModified: 2026-11-19
 seo:
   title: "Python SDK for LLM Tracing"
   description: "Install telemetry-dev to add OpenTelemetry traces, logs, metrics, and trace context to Python AI applications. The SDK sends data to telemetry.dev over OTLP."
@@ -255,7 +255,7 @@ The fields map to the same attributes as in the TypeScript SDK. See [Span fields
 - `cost_usd` overrides the server's cost calculation. Without it, the server estimates cost from token usage when it has pricing for the model. See [Cost](/reference/cost).
 - `metadata` becomes `td.metadata.<key>` on this span. The SDK drops the keys `userId`, `sessionId`, `user_id`, and `session_id`; set the user and session with [`propagate_attributes()`](#add-user-session-and-metadata) instead.
 - `attributes` are applied last and can replace mapped attributes.
-- `error` sets the span status to `ERROR`, sets `error.type` to the exception's class name, and records an `exception` event with the message and stack trace.
+- `error` sets the span status to `ERROR`, sets `error.type`, and records an `exception` event with the message and stack trace. `error.type` is usually the exception's class name. From version 0.3.8, it is the provider's error code when the error has an HTTP status and a code, such as `insufficient_quota` on an OpenAI `RateLimitError`. A generic provider error (`Exception`, `APIError`, `APIStatusError`, `ClientError`, `ServerError`, or `EventStreamError`) records its code, else its HTTP status, such as `429`, else the provider's error type, such as `overloaded_error`, else the AWS error code of a botocore error, such as `ThrottlingException`.
 
 `start_span()` also accepts these arguments:
 
@@ -293,6 +293,52 @@ Some providers price text, image, and audio tokens differently. For those, `usag
 Modality counts are parts of `input_tokens` and `output_tokens`, not additions to them. Send the totals too, and keep the sum of each kind's modality counts at or below its total. See [Cost](https://telemetry.dev/docs/reference/cost#modality-pricing) for how the server prices modality counts.
 
 The SDK drops unknown keys and logs a debug message.
+
+## Record what your agent sees and does
+
+When you build spans by hand, pass the content of each run in the span fields, so its trace shows what the agent was told and what it did. Provider integrations do this for you. Content in `metadata` or under attribute keys of your own is not read as input or output.
+
+The Issues page reads this content to find possible issues: runs after which the person's next message says the agent failed. It reads what the person asked, which tools the agent called and whether they failed, the agent's last messages, and the person's next message in the same session. It also checks the agent's tool calls against its system prompt. Set a session ID with [`propagate_attributes()`](#add-user-session-and-metadata) so it can link the runs of one conversation.
+
+- Put the system prompt in `system_instructions` on the `"generation"` span of each model call. The Issues page reads it only there. An `"agent"` span also shows it as part of its input, and tool and plain spans keep it as an attribute without showing it.
+- Put the messages the model received in `input`, and its reply, including any tool calls it asked for, in `output`.
+- Give each tool call its own `"tool"` span, with the arguments in `input`, the result in `output`, and the model's call ID in `tool_call_id`. The span name is the tool name unless you pass `tool_name`.
+
+```python
+from telemetry_dev import start_span
+
+instructions = "You are a support agent. Refund only delivered orders."
+
+with start_span(
+    "support",
+    type="agent",
+    system_instructions=instructions,
+    input=user_message,
+):
+    with start_span(
+        "chat gpt-4o",
+        type="generation",
+        model="gpt-4o",
+        provider="openai",
+        system_instructions=instructions,
+        input=messages,
+    ) as span:
+        response = call_model(instructions, messages)
+        span.update(output=response.message, usage=response.usage)
+
+    for call in response.message.tool_calls or []:
+        with start_span(
+            call.name,
+            type="tool",
+            tool_call_id=call.id,
+            input=call.arguments,
+        ) as tool:
+            tool.update(output=run_tool(call.name, call.arguments))
+```
+
+`@observe(type="tool")` records a function's arguments and return value the same way. The tool name is the function's qualified name, such as `Orders.refund` for a method, unless you pass `name=`. Inside an observed function, `update_current_span(system_instructions=...)` adds the system prompt to its span. Call it in a function observed with `type="generation"` so the Issues page reads it.
+
+These fields follow `capture_input`, `capture_output`, and `mask` like any other content. See [Control captured content](#control-captured-content).
 
 ## Add user, session, and metadata
 
@@ -379,6 +425,12 @@ with start_span("downstream-work", parent=request.headers.get("traceparent")):
 ## Control captured content
 
 By default the SDK records span input and output. Turn either off for all spans in `init()`, or for one span with the `capture_input` and `capture_output` arguments of `@observe` and `start_span()`.
+
+:::warning[Capture off limits problem detection]
+
+With `capture_input` or `capture_output` off, the Issues page still finds failed model calls, cut-off replies, failing tools, spend jumps, and stopped traffic. Possible issues come from what the person asked, what the agent did and said, and the person's next message. With `capture_input` off, the Issues page finds none in those runs. With `capture_output` off, it reads them without what the agent said. Where a `mask` replaces content, the Issues page reads only the replacement.
+
+:::
 
 To redact content instead of dropping it, pass a `mask` function. This example keeps outputs but replaces every model input:
 

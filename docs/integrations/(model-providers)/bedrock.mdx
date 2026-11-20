@@ -1,7 +1,7 @@
 ---
 title: Amazon Bedrock
 description: Trace Amazon Bedrock Runtime and Agent Runtime calls from TypeScript or Python.
-lastModified: 2026-10-26
+lastModified: 2026-11-14
 seo:
   title: "Amazon Bedrock Tracing and Observability"
   description: "Trace Amazon Bedrock Runtime and Agent Runtime calls from TypeScript or Python, with Converse messages, guardrails, knowledge bases, token usage, and errors."
@@ -11,8 +11,8 @@ Wrap your Bedrock Runtime or Agent Runtime client, and each supported call you m
 
 ## What you get
 
-- Converse messages, system instructions, inference parameters, guardrail data, native `InvokeModel` bodies, and agent input
-- Model output, agent output, citations, return-control data, the AWS request ID, HTTP status, retry counts, and errors
+- Converse messages, system instructions, inference parameters, guardrail data, native `InvokeModel` bodies, and agent input, including an inline agent's instruction and the action results you return to an agent (from version 0.3.0)
+- Model output with tool calls and their arguments, also from `InvokeModelWithResponseStream` for Anthropic Claude and Amazon Nova models from version 0.3.0, agent output, citations, return-control data, the AWS request ID, HTTP status, retry counts, and errors
 - Token usage from responses, native model bodies, AWS headers, and agent trace events
 - Spans for embedding, guardrail, knowledge-base retrieval, rerank, and flow calls, and time to first chunk for streams
 
@@ -145,7 +145,7 @@ Without an API key, `init()` turns telemetry off and the wrapped client works as
 
 In TypeScript, import the Agent Runtime functions from `@telemetry-dev/bedrock/agents`. In Python, `wrap_bedrock()` also accepts a `bedrock-agent-runtime` client.
 
-Pass `enableTrace: true` (`enableTrace=True` in Python) to `InvokeAgent` so AWS sends the trace events that carry the agent's token usage.
+Pass `enableTrace: true` (`enableTrace=True` in Python) to `InvokeAgent` so AWS sends the trace events that carry the agent's token usage and its action group calls with their results.
 
 <CodeGroup>
 
@@ -235,19 +235,19 @@ In Python, global instrumentation wraps Botocore's API call method and acts only
 
 | TypeScript | Python | What it does |
 | --- | --- | --- |
-| `wrapBedrock(client, options?)` from `@telemetry-dev/bedrock` | `wrap_bedrock(client, *, capture_agent_trace=False)` | Instruments one client and returns it. Wrapping the same client again has no effect. Python accepts Runtime and Agent Runtime clients. |
+| `wrapBedrock(client, options?)` from `@telemetry-dev/bedrock` | `wrap_bedrock(client, *, capture_agent_trace=True)` | Instruments one client and returns it. Wrapping the same client again has no effect. Python accepts Runtime and Agent Runtime clients. |
 | `wrapBedrockAgents(client, options?)` from `@telemetry-dev/bedrock/agents` | Use `wrap_bedrock()` | Instruments one Agent Runtime client. |
-| `instrumentBedrock(options?)` and `instrumentBedrockAgents(options?)` | `instrument_bedrock(*, capture_agent_trace=False)` | Instruments every matching client. |
+| `instrumentBedrock(options?)` and `instrumentBedrockAgents(options?)` | `instrument_bedrock(*, capture_agent_trace=True)` | Instruments every matching client. |
 | `uninstrumentBedrock()` and `uninstrumentBedrockAgents()` | `uninstrument_bedrock()` | Removes global instrumentation. |
 
 `boto3` has no asynchronous client, and the Python package doesn't instrument `aiobotocore`.
 
 ### Options
 
-<TypeTable type={{ captureAgentTrace: { type: "boolean", description: "TypeScript name. Attach the agent's trace events to the span as td.metadata.agent_trace. Token usage totals and the event count are recorded either way.", default: "false" }, capture_agent_trace: { type: "bool", description: "Python name for the same option.", default: "False" } }} />
+<TypeTable type={{ captureAgentTrace: { type: "boolean", description: "TypeScript name. Attach the agent's trace events to the span as td.metadata.agent_trace. Set it to false to keep only the token usage totals and the event count. The default was false before version 0.3.0.", default: "true" }, capture_agent_trace: { type: "bool", description: "Python name for the same option. The default was False before version 0.3.0.", default: "True" } }} />
 
-:::warning[Agent trace content]
-Agent trace events can contain prompts, model output, tool input, and retrieved text. In the current releases (TypeScript 0.1.10, Python 0.1.5), `td.metadata.agent_trace` holds the raw events, truncated to the attribute length limit. Your `mask` doesn't see them, and `captureInput` and `captureOutput` don't remove them. Turn this option on only if that content can be stored. An unreleased change filters the events by your capture settings.
+:::note[Agent trace content]
+Agent trace events can contain prompts, model output, tool input, and retrieved text. Content sent to a model, tool, or guardrail is kept only when input capture is on, and content that comes back only when output capture is on. With a `mask`, which can't see these events, their content is left out. Before TypeScript version 0.1.11 and Python version 0.1.6, `td.metadata.agent_trace` holds the raw events, and `captureInput`, `captureOutput`, and `mask` don't remove them.
 :::
 
 ## Traced calls
@@ -290,7 +290,7 @@ Calls through Anthropic's `AnthropicBedrock` client are traced by the [Anthropic
 
 ## Captured content
 
-Prompts and responses follow the core SDK's `captureInput`, `captureOutput`, and `mask` settings (`capture_input`, `capture_output`, and `mask` in Python). With output capture off, request IDs, models, finish reasons, usage, timing, and errors are still recorded. AWS error messages are recorded on the span whatever the capture settings. For agent trace events, see the warning under [Options](#options).
+Prompts and responses follow the core SDK's `captureInput`, `captureOutput`, and `mask` settings (`capture_input`, `capture_output`, and `mask` in Python). With output capture off, request IDs, models, finish reasons, usage, timing, and errors are still recorded. AWS error messages are recorded on the span whatever the capture settings. For agent trace events, see the note under [Options](#options).
 
 ## Send telemetry before exit
 
