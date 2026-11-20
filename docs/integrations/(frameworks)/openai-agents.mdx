@@ -1,13 +1,13 @@
 ---
 title: OpenAI Agents SDK
 description: Trace TypeScript OpenAI Agents SDK runs, model calls, tool calls, and sandbox commands with their exit codes.
-lastModified: 2026-11-05
+lastModified: 2026-11-20
 seo:
   title: "OpenAI Agents SDK Tracing and Observability"
-  description: "Send TypeScript OpenAI Agents SDK traces to telemetry.dev: agents, turns, model calls with token usage and cost, tool calls, and sandbox commands with exit codes and sandbox IDs."
+  description: "Send TypeScript OpenAI Agents SDK traces to telemetry.dev: agents, turns, model calls with token usage and cost, tool calls, and sandbox commands with exit codes."
 ---
 
-`@telemetry-dev/openai-agents` sends the runs of the TypeScript [OpenAI Agents SDK](https://openai.github.io/openai-agents-js/) to telemetry.dev: the agents and their turns, each model call with its token usage, each tool call, and each command that a sandbox agent ran, with its exit code and the sandbox it ran in.
+`@telemetry-dev/openai-agents` sends the runs of the TypeScript [OpenAI Agents SDK](https://openai.github.io/openai-agents-js/) to telemetry.dev: the agents and their turns, each model call with its token usage, each tool call, and each command that a sandbox agent ran, with its exit code.
 
 The package is a trace processor for the Agents SDK. It reads the spans the SDK already records, so you don't change your agents or tools.
 
@@ -17,7 +17,7 @@ The package is a trace processor for the Agents SDK. It reads the spans the SDK 
 npm i @telemetry-dev/openai-agents @openai/agents
 ```
 
-The package supports `@openai/agents` 0.21.0 and later 0.x releases, and needs Node.js 22 or later, the Agents SDK's minimum.
+The package supports `@openai/agents` 0.22.0 and later 0.x releases, and needs Node.js 22 or later, the Agents SDK's minimum.
 
 ## Set the API key
 
@@ -61,9 +61,9 @@ setTraceProcessors([telemetryDevProcessor()]);
 Run your agent once and open [Traces](/platform/traces) in your project. A run contains:
 
 - A root span named after the run's workflow, `Agent workflow` unless you set `workflowName`, and a `task {workflowName}` span under it
-- A span for each agent, and a `turn N` span for each of its turns
+- An `invoke_agent {name}` span for each agent, and a `turn N` span for each of its turns
 - A `chat {model}` span for each model call, with its token usage, which telemetry.dev prices
-- A span for each tool call, named after the tool
+- An `execute_tool {name}` span for each tool call
 - Handoff, guardrail, and MCP tool-listing spans when the run has them
 
 How runs group into traces:
@@ -81,7 +81,7 @@ import { getGlobalTraceProvider } from "@openai/agents";
 await getGlobalTraceProvider().forceFlush();
 ```
 
-A run that throws never ends its Agents SDK trace. The processor ends its root span after one minute without new spans, or at the next `forceFlush` or `shutdown` of the trace provider.
+The root span ends when the Agents SDK trace ends. A run that throws before the SDK ends its trace leaves it open, so the processor also ends the root when the run's task or agent span ends with the error. `forceFlush` and `shutdown` of the trace provider end the root of every trace that has no open span, at the end of its last span, which covers a run that failed before its first span.
 
 ## Trace sandbox agents
 
@@ -90,48 +90,9 @@ Sandbox runs need no extra setup. Each `sandbox.*` span of the Agents SDK, such 
 | Attribute | Value |
 | --- | --- |
 | `sandbox.operation` | The operation, such as `create_session` or `exec` |
-| `sandbox.backend` | The sandbox backend, such as `e2b` or `modal`, when the run created or resumed its session |
-| `sandbox.id` | The provider's sandbox ID, when you wrap the client as shown below |
+| `sandbox.backend` | The sandbox backend, such as `e2b` or `modal`, on the spans that create or resume a session |
 
 The `exec_command` and `write_stdin` tool spans get `process.exit.code` once the command has exited. A command that exits with a non-zero code is not marked as an error, because many commands, such as `grep`, exit non-zero without failing.
-
-### Record the provider's sandbox ID
-
-Wrap the sandbox client with `instrumentSandboxClient()` to record the ID that the provider uses in its own dashboard, logs, and webhooks. The hosted clients are in `@openai/agents-extensions`, and most also need their provider's SDK, such as `e2b` for E2B:
-
-```package-install
-npm i @openai/agents-extensions e2b
-```
-
-The Docker and local clients come with `@openai/agents`.
-
-```ts agent.ts
-import { run } from "@openai/agents";
-import { SandboxAgent } from "@openai/agents/sandbox";
-import { E2BSandboxClient } from "@openai/agents-extensions/sandbox/e2b";
-import { instrumentSandboxClient } from "@telemetry-dev/openai-agents";
-
-const agent = new SandboxAgent({ name: "Coder", instructions: "Run the tests." });
-const client = instrumentSandboxClient(new E2BSandboxClient());
-await run(agent, "Run the tests.", { sandbox: { client } });
-```
-
-The session, command, and tool spans of that agent then carry `sandbox.id`. The wrapper reads the ID from the session the client creates or resumes, and not every backend keeps one there:
-
-| Backend | Client | `sandbox.id` |
-| --- | --- | --- |
-| E2B | `E2BSandboxClient` | The E2B sandbox ID |
-| Modal | `ModalSandboxClient` | The Modal sandbox ID |
-| Daytona | `DaytonaSandboxClient` | The Daytona sandbox ID |
-| Vercel | `VercelSandboxClient` | The Vercel sandbox ID |
-| Cloudflare | `CloudflareSandboxClient` | The Cloudflare sandbox ID |
-| Blaxel | `BlaxelSandboxClient` | Not recorded |
-| Docker | `DockerSandboxClient` | Not recorded |
-| Local | `UnixLocalSandboxClient` | Not recorded |
-
-All of these clients still get `sandbox.backend`.
-
-The backend and the ID come from the span that creates or resumes the session. A session that your app passes in with `sandbox: { session }`, or that a resumed run reuses while it is still live in the same process, has no such span, so the spans of that run have neither.
 
 ## Control captured content
 
@@ -152,7 +113,7 @@ These count as content:
 - Tool arguments and results
 - The command and working directory of `sandbox.exec`, in `process.command_line` and `process.working_directory`
 
-With capture off, telemetry.dev still receives span names and timing, model names, response IDs, token usage, turn numbers, agent, tool, handoff, and guardrail names, each agent's tools, handoffs, and output type, whether a guardrail triggered, the MCP server of a tool call and the number of tools an MCP server listed, exit codes, sandbox backends and IDs, error types, the session ID (such as the run's `groupId`, a `propagateAttributes()` session, or the process session), the user ID and metadata of `propagateAttributes()`, the Agents SDK trace ID, and the string, number, and boolean values of trace metadata and of the data of custom spans. Trace metadata, custom span data, and `propagateAttributes()` metadata do not go through `mask`.
+With capture off, telemetry.dev still receives span names and timing, model names, response IDs, token usage, turn numbers, agent, tool, handoff, and guardrail names, each agent's tools, handoffs, and output type, whether a guardrail triggered, the MCP server of a tool call and the number of tools an MCP server listed, exit codes, sandbox backends, error types, the session ID (such as the run's `groupId`, a `propagateAttributes()` session, or the process session), the user ID and metadata of `propagateAttributes()`, the Agents SDK trace ID, and the string, number, and boolean values of trace metadata and of the data of custom spans. Trace metadata, custom span data, and `propagateAttributes()` metadata do not go through `mask`.
 
 Keep the Agents SDK's `traceIncludeSensitiveData` on, which is its default. With it off, the SDK leaves token usage and tool output off its spans, and the Responses API model leaves off the model name too, so telemetry.dev cannot price model calls or read exit codes. Turn content off with `captureInput` and `captureOutput` instead.
 
