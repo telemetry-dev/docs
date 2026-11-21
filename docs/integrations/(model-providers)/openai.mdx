@@ -9,7 +9,7 @@ seo:
 
 Wrap your OpenAI client, and each call you make with it becomes a span in telemetry.dev. Your calls and their return values don't change.
 
-To trace runs of the TypeScript OpenAI Agents SDK, see [OpenAI Agents SDK](/integrations/openai-agents); don't wrap the client the Agents SDK uses or call `instrumentOpenAI()` in a process that runs the Agents SDK, or each model call is recorded twice.
+To trace runs of the OpenAI Agents SDK, see [OpenAI Agents SDK](/integrations/openai-agents); don't wrap the client the Agents SDK uses or call `instrumentOpenAI()` (`instrument_openai()`) in a process that runs the Agents SDK, or each model call is recorded twice.
 
 ## What you get
 
