@@ -296,7 +296,7 @@ The rule uses the workspace's average ingestion rate over the last 6 hours. It o
 
 It also emails once a month when usage passes 80% and 100% of the allowance, and right away when the ingest API rejects a batch because of the monthly cap or a gift budget. Rejection emails go out at most once every 5 minutes.
 
-The quota is shared, so the quota rules of all projects share each alert: one quota problem opens one alert, not one per project. It goes to the destinations of one project, usually the one whose ingestion grew the most in the last 6 hours compared with its usual rate, or of another project when that one has no destination. An open quota alert does not move when another project's ingestion starts to grow faster.
+The quota is shared, so the quota rules of all projects share each alert: one quota problem opens one alert, not one per project. It usually goes to the destinations of the project whose ingestion grew the most in the last 6 hours compared with its usual rate, or, for a batch the ingest API rejected, of the project that sent it. If that project's quota rule is off or the project has no destination, another project with the rule on and a destination gets the alert, if there is one. An open quota alert does not move when another project's ingestion starts to grow faster. If the quota rule of the project that has an open quota alert is turned off or removed, the alert moves to the project with the oldest quota rule that is on, if there is one.
 
 For plan allowances and the hard stop, see [Plans and billing](https://telemetry.dev/docs/platform/billing).
 
