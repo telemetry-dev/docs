@@ -1,23 +1,52 @@
 ---
 title: OpenAI Agents SDK
-description: Trace TypeScript OpenAI Agents SDK runs, model calls, tool calls, and sandbox commands with their exit codes.
-lastModified: 2026-11-20
+description: Trace OpenAI Agents SDK runs, model calls, tool calls, and sandbox commands with their exit codes, from TypeScript or Python.
+lastModified: 2026-11-21
 seo:
   title: "OpenAI Agents SDK Tracing and Observability"
-  description: "Send TypeScript OpenAI Agents SDK traces to telemetry.dev: agents, turns, model calls with token usage and cost, tool calls, and sandbox commands with exit codes."
+  description: "Send OpenAI Agents SDK traces from TypeScript or Python to telemetry.dev: agents, turns, model calls with token usage and cost, tool calls, and sandbox commands with exit codes."
 ---
 
-`@telemetry-dev/openai-agents` sends the runs of the TypeScript [OpenAI Agents SDK](https://openai.github.io/openai-agents-js/) to telemetry.dev: the agents and their turns, each model call with its token usage, each tool call, and each command that a sandbox agent ran, with its exit code.
+`@telemetry-dev/openai-agents` and `telemetry-dev-openai-agents` send the runs of the [OpenAI Agents SDK](https://openai.github.io/openai-agents-js/) for TypeScript and [for Python](https://openai.github.io/openai-agents-python/) to telemetry.dev: the agents and their turns, each model call with its token usage, each tool call with its call ID, and each command that a sandbox agent ran, with its exit code.
 
-The package is a trace processor for the Agents SDK. It reads the spans the SDK already records, so you don't change your agents or tools.
+Each package is a trace processor for the Agents SDK. It reads the spans the SDK already records, so you don't change your agents or tools.
 
 ## Install
 
-```package-install
-npm i @telemetry-dev/openai-agents @openai/agents
+<CodeGroup>
+
+```sh npm
+npm install @telemetry-dev/openai-agents @openai/agents
 ```
 
-The package supports `@openai/agents` 0.22.0 and later 0.x releases, and needs Node.js 22 or later, the Agents SDK's minimum.
+```sh pnpm
+pnpm add @telemetry-dev/openai-agents @openai/agents
+```
+
+```sh yarn
+yarn add @telemetry-dev/openai-agents @openai/agents
+```
+
+```sh bun
+bun add @telemetry-dev/openai-agents @openai/agents
+```
+
+```sh pip
+pip install telemetry-dev-openai-agents
+```
+
+```sh uv
+uv add telemetry-dev-openai-agents
+```
+
+</CodeGroup>
+
+The Python package also installs `telemetry-dev` and `openai-agents`.
+
+| Language | Requirements |
+| --- | --- |
+| TypeScript | Node.js 22 or later, the Agents SDK's minimum, and `@openai/agents` `>=0.22.0 <1` |
+| Python | Python `>=3.10`, `telemetry-dev` `>=0.3.8`, and `openai-agents` `>=0.25.0,<1` |
 
 ## Set the API key
 
@@ -33,9 +62,11 @@ Without an API key, the processor does nothing.
 
 ## Add the processor
 
-Register the processor once, before the first run:
+Register the processor once, before the first run. In Python, call `telemetry_dev.init()` first:
 
-```ts agent.ts
+<CodeGroup>
+
+```ts TypeScript
 import { addTraceProcessor, Agent, run } from "@openai/agents";
 import { telemetryDevProcessor } from "@telemetry-dev/openai-agents";
 
@@ -45,43 +76,83 @@ const agent = new Agent({ name: "Assistant", instructions: "Answer briefly." });
 await run(agent, "What is OpenTelemetry?");
 ```
 
-`addTraceProcessor` keeps the Agents SDK's default exporter, so traces also reach the OpenAI Traces dashboard. To send them only to telemetry.dev, replace the default exporter instead:
+```python Python
+import telemetry_dev
+from agents import Agent, Runner, add_trace_processor
+from telemetry_dev_openai_agents import TelemetryDevProcessor
 
-```ts agent.ts
+telemetry_dev.init()
+add_trace_processor(TelemetryDevProcessor())
+
+agent = Agent(name="Assistant", instructions="Answer briefly.")
+Runner.run_sync(agent, "What is OpenTelemetry?")
+```
+
+</CodeGroup>
+
+`addTraceProcessor` (`add_trace_processor` in Python) keeps the Agents SDK's default exporter, so traces also reach the OpenAI Traces dashboard. To send them only to telemetry.dev, replace the default exporter instead:
+
+<CodeGroup>
+
+```ts TypeScript
 import { setTraceProcessors } from "@openai/agents";
 import { telemetryDevProcessor } from "@telemetry-dev/openai-agents";
 
 setTraceProcessors([telemetryDevProcessor()]);
 ```
 
-`setTraceProcessors` is also how you keep content away from OpenAI. With `addTraceProcessor`, the OpenAI exporter still receives tool arguments and results, Chat Completions inputs and outputs, sandbox commands and working directories, and trace metadata.
+```python Python
+from agents import set_trace_processors
+from telemetry_dev_openai_agents import TelemetryDevProcessor
+
+set_trace_processors([TelemetryDevProcessor()])
+```
+
+</CodeGroup>
+
+`setTraceProcessors` (`set_trace_processors`) is also how you keep content away from OpenAI. With `addTraceProcessor`, the OpenAI exporter still receives tool arguments and results, model inputs and outputs, sandbox commands and working directories, and trace metadata.
 
 ## Check the trace
 
 Run your agent once and open [Traces](/platform/traces) in your project. A run contains:
 
-- A root span named after the run's workflow, `Agent workflow` unless you set `workflowName`, and a `task {workflowName}` span under it
+- A root span named after the run's workflow, `Agent workflow` unless you set `workflowName` (`workflow_name`), and a `task {workflowName}` span under it
 - An `invoke_agent {name}` span for each agent, and a `turn N` span for each of its turns
 - A `chat {model}` span for each model call, with its token usage, which telemetry.dev prices
-- An `execute_tool {name}` span for each tool call
+- An `execute_tool {name}` span for each tool call, with its call ID
 - Handoff, guardrail, and MCP tool-listing spans when the run has them
 
 How runs group into traces:
 
 - A run is one trace by default.
+- In Python, runs that share a `group_id` share a session: the processor sends the `group_id` as the session ID (`gen_ai.conversation.id`). The rest of this list describes the TypeScript package.
 - A run that starts inside an active OpenTelemetry span, such as an HTTP request span, joins that span's trace.
 - Runs that share a `groupId` share a session: the processor sends the `groupId` as the session ID (`gen_ai.conversation.id`). Runs inside the same [`propagateAttributes({ sessionId })`](/sdk/typescript#add-user-session-and-metadata) session (from `@telemetry-dev/sdk`) do too; a `groupId` takes precedence. Outside an active span, the runs of a session land in [one trace per session](/sdk/typescript#one-trace-per-session), each run as a root span.
 - With `telemetryDevProcessor({ sessionMode: "process" })`, runs without a session of their own share the process's [generated session](/sdk/typescript#process-sessions) in the same way. Use this in a CLI or script that holds one conversation per process, not in a long-running server.
 
 In short-lived runtimes such as serverless functions, flush at the end of each request:
 
-```ts
+<CodeGroup>
+
+```ts TypeScript
 import { getGlobalTraceProvider } from "@openai/agents";
 
 await getGlobalTraceProvider().forceFlush();
 ```
 
-The root span ends when the Agents SDK trace ends. A run that throws before the SDK ends its trace leaves it open, so the processor also ends the root when the run's task or agent span ends with the error. `forceFlush` and `shutdown` of the trace provider end the root of every trace that has no open span, at the end of its last span, which covers a run that failed before its first span.
+```python Python
+from agents.tracing import get_trace_provider
+
+get_trace_provider().force_flush()
+```
+
+</CodeGroup>
+
+The root span ends when the Agents SDK trace ends. The flush and shutdown of the trace provider also end the root of every trace that has no open span, at the end of its last span. In TypeScript, a run that throws before the SDK ends its trace leaves it open, so the processor also ends the root when the run's task or agent span ends with the error; the flush covers a run that failed before its first span. The Python Agents SDK ends the trace even when a run raises.
+
+## Tool call IDs
+
+The Agents SDK puts no call ID on its tool spans, so the processor takes it from the model call that asked for the tool. Each `execute_tool` span gets `gen_ai.tool.call.id` from the call with the same tool name and arguments in the output of the model call before it. Two parallel calls of one tool each get their own ID, even when they finish in a different order.
 
 ## Trace sandbox agents
 
@@ -90,15 +161,17 @@ Sandbox runs need no extra setup. Each `sandbox.*` span of the Agents SDK, such 
 | Attribute | Value |
 | --- | --- |
 | `sandbox.operation` | The operation, such as `create_session` or `exec` |
-| `sandbox.backend` | The sandbox backend, such as `e2b` or `modal`, on the spans that create or resume a session |
+| `sandbox.backend` | The sandbox backend, such as `e2b` or `modal`. In TypeScript only the spans that create or resume a session have it; in Python every session operation does. |
 
-The `exec_command` and `write_stdin` tool spans get `process.exit.code` once the command has exited. A command that exits with a non-zero code is not marked as an error, because many commands, such as `grep`, exit non-zero without failing.
+The `exec_command` and `write_stdin` tool spans get `process.exit.code` once the command has exited. In Python, `sandbox.exec` spans get it too. A command that exits with a non-zero code is not marked as an error, because many commands, such as `grep`, exit non-zero without failing.
 
 ## Control captured content
 
-The processor takes the [`init()` options](/sdk/typescript#configure-init) of `@telemetry-dev/sdk`. Use `captureInput` and `captureOutput` to keep content out of telemetry.dev, and `mask` to redact it:
+The TypeScript processor takes the [`init()` options](/sdk/typescript#configure-init) of `@telemetry-dev/sdk`. In Python, pass them to `telemetry_dev.init()`. Use `captureInput` and `captureOutput` (`capture_input` and `capture_output`) to keep content out of telemetry.dev, and `mask` to redact it:
 
-```ts
+<CodeGroup>
+
+```ts TypeScript
 addTraceProcessor(
   telemetryDevProcessor({
     captureInput: false,
@@ -107,23 +180,30 @@ addTraceProcessor(
 );
 ```
 
+```python Python
+telemetry_dev.init(capture_input=False, capture_output=False)
+add_trace_processor(TelemetryDevProcessor())
+```
+
+</CodeGroup>
+
 These count as content:
 
 - Model inputs and outputs
 - Tool arguments and results
-- The command and working directory of `sandbox.exec`, in `process.command_line` and `process.working_directory`
+- In TypeScript, the command and working directory of `sandbox.exec`, in `process.command_line` and `process.working_directory`
 
-With capture off, telemetry.dev still receives span names and timing, model names, response IDs, token usage, turn numbers, agent, tool, handoff, and guardrail names, each agent's tools, handoffs, and output type, whether a guardrail triggered, the MCP server of a tool call and the number of tools an MCP server listed, exit codes, sandbox backends, error types, the session ID (such as the run's `groupId`, a `propagateAttributes()` session, or the process session), the user ID and metadata of `propagateAttributes()`, the Agents SDK trace ID, and the string, number, and boolean values of trace metadata and of the data of custom spans. Trace metadata, custom span data, and `propagateAttributes()` metadata do not go through `mask`.
+With capture off, telemetry.dev still receives span names and timing, model names, response IDs, token usage, turn numbers, agent, tool, handoff, and guardrail names, each agent's tools, handoffs, and output type, whether a guardrail triggered, the MCP server of a tool call and the number of tools an MCP server listed, tool call IDs, exit codes, sandbox backends, error types, the session ID (such as the run's `groupId`, a `propagateAttributes()` session, or the process session), the user ID and metadata of `propagateAttributes()`, the Agents SDK trace ID, and the string, number, and boolean values of trace metadata and of the data of custom spans. Trace metadata, custom span data, and `propagateAttributes()` metadata do not go through `mask`.
 
-Keep the Agents SDK's `traceIncludeSensitiveData` on, which is its default. With it off, the SDK leaves token usage and tool output off its spans, and the Responses API model leaves off the model name too, so telemetry.dev cannot price model calls or read exit codes. Turn content off with `captureInput` and `captureOutput` instead.
+Keep the Agents SDK's `traceIncludeSensitiveData` (`trace_include_sensitive_data`) on, which is its default. With it off, the TypeScript SDK leaves token usage and tool output off its spans, and the Responses API model leaves off the model name too, so telemetry.dev cannot price model calls or read exit codes. The Python SDK leaves tool output and model outputs off, and the Responses API model leaves off the model name, so telemetry.dev cannot price Responses API calls or read exit codes and tool call IDs. Turn content off with `captureInput` and `captureOutput` instead.
 
 ## Don't also instrument the OpenAI client
 
-The processor already records each model call as a `chat` span. Don't also instrument the OpenAI client that the Agents SDK uses with [`@telemetry-dev/openai`](/integrations/openai): neither a client wrapped with `wrapOpenAI()` and passed to `setDefaultOpenAIClient`, nor `instrumentOpenAI()`, which instruments every client in the process. Each model call would be recorded and priced twice.
+The processor already records each model call as a `chat` span. Don't also instrument the OpenAI client that the Agents SDK uses with [`@telemetry-dev/openai` or `telemetry-dev-openai`](/integrations/openai): neither a client wrapped with `wrapOpenAI()` (`wrap_openai()`) and passed to `setDefaultOpenAIClient` (`set_default_openai_client`), nor `instrumentOpenAI()` (`instrument_openai()`), which instruments every client in the process. Each model call would be recorded and priced twice.
 
 ## Options
 
-`telemetryDevProcessor()` accepts every [`init()` option](/sdk/typescript#configure-init) of `@telemetry-dev/sdk`. The variables you are most likely to set:
+`telemetryDevProcessor()` accepts every [`init()` option](/sdk/typescript#configure-init) of `@telemetry-dev/sdk`. The Python `TelemetryDevProcessor()` takes no options; configure [`telemetry_dev.init()`](/sdk/python) instead. The variables you are most likely to set, read by both:
 
 | Variable | Default | Description |
 | --- | --- | --- |
@@ -132,13 +212,13 @@ The processor already records each model call as a `chat` span. Don't also instr
 | `TELEMETRY_DEV_ENVIRONMENT` | `production` | Environment on exported telemetry |
 | `OTEL_SERVICE_NAME` | SDK default | Service name |
 
-The first processor created in a process sets up the SDK, and later processors ignore their options. Pass SDK options to the processor rather than calling `init()` yourself: the processor replaces a client that an earlier `init()` call made.
+In TypeScript, the first processor created in a process sets up the SDK, and later processors ignore their options. Pass SDK options to the processor rather than calling `init()` yourself: the processor replaces a client that an earlier `init()` call made.
 
 ## Limitations
 
-The Agents SDK shuts the trace provider down on `SIGTERM`, `SIGINT`, and unhandled rejections. The processor then ends every open span so nothing is lost if the process exits. A model call that was in progress at that moment is sent without its token usage.
+The TypeScript Agents SDK shuts the trace provider down on `SIGTERM`, `SIGINT`, and unhandled rejections, and the Python Agents SDK at interpreter exit. The processor then ends every open span so nothing is lost if the process exits. A model call that was in progress at that moment is sent without its token usage.
 
-For the package source and changelog, see [`@telemetry-dev/openai-agents` on GitHub](https://github.com/telemetry-dev/telemetry/tree/main/packages/openai-agents).
+For the package source and changelog, see [`@telemetry-dev/openai-agents`](https://github.com/telemetry-dev/telemetry/tree/main/packages/openai-agents) and [`telemetry-dev-openai-agents`](https://github.com/telemetry-dev/telemetry/tree/main/sdks/python-openai-agents) on GitHub.
 
 <CardGroup cols={2}>
   <Card title="View traces" href="/platform/traces" icon="activity">
