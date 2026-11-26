@@ -467,12 +467,15 @@ The SDK prepares each piece of captured content in three steps:
 | `systemInstructions` | `gen_ai.system_instructions` |
 | Log message | `log.message` |
 | Log attributes other than numbers and booleans | The attribute name |
+| The list of tools offered to a model, from an unreleased change | `gen_ai.tool.definitions` |
 
 If `mask` returns `undefined`, the SDK writes nothing for that attribute. If `mask` throws, the SDK drops the value and reports the error to `onError`.
 
 :::warning[What capture controls do not cover]
 
 `captureInput`, `captureOutput`, and `mask` do not apply to span `metadata`, propagated metadata, raw `attributes`, stop sequences, tool descriptions, or the message and stack trace of a recorded error. The capture flags also do not apply to logs. Keep sensitive data out of those fields, or redact it before you pass it to the SDK.
+
+An unreleased change makes one raw attribute an exception: `gen_ai.tool.definitions`, the tools offered to a model. With `captureInput` off it keeps only each tool's type and name, and with it on it passes through `mask`. Like other content, a list longer than `maxAttributeLength`, 0 included, keeps only the types and names. The attribute is left out only when the names do not fit a limit above 0.
 
 :::
 
