@@ -169,7 +169,7 @@ Any other provider keeps its LiteLLM name, such as `ollama`, `openrouter`, `toge
 
 ## Captured content
 
-Prompts and responses follow the core SDK's `capture_input`, `capture_output`, and `mask` settings. With capture off, models, finish reasons, usage, cost, timing, and errors are still recorded. An unreleased change records the tools offered to the model in `gen_ai.tool.definitions`, which the trace view lists as **Tools offered**: each tool's type and name whatever the settings, and its description and input schema only with `capture_input` on, after `mask`.
+Prompts and responses follow the core SDK's `capture_input`, `capture_output`, and `mask` settings. With capture off, models, finish reasons, usage, cost, timing, and errors are still recorded. From version 0.2.9, the integration records the tools offered to the model in `gen_ai.tool.definitions`, which the trace view lists as **Tools offered**: each tool's type and name whatever the settings, and its description and input schema only with `capture_input` on, after `mask`.
 
 Metadata is stored outside those settings. The integration exports each key of a call's `litellm_metadata` argument, or of `metadata` when `litellm_metadata` is absent or empty, as `td.metadata.<key>`. The capture settings don't remove these values and the mask doesn't see them, so don't put credentials or personal data in metadata. For user and session IDs, use `propagate_attributes(user_id=..., session_id=...)` from the [Python SDK](/sdk/python) instead.
 

@@ -183,7 +183,7 @@ Each stream keeps up to 64 KiB and 1,024 items of output. Past that, the span ke
 
 ## Captured content
 
-Prompts and responses follow the core SDK's `captureInput`, `captureOutput`, and `mask` settings (`capture_input`, `capture_output`, and `mask` in Python). With capture off, response IDs, models, finish reasons, usage, cost, timing, and errors are still recorded. An unreleased change records the tools offered to the model in `gen_ai.tool.definitions`, which the trace view lists as **Tools offered**: each tool's type and name whatever the settings, and its description and input schema only with input capture on, after `mask`. See [privacy](/platform/privacy) for server-side redaction.
+Prompts and responses follow the core SDK's `captureInput`, `captureOutput`, and `mask` settings (`capture_input`, `capture_output`, and `mask` in Python). With capture off, response IDs, models, finish reasons, usage, cost, timing, and errors are still recorded. From versions 0.2.9 (TypeScript) and 0.2.8 (Python), the integration records the tools offered to the model in `gen_ai.tool.definitions`, which the trace view lists as **Tools offered**: each tool's type and name whatever the settings, and its description and input schema only with input capture on, after `mask`. See [privacy](/platform/privacy) for server-side redaction.
 
 ## Send telemetry before exit
 

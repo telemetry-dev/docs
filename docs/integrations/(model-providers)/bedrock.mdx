@@ -290,7 +290,7 @@ Calls through Anthropic's `AnthropicBedrock` client are traced by the [Anthropic
 
 ## Captured content
 
-Prompts and responses follow the core SDK's `captureInput`, `captureOutput`, and `mask` settings (`capture_input`, `capture_output`, and `mask` in Python). With output capture off, request IDs, models, finish reasons, usage, timing, and errors are still recorded. An unreleased change records the tools offered to the model in Converse calls in `gen_ai.tool.definitions`, which the trace view lists as **Tools offered**: each tool's type and name whatever the settings, and its description and input schema only with input capture on, after `mask`. AWS error messages are recorded on the span whatever the capture settings. For agent trace events, see the note under [Options](#options).
+Prompts and responses follow the core SDK's `captureInput`, `captureOutput`, and `mask` settings (`capture_input`, `capture_output`, and `mask` in Python). With output capture off, request IDs, models, finish reasons, usage, timing, and errors are still recorded. From version 0.3.2 (TypeScript and Python), the integration records the tools offered to the model in Converse calls in `gen_ai.tool.definitions`, which the trace view lists as **Tools offered**: each tool's type and name whatever the settings, and its description and input schema only with input capture on, after `mask`. AWS error messages are recorded on the span whatever the capture settings. For agent trace events, see the note under [Options](#options).
 
 ## Send telemetry before exit
 
