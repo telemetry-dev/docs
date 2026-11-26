@@ -462,7 +462,7 @@ The SDK prepares each piece of captured content in three steps:
 | Span output | `gen_ai.output.messages`, or `gen_ai.tool.call.result` on tool spans |
 | `system_instructions` | `gen_ai.system_instructions` |
 | Log message | `log.message` |
-| The list of tools offered to a model, from an unreleased change | `gen_ai.tool.definitions` |
+| The list of tools offered to a model, from version 0.3.9 | `gen_ai.tool.definitions` |
 
 If `mask` raises, the SDK drops the value and reports the error to `on_error`. Returning `None` does not drop the value; it is recorded as the JSON string `null`.
 
@@ -470,7 +470,7 @@ If `mask` raises, the SDK drops the value and reports the error to `on_error`. R
 
 `capture_input`, `capture_output`, and `mask` do not apply to span `metadata`, propagated metadata, raw `attributes`, log attributes, stop sequences, tool descriptions, or the message and stack trace of a recorded exception. The capture flags also do not apply to logs. Keep sensitive data out of those fields, or redact it before you pass it to the SDK.
 
-An unreleased change makes one raw attribute an exception: `gen_ai.tool.definitions`, the tools offered to a model. With `capture_input` off it keeps only each tool's type and name, and with it on it passes through `mask`. Like other content, a list longer than `max_attribute_length`, 0 included, keeps only the types and names. The attribute is left out only when the names do not fit a limit above 0.
+From version 0.3.9, one raw attribute is an exception: `gen_ai.tool.definitions`, the tools offered to a model. With `capture_input` off it keeps only each tool's type and name, and with it on it passes through `mask`. Like other content, a list longer than `max_attribute_length`, 0 included, keeps only the types and names. The attribute is left out only when the names do not fit a limit above 0.
 
 :::
 

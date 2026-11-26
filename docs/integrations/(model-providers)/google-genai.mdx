@@ -230,7 +230,7 @@ Prompts and responses follow the core SDK's `captureInput`, `captureOutput`, and
 
 Some data is stored outside those settings:
 
-- In the current releases (TypeScript 0.1.9, Python 0.1.6), tool definitions (`gen_ai.tool.definitions`), including descriptions and parameter schemas, are request attributes. Turning off input capture or setting a mask doesn't remove them. An unreleased change keeps only each tool's type and name unless input capture is on, and passes descriptions and schemas through `mask`.
+- Before versions 0.2.9 (TypeScript) and 0.2.8 (Python), tool definitions (`gen_ai.tool.definitions`), including descriptions and parameter schemas, are request attributes that input capture and the mask don't cover. From those versions, only each tool's type and name are kept unless input capture is on, and descriptions and schemas pass through `mask`.
 - In the current releases (TypeScript 0.1.9, Python 0.1.6), the block reason message, safety ratings, grounding metadata, and URL-context metadata are stored as attributes even when output capture is off, and the mask doesn't see them. Grounding metadata can repeat the answer text and include retrieved document text, source titles and URIs, and search queries. An unreleased change keeps only their structure, such as categories, scores, and offsets, unless output is captured and no mask is set.
 - Stop sequences, metadata and attributes you pass yourself, and exception messages aren't covered by the capture settings.
 

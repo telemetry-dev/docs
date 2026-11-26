@@ -205,7 +205,7 @@ telemetry: {
 }
 ```
 
-These options leave out prompts, instructions, responses, tool arguments, tool results, and detailed error messages. Tool names, status, error types, token usage, and other metadata are still recorded. An unreleased change also records the tools offered to each model call in `gen_ai.tool.definitions`: their names always, and their descriptions and input schemas only with `recordInputs` on. Model warning messages are replaced with a generic `Model warning` unless both options are on.
+These options leave out prompts, instructions, responses, tool arguments, tool results, and detailed error messages. Tool names, status, error types, token usage, and other metadata are still recorded. From version 0.2.6, the integration also records the tools offered to each model call in `gen_ai.tool.definitions`: their names always, and their descriptions and input schemas only with `recordInputs` on. Model warning messages are replaced with a generic `Model warning` unless both options are on.
 
 AI SDK 6 ignores these options and always records content.
 
