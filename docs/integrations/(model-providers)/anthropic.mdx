@@ -200,7 +200,7 @@ The span's `gen_ai.provider.name` comes from the client class, including subclas
 
 ## Captured content
 
-Prompts and responses follow the core SDK's `captureInput`, `captureOutput`, and `mask` settings (`capture_input`, `capture_output`, and `mask` in Python). Tools and `tool_choice` are part of the input, so turning input capture off removes them too. Each tool's type and name are still recorded in `gen_ai.tool.definitions`, which the trace view lists as **Tools offered**. `mask` does not apply to them; descriptions and input schemas are not. With output capture off, response IDs, models, stop reasons, usage, timing, and errors are still recorded.
+Prompts and responses follow the core SDK's `captureInput`, `captureOutput`, and `mask` settings (`capture_input`, `capture_output`, and `mask` in Python). Tools and `tool_choice` are part of the input, so turning input capture off removes them too. Each tool's type and name are still recorded in `gen_ai.tool.definitions`, which the trace view lists as **Tools offered**. `mask` does not apply to them; descriptions and input schemas are not. An unreleased change also records each tool's description and input schema when input capture is on, after `mask`. With output capture off, response IDs, models, stop reasons, usage, timing, and errors are still recorded.
 
 The capture settings don't cover stop sequences, metadata and attributes you pass yourself, or exception messages and stack traces. Redact those separately if they can hold sensitive data. See [privacy](/platform/privacy) for server-side redaction.
 

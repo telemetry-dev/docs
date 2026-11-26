@@ -125,7 +125,7 @@ Model calls that stream, for example through `agent.stream(input, { streamMode: 
 
 ### Control captured content
 
-The `captureInput`, `captureOutput`, `mask`, and `maxAttributeLength` options of `init()` apply to the messages, inputs, and outputs that the handler records. With capture off, spans keep the span names, models, token usage, and errors. The run names, the tool names, the names of the bound tools, and the metadata of your app are still sent.
+The `captureInput`, `captureOutput`, `mask`, and `maxAttributeLength` options of `init()` apply to the messages, inputs, and outputs that the handler records. With capture off, spans keep the span names, models, token usage, and errors. The run names, the tool names, the names of the bound tools, and the metadata of your app are still sent. An unreleased change also sends the descriptions and input schemas of the bound tools when input capture is on, after `mask`.
 
 ### Use it next to LangSmith
 
