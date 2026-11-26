@@ -114,12 +114,12 @@ Create a new `telemetryDev()` instance for each AI SDK 6 call. An AI SDK 6 insta
 | Traced operations | Text, object, embed, rerank, and decide operations | `generateText`, `streamText`, and `Agent` only |
 | Time to first chunk | Recorded for streamed text and object operations | Not available |
 | One shared instance | Safe | Not safe for overlapping calls |
-| Content controls | Honors `recordInputs` and `recordOutputs` | Always records messages and output |
+| Content controls | `recordInputs`, `recordOutputs`, and `mask` | `mask` only |
 | A call that throws | Sends a trace marked as an error | Sends no trace, because `onFinish` never runs |
 | Provider and tool span context | Provider requests and nested calls join the call's trace | No context wrappers |
 
 :::warning[AI SDK 6 content capture]
-AI SDK 6 always records message and output content. It has no option to leave out inputs or outputs.
+AI SDK 6 has no `recordInputs` or `recordOutputs` option, so it records message and output content unless a [mask](#redact-instead-of-drop) replaces or leaves it out.
 :::
 
 ## What is traced
@@ -207,13 +207,45 @@ telemetry: {
 
 These options leave out prompts, instructions, responses, tool arguments, tool results, and detailed error messages. Tool names, status, error types, token usage, and other metadata are still recorded. From version 0.2.6, the integration also records the tools offered to each model call in `gen_ai.tool.definitions`: their names always, and their descriptions and input schemas only with `recordInputs` on. Model warning messages are replaced with a generic `Model warning` unless both options are on.
 
-AI SDK 6 ignores these options and always records content.
+AI SDK 6 ignores these options. Use a [mask](#redact-instead-of-drop) to leave content out there.
 
 :::warning[Recording off limits problem detection]
 
 With `recordInputs` or `recordOutputs` off, the Issues page still finds failed model calls, cut-off replies, failing tools, spend jumps, and stopped traffic. Possible issues come from what the person asked, what the agent did and said, and the person's next message. With `recordInputs` off, the Issues page finds none in those runs. With `recordOutputs` off, it reads them without what the agent said.
 
 :::
+
+### Redact instead of drop
+
+To keep private text out and still have the Issues page check the runs, leave recording on and pass a `mask` to `telemetryDev()`. The mask receives each payload before it is recorded and returns what to record instead. This example replaces email addresses and keeps the rest of each message:
+
+```ts
+const email =
+  /(?<![\p{L}\p{M}\p{N}._%+-])[\p{L}\p{M}\p{N}._%+-]+@(?:[\p{L}\p{M}\p{N}-]+\.)+\p{L}[\p{L}\p{M}]+(?![\p{L}\p{M}\p{N}-])/gu;
+
+telemetryDev({
+  // Serializing first reaches the strings inside class instances,
+  // URLs, and dates. Object keys are left as they are.
+  mask: (value) =>
+    JSON.parse(
+      JSON.stringify(value, (_name, item) =>
+        typeof item === "string" ? item.replaceAll(email, "[email]") : item,
+      ),
+    ),
+});
+```
+
+The mask receives prompt and response messages, instructions, tool descriptions and input schemas, tool arguments and results, detailed error messages, and model warning text. Its second argument holds `key`, the attribute the result is written to, such as `gen_ai.input.messages`, `gen_ai.system_instructions`, or `gen_ai.tool.call.result`. For error messages it is `exception.message`, and for warning text `log.message`.
+
+- If the mask returns `undefined` or throws, the integration leaves the payload out, and a thrown error goes to `onError`. An error message is then replaced with a generic text, warning text with `Model warning`, and the list of tools with their names.
+- On AI SDK 7, the mask sees only the payloads that `recordInputs` and `recordOutputs` allow. On AI SDK 6, it sees every payload.
+- The Issues page reads only what the mask returns.
+
+The media and batch wrappers record no payloads, and they do not inherit the mask from `telemetryDev()`. Pass `mask` in a wrapper's options to mask the message of a failed call. The wrapper then records a generic text when the mask leaves the message out, and records no stack trace.
+
+The mask does not see the `runtimeContext` keys recorded as the user, conversation, and metadata attributes, or the `metadata` of AI SDK 6. Leave out keys that should not be recorded. The `mask` option is available from version 0.1.9.
+
+If a trace also has spans from `@telemetry-dev/sdk`, such as spans you create by hand, that SDK's `captureInput`, `captureOutput`, and `mask` options control them. See [Control captured content](/sdk/typescript#control-captured-content) in the TypeScript SDK guide.
 
 ## Options
 
@@ -229,6 +261,7 @@ Pass options to `telemetryDev()`. Explicit options take precedence over environm
 | `fetch` | `typeof fetch` | None | `globalThis.fetch` |
 | `waitUntil` | `(promise: Promise<unknown>) => void` | None | None. The final hook waits for the export. |
 | `onError` | `(error) => void` | None | None |
+| `mask` | `(value: unknown, context: { key: string }) => unknown` | None | None. Content is recorded as is. See [Redact instead of drop](#redact-instead-of-drop). |
 
 The sampler also decides whether session traces are kept. A real active parent span keeps its own sampling decision.
 
