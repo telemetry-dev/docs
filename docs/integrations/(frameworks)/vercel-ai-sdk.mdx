@@ -224,8 +224,8 @@ const email =
   /(?<![\p{L}\p{M}\p{N}._%+-])[\p{L}\p{M}\p{N}._%+-]+@(?:[\p{L}\p{M}\p{N}-]+\.)+\p{L}[\p{L}\p{M}]+(?![\p{L}\p{M}\p{N}-])/gu;
 
 telemetryDev({
-  // Serializing first reaches the strings inside class instances, URLs, and dates. Object
-  // keys are left as they are.
+  // Serializing first reaches the strings inside class instances,
+  // URLs, and dates. Object keys are left as they are.
   mask: (value) =>
     JSON.parse(
       JSON.stringify(value, (_name, item) =>
